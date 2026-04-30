@@ -10,7 +10,8 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
-	tile_to_imgtable rl0_generate rl0_depict rl0_data
+	tile_to_imgtable rl0_generate rl0_depict rl0_data tiling_3x3_demo \
+	tiling_4x4_demo
 
 poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE)
@@ -26,7 +27,16 @@ clean:
 		$(SRC)/usage/*.o $(SRC)/throughput/*.o \
 		poly_count poly_print vcomp_count count_vcomp vcomp_print \
 		vcomp_parity \
-		imgtable tile_to_imgtable rl0_generate rl0_depict
+		imgtable tile_to_imgtable rl0_generate rl0_depict \
+		tiling_3x3_demo tiling_4x4_demo
+
+tiling_3x3_demo: $(SRC)/usage/tiling_3x3_demo.o $(SRC)/core/dfs.o
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/tiling_3x3_demo.o \
+		$(SRC)/core/dfs.o
+
+tiling_4x4_demo: $(SRC)/usage/tiling_4x4_demo.o $(SRC)/core/dfs.o
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/tiling_4x4_demo.o \
+		$(SRC)/core/dfs.o
 
 vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE)
