@@ -175,7 +175,7 @@ static int records_add(RL0Ctx *ctx,
         ctx->record_cap = nc;
     }
 
-    RL0Record *rec = &ctx->records[ctx->record_count++];
+    RL0Record *rec = &ctx->records[ctx->record_count];
     rec->valence = valence;
     rec->tile_count = tile_count;
     rec->center = center;
@@ -192,6 +192,7 @@ static int records_add(RL0Ctx *ctx,
         rec->hidden[i] = raw->hidden[i];
     }
 
+    ctx->record_count++;
     return 1;
 }
 
@@ -205,6 +206,10 @@ static int record_cmp_local(const void *A, const void *B) {
 
     int pcmp = strcmp(a->boundary_str, b->boundary_str);
     if (pcmp != 0) return pcmp;
+
+    if (a->hidden_count != b->hidden_count) {
+        return (a->hidden_count < b->hidden_count) ? -1 : 1;
+    }
 
     if (a->valence != b->valence) {
         return (a->valence < b->valence) ? -1 : 1;
@@ -243,12 +248,12 @@ static void write_records(RL0Ctx *ctx) {
     }
 }
 
-static void emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
+static int emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     int indices[RL0_MAX_TRACE];
     int total_tile_count = raw->tile_count;
     Coord center = raw->target;
 
-    if (!poly_has_live_boundary(&raw->poly, ctx->tile)) return;
+    if (!poly_has_live_boundary(&raw->poly, ctx->tile)) return 1;
 
     for (int i = 0; i < total_tile_count; i++) {
         indices[i] = cycle_vertex_index(&raw->tiles[i], center);
@@ -259,10 +264,10 @@ static void emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
         (center.v == 3 || center.v == 4 || center.v == 6)) {
         valence = center.v;
     }
-    if (seen_has(ctx, valence, total_tile_count, &raw->poly)) return;
-    if (!seen_add(ctx, valence, total_tile_count, &raw->poly)) return;
+    if (seen_has(ctx, valence, total_tile_count, &raw->poly)) return 1;
+    if (!seen_add(ctx, valence, total_tile_count, &raw->poly)) return 0;
 
-    records_add(ctx, valence, total_tile_count, center, raw, indices);
+    return records_add(ctx, valence, total_tile_count, center, raw, indices);
 }
 
 static int ensure_dir(const char *path) {
@@ -323,7 +328,8 @@ int main(int argc, char **argv) {
     ctx.record_count = 0;
     ctx.record_cap = 0;
 
-    for (int i = 0; i < vc; i++) {
+    int ok = 1;
+    for (int i = 0; i < vc && ok; i++) {
         VCompLevels raw;
         ctx.target = verts[i];
         vcomp_levels_init(&raw, VCOMP_MAX_LEVELS - 1);
@@ -341,10 +347,25 @@ int main(int argc, char **argv) {
                                &raw);
         for (int level = 1; level <= raw.max_level; level++) {
             for (size_t r = 0; r < raw.levels[level].count; r++) {
-                emit_raw_completion(&raw.levels[level].data[r], &ctx);
+                if (!emit_raw_completion(&raw.levels[level].data[r], &ctx)) {
+                    ok = 0;
+                    break;
+                }
             }
+            if (!ok) break;
         }
         vcomp_levels_destroy(&raw);
+    }
+
+    if (!ok) {
+        fprintf(stderr, "allocation failure while generating RL0 records\n");
+        fclose(fp);
+        free(ctx.seen);
+        for (size_t i = 0; i < ctx.record_count; i++) {
+            free(ctx.records[i].boundary_str);
+        }
+        free(ctx.records);
+        return 1;
     }
 
     write_records(&ctx);
