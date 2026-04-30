@@ -135,6 +135,14 @@ static void trace_line(size_t depth,const void *state,int cid,int event,void *vc
     fprintf(ctx->trace_fp,"%s\t%zu\t%d\t0x%03x\n",event_name(event),depth,cid,s->mask);
 }
 
+static void print_mask_binary(uint16_t mask) {
+    for (int y = 0; y < BOARD_H; y++) {
+        for (int x = 0; x < BOARD_W; x++) {
+            putchar((mask & (1u << (y * BOARD_W + x))) ? '1' : '0');
+        }
+    }
+}
+
 int main(int argc,char **argv){
     DemoCtx ctx; DemoState init; DfsConfig cfg; DfsStats st; memset(&ctx,0,sizeof(ctx)); ctx.anchor_mode=0; placements_init(&ctx);
     for(int i=1;i<argc;i++){
@@ -144,8 +152,18 @@ int main(int argc,char **argv){
     }
     order_build(&ctx); memset(&init,0,sizeof(init));
     cfg=(DfsConfig){sizeof(DemoState),MAX_DEPTH,0,0,next_state,validity,veracity,on_solution,trace_line,&ctx};
-    dfs_run(&cfg,&init,&st);
+    if (!dfs_run(&cfg,&init,&st)) {
+        if (ctx.trace_fp) fclose(ctx.trace_fp);
+        fprintf(stderr, "dfs_run failed\n");
+        return 1;
+    }
     if(ctx.trace_fp) fclose(ctx.trace_fp);
-    printf("placements=%d solutions=%zu canonical=%zu nodes=%zu prunes=%zu kept=%zu order=%s anchor=%d\n",ctx.n,ctx.solution_count,ctx.canonical_count,st.nodes_visited,st.validity_prunes,st.solutions_kept,ctx.order_mode==ORDER_RARE?"rare":ctx.order_mode==ORDER_COMMON?"common":ctx.order_mode==ORDER_MRV?"mrv":"index",ctx.anchor_mode);
+    printf("placements=%d solutions=%zu canonical=%zu nodes=%zu prunes=%zu kept=%zu order=%s anchor=%d full=",
+           ctx.n,ctx.solution_count,ctx.canonical_count,st.nodes_visited,
+           st.validity_prunes,st.solutions_kept,
+           ctx.order_mode==ORDER_RARE?"rare":ctx.order_mode==ORDER_COMMON?"common":ctx.order_mode==ORDER_MRV?"mrv":"index",
+           ctx.anchor_mode);
+    print_mask_binary(BOARD_FULL);
+    printf("\n");
     return 0;
 }
