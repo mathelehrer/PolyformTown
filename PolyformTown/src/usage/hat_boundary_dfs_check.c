@@ -129,7 +129,7 @@ static int next_state(const void *st,size_t d,int *cur,void *child,int *cid,void
     const HatState *in=st; HatState*out=child; HatCtx*ctx=vctx; Edge edges[4096]; int ec=build_boundary_edges(&in->poly,edges); (void)d;
     while(*cur<ec*ctx->tile->variant_count){ int step=(*cur)++; int be=step/ctx->tile->variant_count; int tv=step%ctx->tile->variant_count; const Cycle *var=&ctx->tile->variants[tv];
         if(!edge_has_target(edges[be],in->target)) continue;
-        for(int te=0;te<var->n;te++){ Poly grown,key; if(!try_attach_tile_poly(&in->poly,var,ctx->tile->lattice,be,te,&grown)) continue; if(!live_boundary_dfs(&grown,ctx->tile)) continue; poly_hash_key_lattice(&grown,ctx->tile->lattice,&key); if(!hash_insert(&ctx->seen,&key)) continue; *out=*in; out->poly=grown; out->tile_count=in->tile_count+1; if(cid)*cid=step; return 1; }
+        for(int te=0;te<var->n;te++){ Poly grown,key; if(!try_attach_tile_poly(&in->poly,var,ctx->tile->lattice,be,te,&grown)) continue; poly_hash_key_lattice(&grown,ctx->tile->lattice,&key); if(!hash_insert(&ctx->seen,&key)) continue; *out=*in; out->poly=grown; out->tile_count=in->tile_count+1; if(cid)*cid=step; return 1; }
     } return 0;
 }
 static int valid(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx;
@@ -137,7 +137,11 @@ static int valid(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=
     if(s->tile_count>=SAFETY_MAX_DEPTH && poly_has_vertex(&s->poly,s->target)) ctx->cap_blocked++;
     return s->tile_count<=SAFETY_MAX_DEPTH; }
 static int done(const void *st,size_t d,void *vctx){ (void)d; (void)vctx; const HatState*s=st; return !poly_has_vertex(&s->poly,s->target); }
-static void on_sol(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx; Poly k; poly_hash_key_lattice(&s->poly,ctx->tile->lattice,&k); add_out(ctx,&k,s->target); }
+static void on_sol(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx; Poly k;
+    if(!live_boundary_dfs(&s->poly, ctx->tile)) return;
+    poly_hash_key_lattice(&s->poly,ctx->tile->lattice,&k);
+    add_out(ctx,&k,s->target);
+}
 static int cmp_str(const void *a,const void *b){ const char*const*sa=a; const char*const*sb=b; return strcmp(*sa,*sb); }
 
 int main(int argc,char **argv){
