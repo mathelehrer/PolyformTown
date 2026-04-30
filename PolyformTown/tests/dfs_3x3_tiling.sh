@@ -5,6 +5,7 @@ out="$(./tiling_3x3_demo)"
 [[ "$out" == placements=22* ]]
 [[ "$out" == *"solutions=10"* ]]
 [[ "$out" == *"canonical=2"* ]]
+[[ "$out" == *"full=111111111"* ]]
 
 out_mrv="$(./tiling_3x3_demo --order mrv)"
 [[ "$out_mrv" == *"order=mrv"* ]]

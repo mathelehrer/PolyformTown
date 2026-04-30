@@ -4,9 +4,19 @@
 
 #include "core/dfs.h"
 
-enum { W = 4, H = 4, FULL = 0xFFFF, MAXP = 256, DEPTH = 4 };
+enum {
+    W = 4,
+    H = 4,
+    FULL = 0xFFFF,
+    MAXP = 256,
+    DEPTH = 4,
+    ORDER_INDEX = 0,
+    ORDER_RARE = 1,
+    ORDER_COMMON = 2,
+    ORDER_MRV = 3
+};
 
-typedef struct { uint16_t mask; uint8_t depth; } S;
+typedef struct { uint16_t mask; uint8_t depth; int path[DEPTH]; } S;
 typedef struct {
     uint16_t p[MAXP];
     int n;
@@ -58,34 +68,77 @@ static void init_ctx(C *c) {
 }
 
 static int score(C *c, uint16_t m){int s=0;for(int b=0;b<16;b++)if(m&(1u<<b))s+=c->cover[b];return s;}
+static int choose_mrv_cell(const C *c, const S *in) {
+    int best_cell = -1;
+    int best_count = 999;
+    int min_idx = (in->depth > 0) ? in->path[in->depth - 1] : -1;
+    for (int cell = 0; cell < 16; cell++) {
+        if (in->mask & (1u << cell)) continue;
+        int count = 0;
+        for (int i = 0; i < c->n; i++) {
+            uint16_t p = c->p[i];
+            if (i <= min_idx) continue;
+            if (!(p & (1u << cell))) continue;
+            if (p & in->mask) continue;
+            count++;
+        }
+        if (count < best_count) { best_count = count; best_cell = cell; }
+    }
+    return best_cell;
+}
 static void mkord(C *c){
     for(int i=0;i<c->n;i++) c->ord[i]=i;
     for(int i=0;i<c->n;i++) for(int j=i+1;j<c->n;j++){
         int a=c->ord[i], b=c->ord[j];
         int sa=score(c,c->p[a]), sb=score(c,c->p[b]);
-        int sw=(c->mode==1)?(sa>sb):(c->mode==2)?(sa<sb):(a>b);
+        int sw=(c->mode==ORDER_RARE)?(sa>sb):(c->mode==ORDER_COMMON)?(sa<sb):(a>b);
         if(sw){int t=c->ord[i];c->ord[i]=c->ord[j];c->ord[j]=t;}
     }
 }
 
 static int nx(const void *st,size_t d,int *cur,void *ch,int *cid,void *vc){
     const S *in=st; S *out=ch; C *c=vc; (void)d;
-    while(*cur<c->n){int idx=c->ord[(*cur)++]; *out=*in; out->depth=in->depth+1; out->mask|=c->p[idx]; if(cid)*cid=idx; return 1;}
+    int mrv_cell = (c->mode == ORDER_MRV) ? choose_mrv_cell(c, in) : -1;
+    while(*cur<c->n){
+        int idx=c->ord[(*cur)++];
+        uint16_t p = c->p[idx];
+        if (mrv_cell >= 0 && !(p & (1u << mrv_cell))) continue;
+        if (c->mode != ORDER_MRV && in->depth > 0 && idx <= in->path[in->depth - 1]) continue;
+        *out=*in;
+        out->depth=in->depth+1;
+        out->path[in->depth]=idx;
+        out->mask|=p;
+        if(cid)*cid=idx;
+        return 1;
+    }
     return 0;
 }
 static int ok(const void *st,size_t d,void *vc){(void)d;(void)vc; const S *s=st; return pc(s->mask)==s->depth*4;}
 static int done(const void *st,size_t d,void *vc){(void)d;(void)vc; return ((const S*)st)->mask==FULL;}
 static void hit(const void *st,size_t d,void *vc){(void)st;(void)d; ((C*)vc)->sol++;}
 
+static void print_mask_binary(uint16_t mask) {
+    for (int y = 0; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            putchar((mask & (1u << (y * W + x))) ? '1' : '0');
+        }
+    }
+}
+
 int main(void){
-    C c; S seed={0,0}; DfsConfig cfg; DfsStats st;
-    for(int m=0;m<3;m++){
+    C c; S seed = {0}; DfsConfig cfg; DfsStats st;
+    for(int m=0;m<4;m++){
         init_ctx(&c); c.mode=m; mkord(&c);
         cfg=(DfsConfig){sizeof(S),DEPTH,0,0,nx,ok,done,hit,NULL,&c};
-        dfs_run(&cfg,&seed,&st);
-        printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu\n",
-               m==0?"index":m==1?"rare":"common",
+        if (!dfs_run(&cfg,&seed,&st)) {
+            fprintf(stderr, "dfs_run failed for order=%d\n", m);
+            return 1;
+        }
+        printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu full=",
+               m==ORDER_INDEX?"index":m==ORDER_RARE?"rare":m==ORDER_COMMON?"common":"mrv",
                c.n,c.sol,st.nodes_visited,st.validity_prunes);
+        print_mask_binary(FULL);
+        printf("\n");
     }
     return 0;
 }
