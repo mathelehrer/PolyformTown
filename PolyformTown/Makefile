@@ -96,7 +96,7 @@ rl0_data: rl0_generate
 	$(BIN)/rl0_generate tiles/hat.tile data/rl0/completions.dat
 
 rl0_svg: rl0_data rl0_depict imgtable
-	$(BIN)/rl0_depict --data data/rl0/completions.dat | \
+	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl0_all.svg
 
 $(BIN):
