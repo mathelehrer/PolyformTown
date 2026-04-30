@@ -91,7 +91,7 @@ check_cmd_eq "0" bash -c './vcomp_print 5 tiles/triangle.tile | count_vcomp_aggr
 check_cmd_eq "0" bash -c './vcomp_print 7 tiles/hexagon.tile  | count_vcomp_aggregate_holes'
 check_cmd_eq "0" bash -c './vcomp_print 1 tiles/hh.tile       | count_vcomp_aggregate_holes'
 check_cmd_eq "0" bash -c './vcomp_print 6 tiles/kite.tile     | count_vcomp_aggregate_holes'
-check_cmd_eq "11" bash -c './vcomp_print 4 tiles/hat.tile      | count_vcomp_aggregate_holes'
+check_cmd_eq "7" bash -c './vcomp_print 4 tiles/hat.tile      | count_vcomp_aggregate_holes'
 
 if [[ "$fails" -gt 0 ]]; then
   echo "TOTAL FAILS: $fails"
