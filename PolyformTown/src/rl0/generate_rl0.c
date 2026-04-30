@@ -278,7 +278,7 @@ static int ensure_dir(const char *path) {
 
 int main(int argc, char **argv) {
     const char *tile_path = "tiles/hat.tile";
-    const char *output_path = "levelData/rl0/completions.dat";
+    const char *output_path = "data/rl0/completions.dat";
 
     if (argc > 1) tile_path = argv[1];
     if (argc > 2) output_path = argv[2];
@@ -289,8 +289,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (!ensure_dir("levelData") || !ensure_dir("levelData/rl0")) {
-        fprintf(stderr, "failed to create levelData/rl0\n");
+    if (!ensure_dir("data") || !ensure_dir("data/rl0")) {
+        fprintf(stderr, "failed to create data/rl0\n");
         return 1;
     }
 

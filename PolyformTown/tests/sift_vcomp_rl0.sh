@@ -34,10 +34,10 @@ function canonb(s){
   b=trim(b)
   print center "|" canonb(b)
 }
-' levelData/rl0/completions.dat | sort -u > "$rl0_keys"
+' data/rl0/completions.dat | sort -u > "$rl0_keys"
 
 for n in $(seq 1 10); do
-  ./vcomp_print "$n" tiles/hat.tile --live-only
+  ./bin/vcomp_print "$n" tiles/hat.tile --live-only
 done > "$tmpd/vcomp.out"
 
 awk '
