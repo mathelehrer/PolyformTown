@@ -129,15 +129,12 @@ static const char *event_name(int e) {
 static void trace_line(size_t depth,const void *state,int cid,int event,void *vctx){
     C *c=vctx; const S*s=state;
     if(!c->trace_on||!c->trace_fp)return;
-    fprintf(c->trace_fp,"%s\t%zu\t%d\t0x%04x\n",event_name(event),depth,cid,s->mask);
-}
-
-static void print_mask_binary(uint16_t mask) {
-    for (int y = 0; y < H; y++) {
-        for (int x = 0; x < W; x++) {
-            putchar((mask & (1u << (y * W + x))) ? '1' : '0');
-        }
+    fprintf(c->trace_fp,"%s\t%zu\t%d\t[",event_name(event),depth,cid);
+    for (int i = 0; i < W * H; i++) {
+        if (i) fputc(',', c->trace_fp);
+        fputc((s->mask & (1u << i)) ? '1' : '0', c->trace_fp);
     }
+    fprintf(c->trace_fp,"]\n");
 }
 
 int main(int argc, char **argv){
@@ -153,10 +150,11 @@ int main(int argc, char **argv){
             fprintf(c.trace_fp,"ev\tdepth\tidx\tmask\n");
         } else if(strcmp(argv[i],"--order")==0 && i+1<argc){
             i++;
-            if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
+            if(strcmp(argv[i],"index")==0)c.mode=ORDER_INDEX;
+            else if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
             else if(strcmp(argv[i],"common")==0)c.mode=ORDER_COMMON;
             else if(strcmp(argv[i],"mrv")==0)c.mode=ORDER_MRV;
-            else c.mode=ORDER_INDEX;
+            else { fprintf(stderr, "unknown --order value: %s\n", argv[i]); return 1; }
         }
     }
 
@@ -168,11 +166,9 @@ int main(int argc, char **argv){
         fprintf(stderr, "dfs_run failed for order=%d\n", c.mode);
         return 1;
     }
-    printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu kept=%zu full=",
+    printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu kept=%zu\n",
            c.mode==ORDER_INDEX?"index":c.mode==ORDER_RARE?"rare":c.mode==ORDER_COMMON?"common":"mrv",
            c.n,c.sol,st.nodes_visited,st.validity_prunes,st.solutions_kept);
-    print_mask_binary(FULL);
-    printf("\n");
 
     if (c.trace_fp) fclose(c.trace_fp);
     return 0;
