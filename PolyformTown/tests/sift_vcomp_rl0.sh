@@ -128,6 +128,13 @@ echo "intersect=$inter_n"
 echo "missing=$missing_n"
 echo "extra=$extra_n"
 
+
+#  echo "--- rl0.keys ($rl0_keys) ---"
+#  cat "$rl0_keys"
+#  echo "--- sift.keys ($sift_keys) ---"
+#  cat "$sift_keys"
+
+
 if [ "$rl0_n" -ne 44 ]; then
   echo "FAIL: expected rl0_keys=44, got $rl0_n" >&2
   exit 1
