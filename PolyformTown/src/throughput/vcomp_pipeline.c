@@ -284,8 +284,12 @@ void run_vcomp_levels(const Tile *tile,
                                        levels[level].data[i].hidden_count,
                                        levels[level].data[i].ports,
                                        levels[level].data[i].port_count,
-                                       levels[level].data[i].tiles,
-                                       levels[level].data[i].tile_count,
+                                       track_tiles
+                                           ? levels[level].data[i].tiles
+                                           : NULL,
+                                       track_tiles
+                                           ? levels[level].data[i].tile_count
+                                           : 0,
                                        max_n,
                                        track_tiles,
                                        &raw);
