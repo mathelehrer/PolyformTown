@@ -92,7 +92,7 @@ Print the count at each level `1..N`.
 `--live-only` filters out states with DEAD boundaries.
 
 ```bash
-./poly_count N [tilefile] [--live-only]
+./bin/poly_count N [tilefile] [--live-only]
 ```
 
 ### poly_print
@@ -100,7 +100,7 @@ Print the count at each level `1..N`.
 Print the canonical edge form for each shape at level `N`.
 
 ```bash
-./poly_print N [tilefile] [--live-only]
+./bin/poly_print N [tilefile] [--live-only]
 ```
 
 ### vcomp_count
@@ -110,7 +110,7 @@ Print the vertex-completion count at each level `1..N`.
 `--live-only` filters out states with DEAD boundaries.
 
 ```bash
-./vcomp_count N [tilefile] [--live-only]
+./bin/vcomp_count N [tilefile] [--live-only]
 ```
 
 ### vcomp_print
@@ -118,14 +118,14 @@ Print the vertex-completion count at each level `1..N`.
 Print the canonical vertex-completion representatives at level `N`.
 
 ```bash
-./vcomp_print N [tilefile] [--live-only]
+./bin/vcomp_print N [tilefile] [--live-only]
 ```
 
 ### rl0_generate
 
 Generate RL0 completion records and write them to
-`levelData/rl0/completions.dat`.
-Schema notes are stored in `levelData/rl0/completions.meta`.
+`data/rl0/completions.dat`.
+Schema notes are stored in `data/rl0/completions.meta`.
 
 Each record has attributes:
 `valence`, `tile_count`, `canonical_boundary`, `tiles`, `indices`.
@@ -133,7 +133,7 @@ Each record has attributes:
 Records are emitted as multi-line blocks delimited by `---[N]---`.
 
 ```bash
-./rl0_generate [tilefile] [output_path]
+./bin/rl0_generate [tilefile] [output_path]
 ```
 
 Quick refresh using defaults:
@@ -149,30 +149,30 @@ Convert RL0 records to `imgtable` input.
 Then pipe to `imgtable` to build one SVG grid.
 
 ```bash
-DATA=levelData/rl0/completions.dat
-./rl0_depict --data "$DATA" | \
-  ./imgtable > rl0.svg
+DATA=data/rl0/completions.dat
+./bin/rl0_depict --data "$DATA" | \
+  ./bin/imgtable > rl0.svg
 ```
 
 Examples:
 
 ```bash
-DATA=levelData/rl0/completions.dat
-./rl0_depict --data "$DATA" | \
-  ./imgtable > rl0_all.svg
-./rl0_depict --data "$DATA" \
+DATA=data/rl0/completions.dat
+./bin/rl0_depict --data "$DATA" | \
+  ./bin/imgtable > img/rl0_all.svg
+./bin/rl0_depict --data "$DATA" \
   --limit 144 | \
-  ./imgtable > rl0_16x9.svg
-./rl0_depict --data "$DATA" \
-  --valence 3 --tile-count 3 --grouped | ./imgtable > rl0_v3_n3.svg
-./rl0_depict --data "$DATA" \
-  --valence 6 --tile-count 3 --grouped | ./imgtable > rl0_v6_n3.svg
-./rl0_depict --data "$DATA" \
+  ./bin/imgtable > rl0_16x9.svg
+./bin/rl0_depict --data "$DATA" \
+  --valence 3 --tile-count 3 --grouped | ./bin/imgtable > rl0_v3_n3.svg
+./bin/rl0_depict --data "$DATA" \
+  --valence 6 --tile-count 3 --grouped | ./bin/imgtable > rl0_v6_n3.svg
+./bin/rl0_depict --data "$DATA" \
   --valence 3 6 --tile-count 3 4 \
-  --grouped | ./imgtable > rl0_v36_n34.svg
-./rl0_depict --data "$DATA" \
+  --grouped | ./bin/imgtable > rl0_v36_n34.svg
+./bin/rl0_depict --data "$DATA" \
   --valence 3 6 --tile-count 3 \
-  --grouped --live-only | ./imgtable > rl0_live.svg
+  --grouped --live-only | ./bin/imgtable > rl0_live.svg
 ```
 
 `--valence` and `--tile-count` accept one or more values per flag,
@@ -213,32 +213,32 @@ small domino, chair, and hat cases.
 Run with defaults (monomino, built-in `N`):
 
 ```bash
-./poly_count
-./poly_print
+./bin/poly_count
+./bin/poly_print
 ```
 
 ### Square lattice examples
 
 ```bash
-./poly_count 7 tiles/monomino.tile
-./poly_count 5 tiles/domino.tile
-./poly_count 4 tiles/chair.tile
-./poly_count 3 tiles/tetL.tile
+./bin/poly_count 7 tiles/monomino.tile
+./bin/poly_count 5 tiles/domino.tile
+./bin/poly_count 4 tiles/chair.tile
+./bin/poly_count 3 tiles/tetL.tile
 ```
 
 ### Triangular lattice examples
 
 ```bash
-./poly_count 8 tiles/triangle.tile
-./poly_count 6 tiles/hexagon.tile
-./poly_count 6 tiles/hh.tile
+./bin/poly_count 8 tiles/triangle.tile
+./bin/poly_count 6 tiles/hexagon.tile
+./bin/poly_count 6 tiles/hh.tile
 ```
 
 ### Tetrille tiling examples
 
 ```bash
-./poly_count 8 tiles/kite.tile
-./vcomp_count 3 tiles/hat.tile
+./bin/poly_count 8 tiles/kite.tile
+./bin/vcomp_count 3 tiles/hat.tile
 ```
 
 ## Expected hole counts from print
@@ -246,26 +246,26 @@ Run with defaults (monomino, built-in `N`):
 ### Monomino
 
 ```bash
-./poly_print 7 tiles/monomino.tile | grep '^1 ' | wc -l  -> 1
-./poly_print 8 tiles/monomino.tile | grep '^1 ' | wc -l  -> 6
+./bin/poly_print 7 tiles/monomino.tile | grep '^1 ' | wc -l  -> 1
+./bin/poly_print 8 tiles/monomino.tile | grep '^1 ' | wc -l  -> 6
 ```
 
 ### Domino
 
 ```bash
-./poly_print 4 tiles/domino.tile | grep '^1 ' | wc -l    -> 3
+./bin/poly_print 4 tiles/domino.tile | grep '^1 ' | wc -l    -> 3
 ```
 
 ### tetL
 
 ```bash
-./poly_print 2 tiles/tetL.tile | grep '^1 ' | wc -l      -> 1
+./bin/poly_print 2 tiles/tetL.tile | grep '^1 ' | wc -l      -> 1
 ```
 
 ### Chair (not proven)
 
 ```bash
-./poly_print 3 tiles/chair.tile | grep '^1 ' | wc -l     -> 10
+./bin/poly_print 3 tiles/chair.tile | grep '^1 ' | wc -l     -> 10
 ```
 
 
@@ -294,7 +294,7 @@ printed first; additional cycles represent holes.
 Canonical tile data can be piped into an SVG converter:
 
 ```bash
-./vcomp_print 3 tiles/hat.tile | ./imgtable > out.svg; open out.svg
+./bin/vcomp_print 3 tiles/hat.tile | ./bin/imgtable > out.svg; open out.svg
 ```
 
 Data is streamed into a text-to-SVG converter, saved to a local 

@@ -143,7 +143,7 @@ static void apply_record(Stats *s, const RL0Record *r, const Tile *tile) {
 }
 
 int main(int argc, char **argv) {
-    const char *data_path = "levelData/rl0/completions.dat";
+    const char *data_path = "data/rl0/completions.dat";
     const char *tile_path = "tiles/hat.tile";
 
     if (argc > 1) data_path = argv[1];

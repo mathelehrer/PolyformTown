@@ -384,7 +384,7 @@ static void usage(const char *prog) {
 }
 
 static int parse_args(int argc, char **argv, Options *opt) {
-    opt->data_path = "levelData/rl0/completions.dat";
+    opt->data_path = "data/rl0/completions.dat";
     opt->limit = 0;
     opt->valence_count = 0;
     opt->tile_count_count = 0;
