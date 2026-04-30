@@ -47,7 +47,8 @@ static int coord_less(Coord a, Coord b){
 }
 static int cycle_abs_area_cmp_desc_local(const Cycle *a,const Cycle *b,int lattice){
     long long aa=cycle_signed_area2(a,lattice), ab=cycle_signed_area2(b,lattice);
-    if(aa<0) aa=-aa; if(ab<0) ab=-ab;
+    if(aa<0) aa=-aa;
+    if(ab<0) ab=-ab;
     if(aa!=ab) return aa>ab;
     return cycle_less(a,b);
 }
@@ -128,7 +129,7 @@ static int next_state(const void *st,size_t d,int *cur,void *child,int *cid,void
     const HatState *in=st; HatState*out=child; HatCtx*ctx=vctx; Edge edges[4096]; int ec=build_boundary_edges(&in->poly,edges); (void)d;
     while(*cur<ec*ctx->tile->variant_count){ int step=(*cur)++; int be=step/ctx->tile->variant_count; int tv=step%ctx->tile->variant_count; const Cycle *var=&ctx->tile->variants[tv];
         if(!edge_has_target(edges[be],in->target)) continue;
-        for(int te=0;te<var->n;te++){ Poly grown,key; if(!try_attach_tile_poly(&in->poly,var,ctx->tile->lattice,be,te,&grown)) continue; if(!live_boundary_dfs(&grown,ctx->tile)) continue; poly_hash_key_lattice(&grown,ctx->tile->lattice,&key); if(!hash_insert(&ctx->seen,&key)) continue; *out=*in; out->poly=grown; out->tile_count=in->tile_count+1; if(cid)*cid=step; return 1; }
+        for(int te=0;te<var->n;te++){ Poly grown,key; if(!try_attach_tile_poly(&in->poly,var,ctx->tile->lattice,be,te,&grown)) continue; poly_hash_key_lattice(&grown,ctx->tile->lattice,&key); if(!hash_insert(&ctx->seen,&key)) continue; *out=*in; out->poly=grown; out->tile_count=in->tile_count+1; if(cid)*cid=step; return 1; }
     } return 0;
 }
 static int valid(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx;
@@ -136,12 +137,22 @@ static int valid(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=
     if(s->tile_count>=SAFETY_MAX_DEPTH && poly_has_vertex(&s->poly,s->target)) ctx->cap_blocked++;
     return s->tile_count<=SAFETY_MAX_DEPTH; }
 static int done(const void *st,size_t d,void *vctx){ (void)d; (void)vctx; const HatState*s=st; return !poly_has_vertex(&s->poly,s->target); }
-static void on_sol(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx; Poly k; poly_hash_key_lattice(&s->poly,ctx->tile->lattice,&k); add_out(ctx,&k,s->target); }
+static void on_sol(const void *st,size_t d,void *vctx){ (void)d; const HatState*s=st; HatCtx*ctx=vctx; Poly k;
+    if(!live_boundary_dfs(&s->poly, ctx->tile)) return;
+    poly_hash_key_lattice(&s->poly,ctx->tile->lattice,&k);
+    add_out(ctx,&k,s->target);
+}
 static int cmp_str(const void *a,const void *b){ const char*const*sa=a; const char*const*sb=b; return strcmp(*sa,*sb); }
 
 int main(int argc,char **argv){
     const char *tile_path="tiles/hat.tile", *out_path=NULL; Tile tile; HatCtx *ctx; DfsStats total={0,0,0,0};
-    for(int i=1;i<argc;i++){ if(strcmp(argv[i],"--tile")==0&&i+1<argc) tile_path=argv[++i]; else if(strcmp(argv[i],"--out")==0&&i+1<argc) out_path=argv[++i]; }
+    for(int i=1;i<argc;i++){
+        if(strcmp(argv[i],"--tile")==0 && i+1<argc){
+            tile_path=argv[++i];
+        } else if(strcmp(argv[i],"--out")==0 && i+1<argc){
+            out_path=argv[++i];
+        }
+    }
     if(!tile_load(tile_path,&tile)) return 1;
     ctx=calloc(1,sizeof(*ctx)); if(!ctx) return 1; ctx->tile=&tile;
     for(int i=0;i<tile.base.n;i++){
@@ -150,11 +161,21 @@ int main(int argc,char **argv){
         { Poly key; poly_hash_key_lattice(&init.poly,tile.lattice,&key); hash_insert(&ctx->seen,&key); }
         cfg=(DfsConfig){sizeof(HatState),SAFETY_MAX_DEPTH,0,0,next_state,valid,done,on_sol,NULL,ctx};
         if(!dfs_run(&cfg,&init,&st)) return 1;
-        total.nodes_visited+=st.nodes_visited; total.validity_prunes+=st.validity_prunes; total.solutions_found+=st.solutions_found; total.solutions_kept+=st.solutions_kept;
+        total.nodes_visited+=st.nodes_visited;
+        total.validity_prunes+=st.validity_prunes;
+        total.solutions_found+=st.solutions_found;
+        total.solutions_kept+=st.solutions_kept;
     }
     qsort(ctx->out,(size_t)ctx->out_n,sizeof(*ctx->out),cmp_str);
-    FILE *fp=stdout; if(out_path) fp=fopen(out_path,"w"); if(!fp) return 1;
-    for(int i=0;i<ctx->out_n;i++) fprintf(fp,"%s\n",ctx->out[i]); if(fp!=stdout) fclose(fp);
+    FILE *fp=stdout;
+    if(out_path) fp=fopen(out_path,"w");
+    if(!fp) return 1;
+    for(int i=0;i<ctx->out_n;i++) fprintf(fp,"%s\n",ctx->out[i]);
+    if(fp!=stdout) fclose(fp);
     printf("tile=%s boundary_vertices=%d centered_boundary=%d nodes=%zu prunes=%zu found=%zu kept=%zu depth_cap=%d max_tile_seen=%d cap_blocked=%d\n",tile_path,tile.base.n,ctx->out_n,total.nodes_visited,total.validity_prunes,total.solutions_found,total.solutions_kept,SAFETY_MAX_DEPTH,ctx->max_tile_seen,ctx->cap_blocked);
-    for(int i=0;i<ctx->out_n;i++) free(ctx->out[i]); free(ctx->out); hash_destroy(&ctx->seen); free(ctx); return 0;
+    for(int i=0;i<ctx->out_n;i++) free(ctx->out[i]);
+    free(ctx->out);
+    hash_destroy(&ctx->seen);
+    free(ctx);
+    return 0;
 }
