@@ -23,6 +23,8 @@ typedef struct {
     int ord[MAXP];
     int cover[16];
     int mode;
+    int trace_on;
+    FILE *trace_fp;
     size_t sol;
 } C;
 
@@ -117,6 +119,19 @@ static int ok(const void *st,size_t d,void *vc){(void)d;(void)vc; const S *s=st;
 static int done(const void *st,size_t d,void *vc){(void)d;(void)vc; return ((const S*)st)->mask==FULL;}
 static void hit(const void *st,size_t d,void *vc){(void)st;(void)d; ((C*)vc)->sol++;}
 
+static const char *event_name(int e) {
+    if (e == DFS_TRACE_ENTER) return "E";
+    if (e == DFS_TRACE_PRUNE) return "P";
+    if (e == DFS_TRACE_BACKTRACK) return "B";
+    if (e == DFS_TRACE_SOLUTION) return "S";
+    return "?";
+}
+static void trace_line(size_t depth,const void *state,int cid,int event,void *vctx){
+    C *c=vctx; const S*s=state;
+    if(!c->trace_on||!c->trace_fp)return;
+    fprintf(c->trace_fp,"%s\t%zu\t%d\t0x%04x\n",event_name(event),depth,cid,s->mask);
+}
+
 static void print_mask_binary(uint16_t mask) {
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
@@ -125,20 +140,40 @@ static void print_mask_binary(uint16_t mask) {
     }
 }
 
-int main(void){
+int main(int argc, char **argv){
     C c; S seed = {0}; DfsConfig cfg; DfsStats st;
-    for(int m=0;m<4;m++){
-        init_ctx(&c); c.mode=m; mkord(&c);
-        cfg=(DfsConfig){sizeof(S),DEPTH,0,0,nx,ok,done,hit,NULL,&c};
-        if (!dfs_run(&cfg,&seed,&st)) {
-            fprintf(stderr, "dfs_run failed for order=%d\n", m);
-            return 1;
+
+    init_ctx(&c);
+    c.mode = ORDER_MRV;
+    for (int i = 1; i < argc; i++) {
+        if(strcmp(argv[i],"--trace")==0 && i+1<argc){
+            c.trace_on=1;
+            c.trace_fp=fopen(argv[++i],"w");
+            if(!c.trace_fp)return 1;
+            fprintf(c.trace_fp,"ev\tdepth\tidx\tmask\n");
+        } else if(strcmp(argv[i],"--order")==0 && i+1<argc){
+            i++;
+            if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
+            else if(strcmp(argv[i],"common")==0)c.mode=ORDER_COMMON;
+            else if(strcmp(argv[i],"mrv")==0)c.mode=ORDER_MRV;
+            else c.mode=ORDER_INDEX;
         }
-        printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu full=",
-               m==ORDER_INDEX?"index":m==ORDER_RARE?"rare":m==ORDER_COMMON?"common":"mrv",
-               c.n,c.sol,st.nodes_visited,st.validity_prunes);
-        print_mask_binary(FULL);
-        printf("\n");
     }
+
+    c.sol = 0;
+    mkord(&c);
+    cfg=(DfsConfig){sizeof(S),DEPTH,0,0,nx,ok,done,hit,trace_line,&c};
+    if (!dfs_run(&cfg,&seed,&st)) {
+        if (c.trace_fp) fclose(c.trace_fp);
+        fprintf(stderr, "dfs_run failed for order=%d\n", c.mode);
+        return 1;
+    }
+    printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu kept=%zu full=",
+           c.mode==ORDER_INDEX?"index":c.mode==ORDER_RARE?"rare":c.mode==ORDER_COMMON?"common":"mrv",
+           c.n,c.sol,st.nodes_visited,st.validity_prunes,st.solutions_kept);
+    print_mask_binary(FULL);
+    printf("\n");
+
+    if (c.trace_fp) fclose(c.trace_fp);
     return 0;
 }
