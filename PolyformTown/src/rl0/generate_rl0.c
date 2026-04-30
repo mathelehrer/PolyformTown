@@ -204,12 +204,12 @@ static int record_cmp_local(const void *A, const void *B) {
         return (a->tile_count < b->tile_count) ? -1 : 1;
     }
 
-    int pcmp = strcmp(a->boundary_str, b->boundary_str);
-    if (pcmp != 0) return pcmp;
-
     if (a->hidden_count != b->hidden_count) {
         return (a->hidden_count < b->hidden_count) ? -1 : 1;
     }
+
+    int pcmp = strcmp(a->boundary_str, b->boundary_str);
+    if (pcmp != 0) return pcmp;
 
     if (a->valence != b->valence) {
         return (a->valence < b->valence) ? -1 : 1;
