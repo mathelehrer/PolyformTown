@@ -70,6 +70,20 @@ static void init_ctx(C *c) {
 }
 
 static int score(C *c, uint16_t m){int s=0;for(int b=0;b<16;b++)if(m&(1u<<b))s+=c->cover[b];return s;}
+static const char *order_name(int mode){
+    if(mode==ORDER_INDEX) return "index";
+    if(mode==ORDER_RARE) return "rare";
+    if(mode==ORDER_COMMON) return "common";
+    return "mrv";
+}
+static int parse_order_mode(const char *s, int *out){
+    if(strcmp(s,"index")==0) *out=ORDER_INDEX;
+    else if(strcmp(s,"rare")==0) *out=ORDER_RARE;
+    else if(strcmp(s,"common")==0) *out=ORDER_COMMON;
+    else if(strcmp(s,"mrv")==0) *out=ORDER_MRV;
+    else return 0;
+    return 1;
+}
 static int choose_mrv_cell(const C *c, const S *in) {
     int best_cell = -1;
     int best_count = 999;
@@ -150,11 +164,10 @@ int main(int argc, char **argv){
             fprintf(c.trace_fp,"ev\tdepth\tidx\tmask\n");
         } else if(strcmp(argv[i],"--order")==0 && i+1<argc){
             i++;
-            if(strcmp(argv[i],"index")==0)c.mode=ORDER_INDEX;
-            else if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
-            else if(strcmp(argv[i],"common")==0)c.mode=ORDER_COMMON;
-            else if(strcmp(argv[i],"mrv")==0)c.mode=ORDER_MRV;
-            else { fprintf(stderr, "unknown --order value: %s\n", argv[i]); return 1; }
+            if(!parse_order_mode(argv[i], &c.mode)){
+                fprintf(stderr, "unknown --order value: %s\n", argv[i]);
+                return 1;
+            }
         }
     }
 
@@ -167,7 +180,7 @@ int main(int argc, char **argv){
         return 1;
     }
     printf("order=%s placements=%d solutions=%zu nodes=%zu prunes=%zu kept=%zu\n",
-           c.mode==ORDER_INDEX?"index":c.mode==ORDER_RARE?"rare":c.mode==ORDER_COMMON?"common":"mrv",
+           order_name(c.mode),
            c.n,c.sol,st.nodes_visited,st.validity_prunes,st.solutions_kept);
 
     if (c.trace_fp) fclose(c.trace_fp);
