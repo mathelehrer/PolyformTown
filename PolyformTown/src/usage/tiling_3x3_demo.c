@@ -147,7 +147,7 @@ int main(int argc,char **argv){
     DemoCtx ctx; DemoState init; DfsConfig cfg; DfsStats st; memset(&ctx,0,sizeof(ctx)); ctx.anchor_mode=0; ctx.order_mode=ORDER_MRV; placements_init(&ctx);
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--trace")==0 && i+1<argc){ctx.trace_on=1; ctx.trace_fp=fopen(argv[++i],"w"); if(!ctx.trace_fp)return 1; fprintf(ctx.trace_fp,"ev\tdepth\tidx\tmask\n");}
-        else if(strcmp(argv[i],"--order")==0 && i+1<argc){i++; if(strcmp(argv[i],"rare")==0)ctx.order_mode=ORDER_RARE; else if(strcmp(argv[i],"common")==0)ctx.order_mode=ORDER_COMMON; else if(strcmp(argv[i],"mrv")==0)ctx.order_mode=ORDER_MRV;}
+        else if(strcmp(argv[i],"--order")==0 && i+1<argc){i++; if(strcmp(argv[i],"index")==0)ctx.order_mode=ORDER_INDEX; else if(strcmp(argv[i],"rare")==0)ctx.order_mode=ORDER_RARE; else if(strcmp(argv[i],"common")==0)ctx.order_mode=ORDER_COMMON; else if(strcmp(argv[i],"mrv")==0)ctx.order_mode=ORDER_MRV; else { fprintf(stderr, "unknown --order value: %s\n", argv[i]); return 1; }}
         else if(strcmp(argv[i],"--anchor")==0){ctx.anchor_mode=1;}
     }
     order_build(&ctx); memset(&init,0,sizeof(init));

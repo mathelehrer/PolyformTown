@@ -153,10 +153,11 @@ int main(int argc, char **argv){
             fprintf(c.trace_fp,"ev\tdepth\tidx\tmask\n");
         } else if(strcmp(argv[i],"--order")==0 && i+1<argc){
             i++;
-            if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
+            if(strcmp(argv[i],"index")==0)c.mode=ORDER_INDEX;
+            else if(strcmp(argv[i],"rare")==0)c.mode=ORDER_RARE;
             else if(strcmp(argv[i],"common")==0)c.mode=ORDER_COMMON;
             else if(strcmp(argv[i],"mrv")==0)c.mode=ORDER_MRV;
-            else c.mode=ORDER_INDEX;
+            else { fprintf(stderr, "unknown --order value: %s\n", argv[i]); return 1; }
         }
     }
 
