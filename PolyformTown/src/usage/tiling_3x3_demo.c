@@ -132,15 +132,12 @@ static const char *event_name(int e) {
 static void trace_line(size_t depth,const void *state,int cid,int event,void *vctx){
     DemoCtx *ctx=vctx; const DemoState*s=state;
     if(!ctx->trace_on||!ctx->trace_fp)return;
-    fprintf(ctx->trace_fp,"%s\t%zu\t%d\t0x%03x\n",event_name(event),depth,cid,s->mask);
-}
-
-static void print_mask_binary(uint16_t mask) {
-    for (int y = 0; y < BOARD_H; y++) {
-        for (int x = 0; x < BOARD_W; x++) {
-            putchar((mask & (1u << (y * BOARD_W + x))) ? '1' : '0');
-        }
+    fprintf(ctx->trace_fp,"%s\t%zu\t%d\t[",event_name(event),depth,cid);
+    for (int i = 0; i < BOARD_W * BOARD_H; i++) {
+        if (i) fputc(',', ctx->trace_fp);
+        fputc((s->mask & (1u << i)) ? '1' : '0', ctx->trace_fp);
     }
+    fprintf(ctx->trace_fp,"]\n");
 }
 
 int main(int argc,char **argv){
@@ -158,12 +155,10 @@ int main(int argc,char **argv){
         return 1;
     }
     if(ctx.trace_fp) fclose(ctx.trace_fp);
-    printf("placements=%d solutions=%zu canonical=%zu nodes=%zu prunes=%zu kept=%zu order=%s anchor=%d full=",
+    printf("placements=%d solutions=%zu canonical=%zu nodes=%zu prunes=%zu kept=%zu order=%s anchor=%d\n",
            ctx.n,ctx.solution_count,ctx.canonical_count,st.nodes_visited,
            st.validity_prunes,st.solutions_kept,
            ctx.order_mode==ORDER_RARE?"rare":ctx.order_mode==ORDER_COMMON?"common":ctx.order_mode==ORDER_MRV?"mrv":"index",
            ctx.anchor_mode);
-    print_mask_binary(BOARD_FULL);
-    printf("\n");
     return 0;
 }
