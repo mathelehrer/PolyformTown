@@ -19,6 +19,18 @@ typedef struct {
 } RL0SeenKey;
 
 typedef struct {
+    int valence;
+    int tile_count;
+    Coord center;
+    Poly poly;
+    char *boundary_str;
+    Cycle tiles[RL0_MAX_TRACE];
+    int indices[RL0_MAX_TRACE];
+    Coord hidden[VCOMP_MAX_HIDDEN];
+    int hidden_count;
+} RL0Record;
+
+typedef struct {
     FILE *fp;
     int lattice;
     const Tile *tile;
@@ -27,6 +39,9 @@ typedef struct {
     RL0SeenKey *seen;
     size_t seen_count;
     size_t seen_cap;
+    RL0Record *records;
+    size_t record_count;
+    size_t record_cap;
 } RL0Ctx;
 
 static int coord_less_local(Coord a, Coord b) {
@@ -48,15 +63,6 @@ static void print_cycle(FILE *fp, const Cycle *c) {
     for (int i = 0; i < c->n; i++) {
         if (i) fprintf(fp, ",");
         fprintf(fp, "(%d,%d,%d)", c->v[i].v, c->v[i].x, c->v[i].y);
-    }
-    fprintf(fp, "]");
-}
-
-static void print_poly(FILE *fp, const Poly *p) {
-    fprintf(fp, "[");
-    for (int i = 0; i < p->cycle_count; i++) {
-        if (i) fprintf(fp, "|");
-        print_cycle(fp, &p->cycles[i]);
     }
     fprintf(fp, "]");
 }
@@ -130,6 +136,113 @@ static int seen_add(RL0Ctx *ctx, int valence, int tile_count, const Poly *poly) 
     return 1;
 }
 
+static char *poly_to_string_local(const Poly *p) {
+    size_t cap = 4096;
+    char *buf = malloc(cap);
+    if (!buf) return NULL;
+    size_t off = 0;
+
+    off += (size_t)snprintf(buf + off, cap - off, "[");
+    for (int i = 0; i < p->cycle_count; i++) {
+        if (i) off += (size_t)snprintf(buf + off, cap - off, "|");
+        off += (size_t)snprintf(buf + off, cap - off, "[");
+        for (int j = 0; j < p->cycles[i].n; j++) {
+            if (j) off += (size_t)snprintf(buf + off, cap - off, ",");
+            off += (size_t)snprintf(buf + off,
+                                    cap - off,
+                                    "(%d,%d,%d)",
+                                    p->cycles[i].v[j].v,
+                                    p->cycles[i].v[j].x,
+                                    p->cycles[i].v[j].y);
+        }
+        off += (size_t)snprintf(buf + off, cap - off, "]");
+    }
+    off += (size_t)snprintf(buf + off, cap - off, "]");
+    return buf;
+}
+
+static int records_add(RL0Ctx *ctx,
+                       int valence,
+                       int tile_count,
+                       Coord center,
+                       const VCompRawState *raw,
+                       const int *indices) {
+    if (ctx->record_count == ctx->record_cap) {
+        size_t nc = ctx->record_cap ? (ctx->record_cap * 2) : 128;
+        RL0Record *n = realloc(ctx->records, nc * sizeof(*ctx->records));
+        if (!n) return 0;
+        ctx->records = n;
+        ctx->record_cap = nc;
+    }
+
+    RL0Record *rec = &ctx->records[ctx->record_count++];
+    rec->valence = valence;
+    rec->tile_count = tile_count;
+    rec->center = center;
+    rec->poly = raw->poly;
+    rec->boundary_str = poly_to_string_local(&raw->poly);
+    if (!rec->boundary_str) return 0;
+    rec->hidden_count = raw->hidden_count;
+
+    for (int i = 0; i < tile_count; i++) {
+        rec->tiles[i] = raw->tiles[i];
+        rec->indices[i] = indices[i];
+    }
+    for (int i = 0; i < raw->hidden_count; i++) {
+        rec->hidden[i] = raw->hidden[i];
+    }
+
+    return 1;
+}
+
+static int record_cmp_local(const void *A, const void *B) {
+    const RL0Record *a = A;
+    const RL0Record *b = B;
+
+    if (a->tile_count != b->tile_count) {
+        return (a->tile_count < b->tile_count) ? -1 : 1;
+    }
+
+    int pcmp = strcmp(a->boundary_str, b->boundary_str);
+    if (pcmp != 0) return pcmp;
+
+    if (a->valence != b->valence) {
+        return (a->valence < b->valence) ? -1 : 1;
+    }
+    return 0;
+}
+
+static void write_records(RL0Ctx *ctx) {
+    qsort(ctx->records,
+          ctx->record_count,
+          sizeof(*ctx->records),
+          record_cmp_local);
+
+    for (size_t i = 0; i < ctx->record_count; i++) {
+        const RL0Record *rec = &ctx->records[i];
+        fprintf(ctx->fp, "---[%zu]---\n", i + 1);
+        fprintf(ctx->fp, "valence:%d\n", rec->valence);
+        fprintf(ctx->fp, "tile_count:%d\n", rec->tile_count);
+        fprintf(ctx->fp,
+                "center:(%d,%d,%d)\n",
+                rec->center.v,
+                rec->center.x,
+                rec->center.y);
+        fprintf(ctx->fp, "canonical_boundary:");
+        fputs(rec->boundary_str, ctx->fp);
+        fprintf(ctx->fp, "\n");
+        fprintf(ctx->fp, "tiles:");
+        print_tile_list(ctx->fp, rec->tiles, rec->tile_count);
+        fprintf(ctx->fp, "\n");
+        fprintf(ctx->fp, "hidden:");
+        print_coord_list(ctx->fp, rec->hidden, rec->hidden_count);
+        fprintf(ctx->fp, "\n");
+        fprintf(ctx->fp, "indices:");
+        print_indices(ctx->fp, rec->indices, rec->tile_count);
+        fprintf(ctx->fp, "\n");
+    }
+}
+
 static void emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     int indices[RL0_MAX_TRACE];
     int total_tile_count = raw->tile_count;
@@ -149,23 +262,7 @@ static void emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     if (seen_has(ctx, valence, total_tile_count, &raw->poly)) return;
     if (!seen_add(ctx, valence, total_tile_count, &raw->poly)) return;
 
-    ctx->record_no++;
-    fprintf(ctx->fp, "---[%d]---\n", ctx->record_no);
-    fprintf(ctx->fp, "valence:%d\n", valence);
-    fprintf(ctx->fp, "tile_count:%d\n", total_tile_count);
-    fprintf(ctx->fp, "center:(%d,%d,%d)\n", center.v, center.x, center.y);
-    fprintf(ctx->fp, "canonical_boundary:");
-    print_poly(ctx->fp, &raw->poly);
-    fprintf(ctx->fp, "\n");
-    fprintf(ctx->fp, "tiles:");
-    print_tile_list(ctx->fp, raw->tiles, total_tile_count);
-    fprintf(ctx->fp, "\n");
-    fprintf(ctx->fp, "hidden:");
-    print_coord_list(ctx->fp, raw->hidden, raw->hidden_count);
-    fprintf(ctx->fp, "\n");
-    fprintf(ctx->fp, "indices:");
-    print_indices(ctx->fp, indices, total_tile_count);
-    fprintf(ctx->fp, "\n");
+    records_add(ctx, valence, total_tile_count, center, raw, indices);
 }
 
 static int ensure_dir(const char *path) {
@@ -222,6 +319,9 @@ int main(int argc, char **argv) {
     ctx.seen = NULL;
     ctx.seen_count = 0;
     ctx.seen_cap = 0;
+    ctx.records = NULL;
+    ctx.record_count = 0;
+    ctx.record_cap = 0;
 
     for (int i = 0; i < vc; i++) {
         VCompLevels raw;
@@ -247,7 +347,13 @@ int main(int argc, char **argv) {
         vcomp_levels_destroy(&raw);
     }
 
+    write_records(&ctx);
+
     fclose(fp);
     free(ctx.seen);
+    for (size_t i = 0; i < ctx.record_count; i++) {
+        free(ctx.records[i].boundary_str);
+    }
+    free(ctx.records);
     return 0;
 }
