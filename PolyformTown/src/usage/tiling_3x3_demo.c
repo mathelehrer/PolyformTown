@@ -87,6 +87,20 @@ static void placements_init(DemoCtx *ctx) {
 }
 
 static int score(const DemoCtx *ctx, uint16_t m){int s=0; for(int b=0;b<9;b++) if(m&(1u<<b)) s+=ctx->cover[b]; return s;}
+static const char *order_name(int mode){
+    if(mode==ORDER_INDEX) return "index";
+    if(mode==ORDER_RARE) return "rare";
+    if(mode==ORDER_COMMON) return "common";
+    return "mrv";
+}
+static int parse_order_mode(const char *s, int *out){
+    if(strcmp(s,"index")==0) *out=ORDER_INDEX;
+    else if(strcmp(s,"rare")==0) *out=ORDER_RARE;
+    else if(strcmp(s,"common")==0) *out=ORDER_COMMON;
+    else if(strcmp(s,"mrv")==0) *out=ORDER_MRV;
+    else return 0;
+    return 1;
+}
 static void order_build(DemoCtx *ctx){
     for(int i=0;i<ctx->n;i++) ctx->order[i]=i;
     for(int i=0;i<ctx->n;i++) for(int j=i+1;j<ctx->n;j++){
@@ -144,7 +158,13 @@ int main(int argc,char **argv){
     DemoCtx ctx; DemoState init; DfsConfig cfg; DfsStats st; memset(&ctx,0,sizeof(ctx)); ctx.anchor_mode=0; ctx.order_mode=ORDER_MRV; placements_init(&ctx);
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"--trace")==0 && i+1<argc){ctx.trace_on=1; ctx.trace_fp=fopen(argv[++i],"w"); if(!ctx.trace_fp)return 1; fprintf(ctx.trace_fp,"ev\tdepth\tidx\tmask\n");}
-        else if(strcmp(argv[i],"--order")==0 && i+1<argc){i++; if(strcmp(argv[i],"index")==0)ctx.order_mode=ORDER_INDEX; else if(strcmp(argv[i],"rare")==0)ctx.order_mode=ORDER_RARE; else if(strcmp(argv[i],"common")==0)ctx.order_mode=ORDER_COMMON; else if(strcmp(argv[i],"mrv")==0)ctx.order_mode=ORDER_MRV; else { fprintf(stderr, "unknown --order value: %s\n", argv[i]); return 1; }}
+        else if(strcmp(argv[i],"--order")==0 && i+1<argc){
+            i++;
+            if(!parse_order_mode(argv[i], &ctx.order_mode)){
+                fprintf(stderr, "unknown --order value: %s\n", argv[i]);
+                return 1;
+            }
+        }
         else if(strcmp(argv[i],"--anchor")==0){ctx.anchor_mode=1;}
     }
     order_build(&ctx); memset(&init,0,sizeof(init));
@@ -158,7 +178,7 @@ int main(int argc,char **argv){
     printf("placements=%d solutions=%zu canonical=%zu nodes=%zu prunes=%zu kept=%zu order=%s anchor=%d\n",
            ctx.n,ctx.solution_count,ctx.canonical_count,st.nodes_visited,
            st.validity_prunes,st.solutions_kept,
-           ctx.order_mode==ORDER_RARE?"rare":ctx.order_mode==ORDER_COMMON?"common":ctx.order_mode==ORDER_MRV?"mrv":"index",
+           order_name(ctx.order_mode),
            ctx.anchor_mode);
     return 0;
 }
