@@ -25,6 +25,9 @@ typedef struct {
     int have_indices;
     int index_count;
     int indices[MAX_TILES_PER_RECORD];
+    int have_parities;
+    int parity_count;
+    int parities[MAX_TILES_PER_RECORD];
     int have_hidden;
     int hidden_count;
     Coord hidden[MAX_TILES_PER_RECORD];
@@ -346,12 +349,19 @@ static void emit_record(const RL0Record *r,
     printf("[%d]\n", index);
     printf("Aggregate\n");
     tile_print_imgtable_shape(tile, &r->boundary);
-    printf("Tiles\n");
+    printf("TilesLight\n");
     for (int i = 0; i < r->tile_count_list; i++) {
-        Poly p;
-        p.cycle_count = 1;
-        p.cycles[0] = r->tiles[i];
-        tile_print_imgtable_shape(tile, &p);
+        if (r->have_parities && r->parities[i] == 1) {
+            Poly p; p.cycle_count = 1; p.cycles[0] = r->tiles[i];
+            tile_print_imgtable_shape(tile, &p);
+        }
+    }
+    printf("TilesDark\n");
+    for (int i = 0; i < r->tile_count_list; i++) {
+        if (r->have_parities && r->parities[i] == -1) {
+            Poly p; p.cycle_count = 1; p.cycles[0] = r->tiles[i];
+            tile_print_imgtable_shape(tile, &p);
+        }
     }
     if (r->have_center) {
         printf("Center\n");
@@ -465,6 +475,14 @@ int main(int argc, char **argv) {
     int record_index = 0;
     while (fgets(line, sizeof(line), fp)) {
         if (strncmp(line, "---[", 4) == 0) {
+            if (rec.have_tiles && (!rec.have_parities ||
+                 rec.parity_count != rec.tile_count_list ||
+                 rec.parity_count == 0)) {
+                fprintf(stderr, "malformed record: missing/invalid parities\n");
+                fclose(fp);
+                free(seen.items);
+                return 1;
+            }
             if (record_matches(&rec, &opt, &tile) &&
                 seen_insert(&seen,
                             rec.valence,
@@ -501,6 +519,18 @@ int main(int argc, char **argv) {
                                              &rec.tile_count_list);
             continue;
         }
+        if (strncmp(line, "parities:", 9) == 0) {
+            rec.have_parities = parse_int_list(line + 9,
+                                               rec.parities,
+                                               &rec.parity_count);
+            continue;
+        }
+        if (strncmp(line, "constellation:", 14) == 0) {
+            rec.have_hidden = parse_coord_list(line + 14,
+                                               rec.hidden,
+                                               &rec.hidden_count);
+            continue;
+        }
         if (strncmp(line, "hidden:", 7) == 0) {
             rec.have_hidden = parse_coord_list(line + 7,
                                                rec.hidden,
@@ -521,6 +551,15 @@ int main(int argc, char **argv) {
             }
             continue;
         }
+    }
+
+    if ((!rec.have_parities || !rec.have_tiles ||
+         rec.parity_count != rec.tile_count_list ||
+         rec.parity_count == 0) && rec.have_tiles) {
+        fprintf(stderr, "malformed record: missing/invalid parities\n");
+        free(seen.items);
+        fclose(fp);
+        return 1;
     }
 
     if ((opt.limit == 0 || emitted < opt.limit) &&
