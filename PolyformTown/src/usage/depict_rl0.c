@@ -509,6 +509,10 @@ int main(int argc, char **argv) {
             rec.have_center = parse_center(line + 7, &rec.center);
             continue;
         }
+        if (strncmp(line, "boundary:", 9) == 0) {
+            rec.have_boundary = parse_poly(line + 9, &rec.boundary);
+            continue;
+        }
         if (strncmp(line, "canonical_boundary:", 19) == 0) {
             rec.have_boundary = parse_poly(line + 19, &rec.boundary);
             continue;
@@ -541,13 +545,18 @@ int main(int argc, char **argv) {
             rec.have_indices = parse_int_list(line + 8,
                                               rec.indices,
                                               &rec.index_count);
-            if (rec.have_indices && rec.have_tiles &&
+            if (rec.have_indices && rec.have_tiles && rec.have_parities &&
                 rec.index_count == rec.tile_count_list &&
+                rec.parity_count == rec.tile_count_list &&
                 rec.index_count > 0 &&
                 rec.indices[0] >= 0 &&
                 rec.indices[0] < rec.tiles[0].n) {
-                rec.center = rec.tiles[0].v[rec.indices[0]];
-                rec.have_center = 1;
+                int ci = rec.indices[0];
+                if (rec.parities[0] == -1) ci = rec.tiles[0].n - 1 - ci;
+                if (ci >= 0 && ci < rec.tiles[0].n) {
+                    rec.center = rec.tiles[0].v[ci];
+                    rec.have_center = 1;
+                }
             }
             continue;
         }

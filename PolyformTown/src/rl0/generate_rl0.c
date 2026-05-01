@@ -170,7 +170,9 @@ static int canonicalize_tile(const Cycle *src, const Cycle *in, Coord center,
                 for (int i = 0; i < n; i++) out->v[i] = placed.v[n - 1 - i];
             }
             *index = cycle_vertex_index(out, center);
-            return (*index >= 0);
+            if (*index < 0) return 0;
+            if (p == -1) *index = (n - 1 - *index);
+            return 1;
         }
     }
     return 0;
@@ -310,7 +312,7 @@ static void write_records(RL0Ctx *ctx) {
                 rec->center.v,
                 rec->center.x,
                 rec->center.y);
-        fprintf(ctx->fp, "canonical_boundary:");
+        fprintf(ctx->fp, "boundary:");
         fputs(rec->boundary_str, ctx->fp);
         fprintf(ctx->fp, "\n");
         fprintf(ctx->fp, "constellation:");
