@@ -8,6 +8,7 @@
 #include "core/cycle.h"
 #include "core/lattice.h"
 #include "core/tile.h"
+#include "core/tetrille.h"
 #include "throughput/vcomp.h"
 
 #define RL0_MAX_TRACE MAX_VERTS
@@ -25,6 +26,7 @@ typedef struct {
     Poly poly;
     char *boundary_str;
     Cycle tiles[RL0_MAX_TRACE];
+    int parities[RL0_MAX_TRACE];
     int indices[RL0_MAX_TRACE];
     Coord hidden[VCOMP_MAX_HIDDEN];
     int hidden_count;
@@ -85,6 +87,15 @@ static void print_indices(FILE *fp, const int *indices, int count) {
     fprintf(fp, "]");
 }
 
+static void print_parities(FILE *fp, const int *parities, int count) {
+    fprintf(fp, "[");
+    for (int i = 0; i < count; i++) {
+        if (i) fprintf(fp, ",");
+        fprintf(fp, "%d", parities[i]);
+    }
+    fprintf(fp, "]");
+}
+
 static void print_coord_list(FILE *fp, const Coord *coords, int count) {
     fprintf(fp, "[");
     for (int i = 0; i < count; i++) {
@@ -99,6 +110,70 @@ static int cycle_vertex_index(const Cycle *c, Coord q) {
         if (coord_eq(c->v[i], q)) return i;
     }
     return -1;
+}
+
+
+static int cycle_matches_cyclic(const Cycle *a, const Cycle *b) {
+    if (a->n != b->n) return 0;
+    int n = a->n;
+    for (int shift = 0; shift < n; shift++) {
+        int ok = 1;
+        for (int i = 0; i < n; i++) {
+            if (!coord_eq(a->v[i], b->v[(shift + i) % n])) {
+                ok = 0;
+                break;
+            }
+        }
+        if (ok) return 1;
+        ok = 1;
+        for (int i = 0; i < n; i++) {
+            int j = (shift - i) % n;
+            if (j < 0) j += n;
+            if (!coord_eq(a->v[i], b->v[j])) {
+                ok = 0;
+                break;
+            }
+        }
+        if (ok) return 1;
+    }
+    return 0;
+}
+
+static int canonicalize_tile(const Cycle *src, const Cycle *in, Coord center,
+                             int lattice, Cycle *out, int *parity, int *index) {
+    int n = src->n;
+    if (in->n != n || n <= 0) return 0;
+    long long src_area = cycle_signed_area2(src, lattice);
+    int tcount = lattice_transform_count(lattice);
+
+    for (int t = 0; t < tcount; t++) {
+        Cycle tr = {0};
+        cycle_transform_lattice(src, &tr, lattice, t);
+
+        for (int j = 0; j < n; j++) {
+            if (in->v[j].v != tr.v[0].v) continue;
+            int dx = in->v[j].x - tr.v[0].x;
+            int dy = in->v[j].y - tr.v[0].y;
+            int m6 = 0, n6 = 0;
+            if (!tetrille_delta_to_6(tr.v[0].v, dx, dy, &m6, &n6)) continue;
+
+            Cycle placed = tr;
+            tetrille_translate_cycle(&placed, m6, n6);
+            if (!cycle_matches_cyclic(&placed, in)) continue;
+
+            int p = (cycle_signed_area2(&tr, lattice) * src_area >= 0) ? 1 : -1;
+            *parity = p;
+            out->n = n;
+            if (p == 1) {
+                for (int i = 0; i < n; i++) out->v[i] = placed.v[i];
+            } else {
+                for (int i = 0; i < n; i++) out->v[i] = placed.v[n - 1 - i];
+            }
+            *index = cycle_vertex_index(out, center);
+            return (*index >= 0);
+        }
+    }
+    return 0;
 }
 
 static int poly_equal_local(const Poly *a, const Poly *b) {
@@ -166,6 +241,7 @@ static int records_add(RL0Ctx *ctx,
                        int tile_count,
                        Coord center,
                        const VCompRawState *raw,
+                       const int *parities,
                        const int *indices) {
     if (ctx->record_count == ctx->record_cap) {
         size_t nc = ctx->record_cap ? (ctx->record_cap * 2) : 128;
@@ -186,6 +262,7 @@ static int records_add(RL0Ctx *ctx,
 
     for (int i = 0; i < tile_count; i++) {
         rec->tiles[i] = raw->tiles[i];
+        rec->parities[i] = parities[i];
         rec->indices[i] = indices[i];
     }
     for (int i = 0; i < raw->hidden_count; i++) {
@@ -236,11 +313,14 @@ static void write_records(RL0Ctx *ctx) {
         fprintf(ctx->fp, "canonical_boundary:");
         fputs(rec->boundary_str, ctx->fp);
         fprintf(ctx->fp, "\n");
+        fprintf(ctx->fp, "constellation:");
+        print_coord_list(ctx->fp, rec->hidden, rec->hidden_count);
+        fprintf(ctx->fp, "\n");
         fprintf(ctx->fp, "tiles:");
         print_tile_list(ctx->fp, rec->tiles, rec->tile_count);
         fprintf(ctx->fp, "\n");
-        fprintf(ctx->fp, "hidden:");
-        print_coord_list(ctx->fp, rec->hidden, rec->hidden_count);
+        fprintf(ctx->fp, "parities:");
+        print_parities(ctx->fp, rec->parities, rec->tile_count);
         fprintf(ctx->fp, "\n");
         fprintf(ctx->fp, "indices:");
         print_indices(ctx->fp, rec->indices, rec->tile_count);
@@ -250,13 +330,23 @@ static void write_records(RL0Ctx *ctx) {
 
 static int emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     int indices[RL0_MAX_TRACE];
+    int parities[RL0_MAX_TRACE];
+    Cycle canon_tiles[RL0_MAX_TRACE];
     int total_tile_count = raw->tile_count;
     Coord center = raw->target;
 
     if (!poly_has_live_boundary(&raw->poly, ctx->tile)) return 1;
 
     for (int i = 0; i < total_tile_count; i++) {
-        indices[i] = cycle_vertex_index(&raw->tiles[i], center);
+        if (!canonicalize_tile(&ctx->tile->base,
+                               &raw->tiles[i],
+                               center,
+                               ctx->lattice,
+                               &canon_tiles[i],
+                               &parities[i],
+                               &indices[i])) {
+            return 1;
+        }
     }
 
     int valence = lattice_direction_count(ctx->lattice);
@@ -267,7 +357,15 @@ static int emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     if (seen_has(ctx, valence, total_tile_count, &raw->poly)) return 1;
     if (!seen_add(ctx, valence, total_tile_count, &raw->poly)) return 0;
 
-    return records_add(ctx, valence, total_tile_count, center, raw, indices);
+    VCompRawState canon = *raw;
+    for (int i = 0; i < total_tile_count; i++) canon.tiles[i] = canon_tiles[i];
+    return records_add(ctx,
+                       valence,
+                       total_tile_count,
+                       center,
+                       &canon,
+                       parities,
+                       indices);
 }
 
 static int ensure_dir(const char *path) {

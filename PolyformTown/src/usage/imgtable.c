@@ -38,6 +38,7 @@ typedef struct {
     int tile_cap;
     VPoint *hidden;
     int hidden_count;
+    int *tile_ch;
     int hidden_cap;
     int has_center;
     VPoint center;
@@ -435,18 +436,23 @@ static void free_groups(GroupShape *groups, int count) {
         free(groups[i].aggregate);
         free(groups[i].tiles);
         free(groups[i].hidden);
+        free(groups[i].tile_ch);
     }
 }
 
-static int group_add_tile(GroupShape *g, const Shape *s) {
+static int group_add_tile(GroupShape *g, const Shape *s, Chirality ch) {
     if (g->tile_count >= g->tile_cap) {
         int next_cap = g->tile_cap == 0 ? 8 : g->tile_cap * 2;
         Shape *next_tiles = (Shape *)realloc(g->tiles, (size_t)next_cap * sizeof(Shape));
         if (!next_tiles) return 0;
         g->tiles = next_tiles;
+        int *next_ch = (int *)realloc(g->tile_ch, (size_t)next_cap * sizeof(int));
+        if (!next_ch) return 0;
+        g->tile_ch = next_ch;
         g->tile_cap = next_cap;
     }
-    g->tiles[g->tile_count++] = *s;
+    g->tiles[g->tile_count] = *s;
+    g->tile_ch[g->tile_count++] = ch;
     return 1;
 }
 
@@ -481,7 +487,7 @@ static int read_group_shapes(GroupShape **groups_io, int *group_cap_io,
                              const char *first_line) {
     char line[MAX_LINE];
     int count = 0;
-    int section = 0; /* 1 aggregate, 2 tiles, 3 center, 4 hidden */
+    int section = 0; /* 1 aggregate, 2 tiles, 3 center, 4 constellation, 5 light, 6 dark */
     int cur = -1;
     GroupShape *groups = *groups_io;
     const char *pending = first_line;
@@ -510,18 +516,14 @@ static int read_group_shapes(GroupShape **groups_io, int *group_cap_io,
             section = 1;
             continue;
         }
-        if (strncmp(p, "Tiles", 5) == 0) {
-            section = 2;
-            continue;
-        }
+        if (strncmp(p, "TilesLight", 10) == 0) { section = 5; continue; }
+        if (strncmp(p, "TilesDark", 9) == 0) { section = 6; continue; }
+        if (strncmp(p, "Tiles", 5) == 0) { section = 2; continue; }
         if (strncmp(p, "Center", 6) == 0) {
             section = 3;
             continue;
         }
-        if (strncmp(p, "Hidden", 6) == 0) {
-            section = 4;
-            continue;
-        }
+        if (strncmp(p, "Constellation", 13) == 0 || strncmp(p, "Hidden", 6) == 0) { section = 4; continue; }
         if (cur < 0) continue;
         if (section == 3) {
             const char *q = p;
@@ -576,7 +578,11 @@ static int read_group_shapes(GroupShape **groups_io, int *group_cap_io,
             if (!groups[cur].aggregate) return -1;
             *groups[cur].aggregate = s;
         } else if (section == 2) {
-            if (!group_add_tile(&groups[cur], &s)) return -1;
+            if (!group_add_tile(&groups[cur], &s, CHIRALITY_UNKNOWN)) return -1;
+        } else if (section == 5) {
+            if (!group_add_tile(&groups[cur], &s, CHIRALITY_NORMAL)) return -1;
+        } else if (section == 6) {
+            if (!group_add_tile(&groups[cur], &s, CHIRALITY_REFLECTED)) return -1;
         }
     }
     int kept = 0;
@@ -814,8 +820,8 @@ static void emit_group_svg(FILE *fp, const GroupShape *g,
     emit_shape_path(fp, g->aggregate, tx, ty, scale, "#dddddd", "black", STROKE_W);
     for (int i = 0; i < g->tile_count; i++) {
         const char *fill = "#d9e9f7";
-        Chirality c = CHIRALITY_UNKNOWN;
-        if (g->tile_count > 0) {
+        Chirality c = g->tile_ch ? g->tile_ch[i] : CHIRALITY_UNKNOWN;
+        if (c == CHIRALITY_UNKNOWN && g->tile_count > 0) {
             int sign = cycle_relation_det_sign(&g->tiles[0], &g->tiles[i]);
             if (sign > 0) c = CHIRALITY_NORMAL;
             else if (sign < 0) c = CHIRALITY_REFLECTED;
