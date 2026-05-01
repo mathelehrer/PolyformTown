@@ -154,11 +154,14 @@ static int canonicalize_tile(const Cycle *src, const Cycle *in, Coord center,
             if (in->v[j].v != tr.v[0].v) continue;
             int dx = in->v[j].x - tr.v[0].x;
             int dy = in->v[j].y - tr.v[0].y;
-            int m6 = 0, n6 = 0;
-            if (!tetrille_delta_to_6(tr.v[0].v, dx, dy, &m6, &n6)) continue;
-
             Cycle placed = tr;
-            tetrille_translate_cycle(&placed, m6, n6);
+            if (lattice == TILE_LATTICE_TETRILLE) {
+                int m6 = 0, n6 = 0;
+                if (!tetrille_delta_to_6(tr.v[0].v, dx, dy, &m6, &n6)) continue;
+                tetrille_translate_cycle(&placed, m6, n6);
+            } else {
+                cycle_translate(&placed, dx, dy);
+            }
             if (!cycle_matches_cyclic(&placed, in)) continue;
 
             int p = (cycle_signed_area2(&tr, lattice) * src_area >= 0) ? 1 : -1;
