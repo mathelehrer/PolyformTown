@@ -1,0 +1,10 @@
+Review core attach geometry and remove avoidable numerics
+
+Audit core attach functionality to see whether overlap, hole,
+outer-boundary, and complement cases can be classified more
+combinatorially.
+
+Holes, outer boundary, and overlap are difficult to distinguish, but if
+complements are easy to detect and should never occur, they may provide
+a better classification system, faster fail criteria, and fewer numeric
+geometry calculations.

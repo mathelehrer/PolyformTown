@@ -1,6 +1,18 @@
-Detailed print mode for all print tools
+Detailed grouped print mode for all print tools
 
 Generalize `--detailed` so all `*_print` programs can emit grouped
-aggregate + tile structure in one consistent stream format.
+aggregate plus tile structure in one consistent stream format.
+Printing with tiles depicted inside bound should be default even
+though there might be a many to one map of exact covers.
 
 Keep `imgtable` as the shared renderer path for that grouped stream.
+
+Propagate RL0 color metadata consistently through print outputs. RL0
+records now include metadata for coloring tiles relative to the source
+tile file, and other print paths that feed `imgtable` should preserve
+that information.
+
+Add an analogous grouped tile-carrying mode to `poly_print`. Other print
+utilities carry tile data through to `imgtable`; ordinary polyform
+enumeration should be able to emit the same kind of tile-aware depiction
+records.

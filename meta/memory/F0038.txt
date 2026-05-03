@@ -1,0 +1,8 @@
+Add support for pentagonal tilings
+
+Cairo and Floret pentagonal tilings have similar structure 
+to the tetrille. Add support for these geometries and search 
+the space of polyforms for interesting examples. Is there 
+anything out there like the hat?  
+
+

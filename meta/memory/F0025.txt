@@ -1,5 +1,25 @@
-RL0 liveness validation for RL1 pruning
+RL0 liveness and index validation for RL1 pruning
 
-Validate and calibrate the RL0 boundary liveness predicate used for
-RL1 pruning. Focus on false-positive/false-negative analysis across
+Validate and calibrate the RL0 boundary liveness predicate used for RL1
+pruning. Focus on false-positive and false-negative analysis across
 simple and complex tiles, and lock a reproducible regression set.
+
+Extend this work into explicit RL0 index construction. Index records
+should prevent growth into known-dead local states before expensive DFS
+search discovers the failure later.
+
+The preferred lookup behavior is:
+
+- missing key -> dead now
+- single value -> forced completion
+- multiple values -> branch only among indexed survivors
+
+Keys should be based on stable canonical boundary or window geometry
+where possible. Tile order, attach order, parity, and source indices may
+be recorded as metadata, but should not define identity unless they have
+been proven stable.
+
+Build intermediate RL0 sublevels before full RL1. Useful sublevels may
+include adjacent vertex windows, small connected boundary windows, and
+partial tile-side or tile-sector surrounds. These are intended to make
+full tile-surround RL1 generation feasible.

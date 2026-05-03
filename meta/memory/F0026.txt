@@ -1,4 +1,8 @@
-Expand smoke tests
+Expand smoke and hole-count tests
 
-Add tetrille (kite) checks for n=1..3 and extend coverage as
-additional counts are verified.
+Add tetrille (kite) checks for n=1..3 and extend coverage as additional
+counts are verified.
+
+Improve hole-count coverage in comprehensive tests. Too many current
+hole tests assert zero holes. Add more positive hole-bearing cases so
+topology regressions are caught by both presence and absence of holes.

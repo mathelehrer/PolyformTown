@@ -1,0 +1,9 @@
+Audit DFS max-depth guards for false-negative risk
+
+Review every DFS and search routine for artificial max-depth limits.
+Sometimes an extra max depth is set when it is not mathematically
+necessary, which can create false negatives.
+
+Searches should fail visibly if any search item exceeds max depth. A
+silent partial result is not acceptable for correctness-sensitive
+enumeration.

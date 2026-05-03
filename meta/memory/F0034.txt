@@ -1,0 +1,9 @@
+Fix canonicalization to prefer positive parity representatives
+
+RL0 data can contain representatives with all `-1` parity values. Update
+canonicalization or tie-breaking so equivalent all-positive forms are
+preferred where valid.
+
+This should preserve canonical identity and verified counts. The fix
+should be backed by before/after data so it does not mask a deeper
+orientation or indexing bug.

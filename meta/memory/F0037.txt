@@ -1,0 +1,9 @@
+Refine and prune bloated legacy source after stable baseline
+
+Agentic code development can leave oversized source files, duplicate
+helpers, and obsolete workaround code after multiple revisions and bug
+fixes.
+
+After a stable verified baseline is attained, simplify and prune
+unnecessary legacy code without changing behavior. Treat this as a
+separate cleanup phase, not as part of correctness repair.

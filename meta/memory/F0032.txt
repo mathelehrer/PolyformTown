@@ -1,0 +1,11 @@
+Promote vcomp toward core after index behavior stabilizes
+
+Vertex completion should become core functionality once RL0 index
+construction works. The time to move it is after index behavior is
+validated, because indexes change how possible neighbors on a frontier
+or boundary are enumerated.
+
+This promotion will likely require generalizing vcomp and some boundary
+utilities together. Keep vcomp available to the vcomp pipeline, print,
+and count tools during the transition, but move stable mathematical
+functionality toward core.

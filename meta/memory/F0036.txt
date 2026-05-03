@@ -1,0 +1,8 @@
+Human-verify test expectations
+
+Because an LLM checking LLM-generated tests can repeat the same mistake,
+a human should independently verify test expectations.
+
+Prioritize count targets, hole-count cases, canonicalization-sensitive
+cases, and any tests derived from generated data rather than from an
+external source or hand-checkable argument.
