@@ -11,8 +11,9 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
-	tile_to_imgtable rl0_generate rl0_depict rl0_data tiling_3x3_demo \
-	tiling_4x4_demo hat_boundary_dfs_check check_rl0
+	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate_naive \
+	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
+	hat_boundary_dfs_check check_rl0
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -27,11 +28,12 @@ $(SRC)/%.o: $(SRC)/%.c
 
 clean:
 	rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/usage/*.o $(SRC)/throughput/*.o \
+		$(SRC)/rl1/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
+		$(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check \
 		tests/check_rl0
@@ -94,6 +96,14 @@ rl0_stats: $(BIN)/rl0_stats
 $(BIN)/rl0_stats: $(SRC)/usage/rl0_stats.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl0_stats.o $(CORE) $(SRC)/throughput/vcomp.o
 
+rl1_generate_naive: $(BIN)/rl1_generate_naive
+$(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE)
+
+rl1_depict_naive: $(BIN)/rl1_depict_naive
+$(BIN)/rl1_depict_naive: $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o
+
 test: all
 	./tests/smoke.sh
 
@@ -103,6 +113,15 @@ rl0_data: rl0_generate
 rl0_svg: rl0_data rl0_depict imgtable
 	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl0_all.svg
+
+rl1_data_naive: rl1_generate_naive
+	mkdir -p data/rl1
+	$(BIN)/rl1_generate_naive tiles/hat.tile data/rl1/naive_hat_n20.dat 20 --live-only
+
+rl1_svg_naive: rl1_data_naive rl1_depict_naive imgtable
+	mkdir -p img
+	$(BIN)/rl1_depict_naive tiles/hat.tile data/rl1/naive_hat_n20.dat --grouped | \
+		$(BIN)/imgtable > img/rl1_naive_hat_n20.svg
 
 $(BIN):
 	mkdir -p $(BIN)
