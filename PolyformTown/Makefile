@@ -12,7 +12,7 @@ VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data tiling_3x3_demo \
-	tiling_4x4_demo hat_boundary_dfs_check
+	tiling_4x4_demo hat_boundary_dfs_check check_rl0
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -33,7 +33,7 @@ clean:
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
-		$(BIN)/hat_boundary_dfs_check
+		$(BIN)/hat_boundary_dfs_check $(BIN)/check_rl0
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
 $(BIN)/tiling_3x3_demo: $(SRC)/usage/tiling_3x3_demo.o $(SRC)/core/dfs.o | $(BIN)
@@ -49,6 +49,10 @@ hat_boundary_dfs_check: $(BIN)/hat_boundary_dfs_check
 $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(SRC)/core/dfs.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/hat_boundary_dfs_check.o \
 		$(CORE) $(SRC)/core/dfs.o
+
+check_rl0: $(BIN)/check_rl0
+$(BIN)/check_rl0: check_rl0.c | $(BIN)
+	$(CC) -O2 -Wall -Wextra -std=c11 check_rl0.c -o $@
 
 vcomp_count: $(BIN)/vcomp_count
 $(BIN)/vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
