@@ -33,7 +33,8 @@ clean:
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
-		$(BIN)/hat_boundary_dfs_check $(BIN)/check_rl0
+		$(BIN)/hat_boundary_dfs_check \
+		tests/check_rl0
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
 $(BIN)/tiling_3x3_demo: $(SRC)/usage/tiling_3x3_demo.o $(SRC)/core/dfs.o | $(BIN)
@@ -50,9 +51,9 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/hat_boundary_dfs_check.o \
 		$(CORE) $(SRC)/core/dfs.o
 
-check_rl0: $(BIN)/check_rl0
-$(BIN)/check_rl0: check_rl0.c | $(BIN)
-	$(CC) -O2 -Wall -Wextra -std=c11 check_rl0.c -o $@
+check_rl0: tests/check_rl0
+tests/check_rl0: tests/check_rl0.c
+	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
 
 vcomp_count: $(BIN)/vcomp_count
 $(BIN)/vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
