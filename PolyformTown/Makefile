@@ -13,7 +13,7 @@ VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate_naive \
 	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_rl0
+	hat_boundary_dfs_check check_rl0 check_rl0_forget_map
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -36,7 +36,7 @@ clean:
 		$(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check \
-		tests/check_rl0
+		tests/check_rl0 tests/check_rl0_forget_map
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
 $(BIN)/tiling_3x3_demo: $(SRC)/usage/tiling_3x3_demo.o $(SRC)/core/dfs.o | $(BIN)
@@ -56,6 +56,10 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c
 	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
+
+check_rl0_forget_map: tests/check_rl0_forget_map
+tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(CORE) $(VCOMP_SURFACE)
+	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl0_forget_map.c 		$(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o 		$(SRC)/rl0/vcomp0.o $(CORE) $(VCOMP_SURFACE)
 
 vcomp_count: $(BIN)/vcomp_count
 $(BIN)/vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)

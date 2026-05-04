@@ -1,0 +1,82 @@
+#ifndef RL0_FORGET_MAP_H
+#define RL0_FORGET_MAP_H
+
+#include <stddef.h>
+
+#define RL0_FM_MAX_ITEMS 16
+#define RL0_FM_MAX_CYCLES 512
+#define RL0_FM_MAX_ROWS 16384
+#define RL0_FM_MAX_VALUES 512
+#define RL0_FM_MAX_DELETIONS 512
+
+/* Indexed vertex figure item.  p is parity/orientation (+1 or -1),
+   i is the source/canonical tile vertex index under that parity. */
+typedef struct {
+    int p;
+    int i;
+} RL0FMItem;
+
+typedef struct {
+    int n;
+    RL0FMItem item[RL0_FM_MAX_ITEMS];
+} RL0FMCycle;
+
+typedef RL0FMCycle RL0FMArc;
+
+typedef struct {
+    int count;
+    int level[RL0_FM_MAX_DELETIONS];
+    RL0FMCycle cycle[RL0_FM_MAX_DELETIONS];
+} RL0FMDeletionSet;
+
+typedef struct {
+    RL0FMArc key;
+    RL0FMArc values[RL0_FM_MAX_VALUES];
+    int value_count;
+} RL0FMRow;
+
+typedef struct {
+    RL0FMCycle cycles[RL0_FM_MAX_CYCLES];
+    int cycle_count;
+    RL0FMRow rows[RL0_FM_MAX_ROWS];
+    int row_count;
+} RL0ForgetMap;
+
+void rl0_fm_init(RL0ForgetMap *map);
+void rl0_fm_deletions_init(RL0FMDeletionSet *set);
+int rl0_fm_deletions_add_cycle(RL0FMDeletionSet *set, int level, const RL0FMCycle *cycle);
+int rl0_fm_deletions_contains_cycle(const RL0FMDeletionSet *set,
+                                    const RL0FMCycle *cycle,
+                                    int delete_through_level);
+int rl0_fm_load_deletions(RL0FMDeletionSet *set, const char *path);
+int rl0_fm_load_completions(RL0ForgetMap *map, const char *path);
+int rl0_fm_load_completions_with_deletions(RL0ForgetMap *map,
+                                           const char *completions_path,
+                                           const char *deletions_path,
+                                           int delete_through_level);
+int rl0_fm_load_completions_filtered(RL0ForgetMap *map,
+                                      const char *path,
+                                      const RL0FMDeletionSet *deletions,
+                                      int delete_through_level);
+int rl0_fm_build_from_cycles(RL0ForgetMap *map);
+void rl0_fm_canonicalize_cycle(const RL0FMCycle *in, RL0FMCycle *out);
+void rl0_fm_reflect_cycle(const RL0FMCycle *in, RL0FMCycle *out);
+int rl0_fm_cycle_equal(const RL0FMCycle *a, const RL0FMCycle *b);
+int rl0_fm_arc_equal(const RL0FMArc *a, const RL0FMArc *b);
+int rl0_fm_lookup(const RL0ForgetMap *map,
+                  const RL0FMArc *key,
+                  const RL0FMArc **values,
+                  int *value_count);
+int rl0_fm_lookup_any_rotation(const RL0ForgetMap *map,
+                               const RL0FMArc *key,
+                               const RL0FMArc **values,
+                               int *value_count,
+                               RL0FMArc *matched_key);
+int rl0_fm_contains_complete(const RL0ForgetMap *map,
+                             const RL0FMCycle *complete);
+int rl0_fm_cycle_from_parity_indices(const int *parities,
+                                     const int *indices,
+                                     int count,
+                                     RL0FMCycle *out);
+
+#endif
