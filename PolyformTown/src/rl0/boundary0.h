@@ -12,6 +12,11 @@ typedef struct {
 } Boundary0Stats;
 
 void boundary0_stats_init(Boundary0Stats *stats);
+
+int boundary0_tile_item_at_vertex(const Tile *tile,
+                                  const Cycle *placed_tile,
+                                  Coord q,
+                                  RL0FMItem *out);
 int boundary0_build_vertex_arc(const Tile *tile,
                                const Cycle *tiles,
                                int tile_count,

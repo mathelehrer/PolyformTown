@@ -241,6 +241,112 @@ static char *poly_to_string_local(const Poly *p) {
     return buf;
 }
 
+
+static int find_center_pos(const Cycle *c, Coord center) {
+    for (int i = 0; i < c->n; i++) {
+        if (coord_eq(c->v[i], center)) return i;
+    }
+    return -1;
+}
+
+static int cyclic_item_seq_less(const int *parities,
+                                const int *indices,
+                                const int *order,
+                                int n,
+                                int shift_a,
+                                int shift_b) {
+    for (int k = 0; k < n; k++) {
+        int ia = order[(shift_a + k) % n];
+        int ib = order[(shift_b + k) % n];
+        if (parities[ia] != parities[ib]) return parities[ia] < parities[ib];
+        if (indices[ia] != indices[ib]) return indices[ia] < indices[ib];
+    }
+    return 0;
+}
+
+static int rotate_order_to_min_item_shift(const int *parities,
+                                          const int *indices,
+                                          int *order,
+                                          int n) {
+    int best = 0;
+    int tmp[RL0_MAX_TRACE];
+    if (n <= 1) return 1;
+    for (int s = 1; s < n; s++) {
+        if (cyclic_item_seq_less(parities, indices, order, n, s, best)) {
+            best = s;
+        }
+    }
+    for (int k = 0; k < n; k++) tmp[k] = order[(best + k) % n];
+    for (int k = 0; k < n; k++) order[k] = tmp[k];
+    return 1;
+}
+
+static int reorder_center_items_ccw(Cycle *tiles,
+                                    int *parities,
+                                    int *indices,
+                                    int tile_count,
+                                    Coord center) {
+    Coord prevs[RL0_MAX_TRACE];
+    Coord nexts[RL0_MAX_TRACE];
+    int next_tile[RL0_MAX_TRACE];
+    int used[RL0_MAX_TRACE] = {0};
+    int order[RL0_MAX_TRACE];
+    Cycle old_tiles[RL0_MAX_TRACE];
+    int old_parities[RL0_MAX_TRACE];
+    int old_indices[RL0_MAX_TRACE];
+
+    if (tile_count <= 1) return 1;
+    if (tile_count > RL0_MAX_TRACE) return 0;
+
+    for (int i = 0; i < tile_count; i++) {
+        int pos = find_center_pos(&tiles[i], center);
+        if (pos < 0 || tiles[i].n <= 0) return 0;
+        prevs[i] = tiles[i].v[(pos + tiles[i].n - 1) % tiles[i].n];
+        nexts[i] = tiles[i].v[(pos + 1) % tiles[i].n];
+        next_tile[i] = -1;
+    }
+
+    /*
+     * The CCW walk through tile interiors crosses the edge from center to
+     * prevs[i].  The next tile in the cyclic vertex figure is the unique tile
+     * whose outgoing edge from center reaches the same geometric vertex.
+     */
+    for (int i = 0; i < tile_count; i++) {
+        for (int j = 0; j < tile_count; j++) {
+            if (i == j) continue;
+            if (!coord_eq(nexts[j], prevs[i])) continue;
+            if (next_tile[i] >= 0) return 0;
+            next_tile[i] = j;
+        }
+        if (next_tile[i] < 0) return 0;
+    }
+
+    order[0] = 0;
+    used[0] = 1;
+    for (int k = 1; k < tile_count; k++) {
+        int n = next_tile[order[k - 1]];
+        if (n < 0 || n >= tile_count || used[n]) return 0;
+        order[k] = n;
+        used[n] = 1;
+    }
+    if (next_tile[order[tile_count - 1]] != order[0]) return 0;
+
+    rotate_order_to_min_item_shift(parities, indices, order, tile_count);
+
+    for (int i = 0; i < tile_count; i++) {
+        old_tiles[i] = tiles[i];
+        old_parities[i] = parities[i];
+        old_indices[i] = indices[i];
+    }
+    for (int i = 0; i < tile_count; i++) {
+        int src = order[i];
+        tiles[i] = old_tiles[src];
+        parities[i] = old_parities[src];
+        indices[i] = old_indices[src];
+    }
+    return 1;
+}
+
 static int records_add(RL0Ctx *ctx,
                        int valence,
                        int tile_count,
@@ -361,6 +467,14 @@ static int emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
     }
     if (seen_has(ctx, valence, total_tile_count, &raw->poly)) return 1;
     if (!seen_add(ctx, valence, total_tile_count, &raw->poly)) return 0;
+
+    if (!reorder_center_items_ccw(canon_tiles,
+                                  parities,
+                                  indices,
+                                  total_tile_count,
+                                  center)) {
+        return 1;
+    }
 
     VCompRawState canon = *raw;
     for (int i = 0; i < total_tile_count; i++) canon.tiles[i] = canon_tiles[i];

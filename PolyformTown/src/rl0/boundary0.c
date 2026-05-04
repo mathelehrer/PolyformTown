@@ -38,7 +38,7 @@ static int cycle_vertex_index_local(const Cycle *c, Coord q) {
     return -1;
 }
 
-static int tile_pair_at_vertex(const Tile *tile,
+int boundary0_tile_item_at_vertex(const Tile *tile,
                                const Cycle *placed_tile,
                                Coord center,
                                RL0FMItem *out) {
@@ -195,7 +195,7 @@ static int collect_incidents0(const Tile *tile,
         RL0FMItem item;
         int pos;
         if (!coord_in_cycle(&tiles[t], q)) continue;
-        if (!tile_pair_at_vertex(tile, &tiles[t], q, &item)) return 0;
+        if (!boundary0_tile_item_at_vertex(tile, &tiles[t], q, &item)) return 0;
         if (*inc_count >= RL0_FM_MAX_ITEMS) return 0;
         pos = tile_vertex_pos0(&tiles[t], q);
         if (pos < 0) return 0;
