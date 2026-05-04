@@ -255,7 +255,8 @@ void tile_build_variants(Tile *tile) {
         cycle_transform_lattice(&tile->base, &cur, tile->lattice, t);
         if (cycle_signed_area2(&cur, tile->lattice) < 0) cycle_reverse(&cur);
         cycle_normalize_position(&cur, tile->lattice);
-        cycle_canonicalize_shift(&cur);
+        /*  not necessary, self defeating! */
+        /* cycle_canonicalize_shift(&cur); */
 
         int dup = 0;
         for (int i = 0; i < tile->variant_count; i++) {
