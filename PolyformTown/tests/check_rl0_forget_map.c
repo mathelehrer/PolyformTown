@@ -6,6 +6,7 @@
 #include "core/boundary.h"
 #include "rl0/forget_map.h"
 #include "rl0/boundary0.h"
+#include "rl0/attach0.h"
 
 #define MAX_REC_TILES 128
 #define RL0_SOURCE_BLOCK_MAX 1048576
@@ -231,6 +232,282 @@ static int scan_rl0_records(const char *path,
     return 1;
 }
 
+
+
+typedef struct {
+    int records_checked;
+    int forced_vertices;
+    int forced_attach_successes;
+    int forced_attach_failures;
+} RL0ForcedScan;
+
+static void forced_scan_init(RL0ForcedScan *s){ memset(s,0,sizeof(*s)); }
+
+static void scan_forced_record(const RL0TestRecord *rec,
+                               const Tile *tile,
+                               const RL0ForgetMap *map,
+                               RL0ForcedScan *scan){
+    Coord verts[MAX_VERTS*MAX_CYCLES];
+    int vc;
+    if(!rec->have_boundary||!rec->have_tiles) return;
+    vc=build_boundary_vertices(&rec->boundary,verts);
+    if(vc<0) return;
+    scan->records_checked++;
+    for(int v=0; v<vc; v++){
+        RL0FMArc arc;
+        const RL0FMArc *values=NULL;
+        int value_count=0;
+        if(!boundary0_build_vertex_arc(tile,rec->tiles,rec->tile_count,verts[v],&arc)) continue;
+        if(!rl0_fm_lookup_any_rotation(map,&arc,&values,&value_count,NULL)) continue;
+        if(value_count!=1 || values[0].n<=0) continue;
+        scan->forced_vertices++;
+        {
+            Poly grown;
+            Cycle out_tiles[MAX_REC_TILES];
+            int out_tile_count=0;
+            Attach0Stats astats;
+            attach0_stats_init(&astats);
+            if(attach0_try_attach_arc(&rec->boundary,
+                                      tile,
+                                      rec->tiles,
+                                      rec->tile_count,
+                                      verts[v],
+                                      &values[0],
+                                      &grown,
+                                      out_tiles,
+                                      &out_tile_count,
+                                      &astats)){
+                scan->forced_attach_successes++;
+            } else {
+                scan->forced_attach_failures++;
+                fprintf(stderr,
+                        "forced attach failed: RL0 record %d vertex (%d,%d,%d) arc",
+                        rec->file_record_no,verts[v].v,verts[v].x,verts[v].y);
+                for(int k=0;k<arc.n;k++) fprintf(stderr," [%d,%d]",arc.item[k].p,arc.item[k].i);
+                fprintf(stderr," ->");
+                for(int k=0;k<values[0].n;k++) fprintf(stderr," [%d,%d]",values[0].item[k].p,values[0].item[k].i);
+                fprintf(stderr,"\n");
+            }
+        }
+    }
+}
+
+static int scan_forced_rl0_records(const char *path,
+                                   const Tile *tile,
+                                   const RL0ForgetMap *map,
+                                   const RL0FMDeletionSet *skip,
+                                   int delete_through_level,
+                                   RL0ForcedScan *forced){
+    FILE *fp=fopen(path,"r");
+    char line[262144];
+    RL0TestRecord rec;
+    int stream_recno=0;
+    assert_true(fp!=NULL,"open RL0 completions for forced scan");
+    forced_scan_init(forced);
+    reset_record(&rec);
+    while(fgets(line,sizeof(line),fp)){
+        if(strncmp(line,"---[",4)==0){
+            if(stream_recno>0 && !record_deleted_through(&rec,skip,delete_through_level)){
+                scan_forced_record(&rec,tile,map,forced);
+            }
+            stream_recno++;
+            reset_record(&rec);
+            rec.stream_record_no=stream_recno;
+            rec.file_record_no=parse_record_header_no(line);
+            continue;
+        }
+        if(stream_recno<=0) continue;
+        if(strncmp(line,"boundary:",9)==0){ rec.have_boundary=parse_poly0(line+9,&rec.boundary); continue; }
+        if(strncmp(line,"tiles:",6)==0){ rec.have_tiles=parse_tile_list0(line+6,rec.tiles,&rec.tile_count); continue; }
+        if(strncmp(line,"parities:",9)==0){ rec.have_parities=parse_int_list0(line+9,rec.parities,&rec.parity_count); continue; }
+        if(strncmp(line,"indices:",8)==0){ rec.have_indices=parse_int_list0(line+8,rec.indices,&rec.index_count); continue; }
+    }
+    if(stream_recno>0 && !record_deleted_through(&rec,skip,delete_through_level)){
+        scan_forced_record(&rec,tile,map,forced);
+    }
+    fclose(fp);
+    return 1;
+}
+
+
+
+typedef struct {
+    int records_checked;
+    int records_failed;
+    int forced_steps;
+    int forced_vertices;
+    int zero_choice_failures;
+    int unresolved_vertices;
+    int fail_record_no[RL0_FM_MAX_DELETIONS];
+} RL0ClosureScan;
+
+static void closure_scan_init(RL0ClosureScan *s){ memset(s,0,sizeof(*s)); }
+
+static void closure_scan_add_failure(RL0ClosureScan *s,int record_no){
+    if(s->records_failed<RL0_FM_MAX_DELETIONS) s->fail_record_no[s->records_failed]=record_no;
+    s->records_failed++;
+}
+
+static void scan_closure_record(const RL0TestRecord *rec,
+                                const Tile *tile,
+                                const RL0ForgetMap *map,
+                                RL0ClosureScan *scan){
+    Poly p;
+    Cycle tiles[MAX_REC_TILES];
+    int tile_count;
+    Attach0Stats astats;
+    Attach0ClosureStats cstats;
+    if(!rec->have_boundary||!rec->have_tiles) return;
+    p = rec->boundary;
+    tile_count = rec->tile_count;
+    for(int i=0;i<tile_count;i++) tiles[i]=rec->tiles[i];
+    attach0_stats_init(&astats);
+    attach0_closure_stats_init(&cstats);
+    scan->records_checked++;
+    if(!attach0_force_live_closure(&p,
+                                   tile,
+                                   tiles,
+                                   &tile_count,
+                                   map,
+                                   1024,
+                                   &astats,
+                                   &cstats)){
+        closure_scan_add_failure(scan,rec->file_record_no);
+        fprintf(stderr,
+                "forced closure failed: RL0 record %d forced_steps=%d zero=%d forced_fail=%d unresolved=%d\n",
+                rec->file_record_no,
+                cstats.closure_steps,
+                cstats.zero_choice_failures,
+                cstats.forced_failures,
+                cstats.unresolved_vertices);
+    }
+    scan->forced_steps += cstats.closure_steps;
+    scan->forced_vertices += cstats.forced_vertices;
+    scan->zero_choice_failures += cstats.zero_choice_failures;
+    scan->unresolved_vertices += cstats.unresolved_vertices;
+}
+
+static int scan_closure_rl0_records(const char *path,
+                                    const Tile *tile,
+                                    const RL0ForgetMap *map,
+                                    const RL0FMDeletionSet *skip,
+                                    int delete_through_level,
+                                    RL0ClosureScan *closure){
+    FILE *fp=fopen(path,"r");
+    char line[262144];
+    RL0TestRecord rec;
+    int stream_recno=0;
+    assert_true(fp!=NULL,"open RL0 completions for forced closure scan");
+    closure_scan_init(closure);
+    reset_record(&rec);
+    while(fgets(line,sizeof(line),fp)){
+        if(strncmp(line,"---[",4)==0){
+            if(stream_recno>0 && !record_deleted_through(&rec,skip,delete_through_level)){
+                scan_closure_record(&rec,tile,map,closure);
+            }
+            stream_recno++;
+            reset_record(&rec);
+            rec.stream_record_no=stream_recno;
+            rec.file_record_no=parse_record_header_no(line);
+            continue;
+        }
+        if(stream_recno<=0) continue;
+        if(strncmp(line,"boundary:",9)==0){ rec.have_boundary=parse_poly0(line+9,&rec.boundary); continue; }
+        if(strncmp(line,"tiles:",6)==0){ rec.have_tiles=parse_tile_list0(line+6,rec.tiles,&rec.tile_count); continue; }
+        if(strncmp(line,"parities:",9)==0){ rec.have_parities=parse_int_list0(line+9,rec.parities,&rec.parity_count); continue; }
+        if(strncmp(line,"indices:",8)==0){ rec.have_indices=parse_int_list0(line+8,rec.indices,&rec.index_count); continue; }
+    }
+    if(stream_recno>0 && !record_deleted_through(&rec,skip,delete_through_level)){
+        scan_closure_record(&rec,tile,map,closure);
+    }
+    fclose(fp);
+    return 1;
+}
+
+
+static void fprint_fm_cycle_test(FILE *fp, const RL0FMCycle *cycle){
+    fprintf(fp,"[");
+    for(int i=0;i<cycle->n;i++){
+        if(i) fprintf(fp,",");
+        fprintf(fp,"[%d,%d]",cycle->item[i].p,cycle->item[i].i);
+    }
+    fprintf(fp,"]");
+}
+
+static int scan_has_failure_record(const RL0ScanResult *scan,int record_no){
+    for(int i=0;i<scan->failed;i++) if(scan->fail_record_no[i]==record_no) return 1;
+    return 0;
+}
+
+static int write_level0_deletions_from_scan(const char *completions_path,
+                                             const char *deletions_path,
+                                             const RL0ScanResult *scan){
+    FILE *in=fopen(completions_path,"r");
+    FILE *out=NULL;
+    char line[262144];
+    RL0TestRecord rec;
+    RL0FMCycle cycles[RL0_FM_MAX_DELETIONS];
+    int cycle_count=0;
+    int stream_recno=0;
+    if(!in) return 0;
+    reset_record(&rec);
+    while(fgets(line,sizeof(line),in)){
+        if(strncmp(line,"---[",4)==0){
+            if(stream_recno>0 && scan_has_failure_record(scan,rec.file_record_no) &&
+               rec.have_parities && rec.have_indices && rec.parity_count==rec.index_count){
+                RL0FMCycle c;
+                int dup=0;
+                if(!rl0_fm_cycle_from_parity_indices(rec.parities,rec.indices,rec.parity_count,&c)){
+                    fclose(in); return 0;
+                }
+                rl0_fm_canonicalize_cycle(&c,&c);
+                for(int i=0;i<cycle_count;i++) if(rl0_fm_cycle_equal(&cycles[i],&c)) dup=1;
+                if(!dup){
+                    if(cycle_count>=RL0_FM_MAX_DELETIONS){ fclose(in); return 0; }
+                    cycles[cycle_count++]=c;
+                }
+            }
+            stream_recno++;
+            reset_record(&rec);
+            rec.stream_record_no=stream_recno;
+            rec.file_record_no=parse_record_header_no(line);
+            continue;
+        }
+        append_source_line(&rec,line);
+        if(strncmp(line,"boundary:",9)==0){ rec.have_boundary=parse_poly0(line+9,&rec.boundary); continue; }
+        if(strncmp(line,"tiles:",6)==0){ rec.have_tiles=parse_tile_list0(line+6,rec.tiles,&rec.tile_count); continue; }
+        if(strncmp(line,"indices:",8)==0){ rec.have_indices=parse_int_list0(line+8,rec.indices,&rec.index_count); continue; }
+        if(strncmp(line,"parities:",9)==0){ rec.have_parities=parse_int_list0(line+9,rec.parities,&rec.parity_count); continue; }
+    }
+    if(stream_recno>0 && scan_has_failure_record(scan,rec.file_record_no) &&
+       rec.have_parities && rec.have_indices && rec.parity_count==rec.index_count){
+        RL0FMCycle c;
+        int dup=0;
+        if(!rl0_fm_cycle_from_parity_indices(rec.parities,rec.indices,rec.parity_count,&c)){
+            fclose(in); return 0;
+        }
+        rl0_fm_canonicalize_cycle(&c,&c);
+        for(int i=0;i<cycle_count;i++) if(rl0_fm_cycle_equal(&cycles[i],&c)) dup=1;
+        if(!dup){
+            if(cycle_count>=RL0_FM_MAX_DELETIONS){ fclose(in); return 0; }
+            cycles[cycle_count++]=c;
+        }
+    }
+    fclose(in);
+    out=fopen(deletions_path,"w");
+    if(!out) return 0;
+    fprintf(out,"# RL0 indexed vertex-figure deletions.\n");
+    fprintf(out,"# Regenerated by check_rl0_forget_map because deletions.dat was missing.\n");
+    fprintf(out,"# Reflections are generated at dictionary load time.\n\n");
+    fprintf(out,"---[0]---\n");
+    for(int i=0;i<cycle_count;i++){
+        fprint_fm_cycle_test(out,&cycles[i]);
+        fprintf(out,"\n");
+    }
+    fclose(out);
+    return cycle_count>0;
+}
+
 static int raw_failures_are_expected(const RL0ScanResult *scan,
                                      const RL0FMDeletionSet *deletions){
     int expected[] = {25, 28, 36, 37, 38, 42};
@@ -259,15 +536,18 @@ int main(void){
     RL0FMDeletionSet deletions;
     RL0ScanResult raw_scan;
     RL0ScanResult reduced_scan;
+    RL0ForcedScan forced_scan;
+    RL0ClosureScan closure_scan;
+    Attach0Stats attach_stats;
 
     test_basic_dictionary();
     assert_true(raw_map!=NULL&&reduced_map!=NULL,"allocate RL0 maps");
     assert_true(tile_load("tiles/hat.tile",&tile),"load hat tile");
+    attach0_stats_init(&attach_stats);
+    assert_true(attach0_verify_variant_order(&tile,&attach_stats),
+                "tile variants preserve rotation/reversal order");
 
     rl0_fm_deletions_init(&deletions);
-    assert_true(rl0_fm_load_deletions(&deletions,"data/rl0/deletions.dat"),
-                "load RL0 deletions");
-    assert_true(deletions.count>0,"deletions file contains Level 0 cycles");
 
     rl0_fm_init(raw_map);
     assert_true(rl0_fm_load_completions(raw_map,"data/rl0/completions.dat"),
@@ -282,6 +562,17 @@ int main(void){
                                  &raw_scan),
                 "scan raw RL0 records");
     print_failure_list("raw strict failures:",&raw_scan);
+
+    if(!rl0_fm_load_deletions(&deletions,"data/rl0/deletions.dat")){
+        assert_true(write_level0_deletions_from_scan("data/rl0/completions.dat",
+                                                     "data/rl0/deletions.dat",
+                                                     &raw_scan),
+                    "regenerate missing RL0 deletions.dat from Level 0 scan");
+        rl0_fm_deletions_init(&deletions);
+        assert_true(rl0_fm_load_deletions(&deletions,"data/rl0/deletions.dat"),
+                    "load regenerated RL0 deletions");
+    }
+    assert_true(deletions.count>0,"deletions file contains Level 0 cycles");
     assert_true(raw_failures_are_expected(&raw_scan,&deletions),
                 "raw strict failures match Level 0 deletion seed records");
 
@@ -304,6 +595,20 @@ int main(void){
     print_failure_list("post-deletion strict failures:",&reduced_scan);
     assert_true(reduced_scan.failed==0,
                 "Level 0 deletions are a fixed point for strict RL0 self-check");
+    assert_true(scan_forced_rl0_records("data/rl0/completions.dat",
+                                        &tile,
+                                        reduced_map,
+                                        &deletions,
+                                        0,
+                                        &forced_scan),
+                "scan reduced RL0 records for forced completions");
+    assert_true(scan_closure_rl0_records("data/rl0/completions.dat",
+                                         &tile,
+                                         reduced_map,
+                                         &deletions,
+                                         0,
+                                         &closure_scan),
+                "scan reduced RL0 records with forced closure");
 
     printf("loaded %d raw canonical/reflected RL0 cycles; derived %d rows\n",
            raw_map->cycle_count,raw_map->row_count);
@@ -311,6 +616,24 @@ int main(void){
            reduced_map->cycle_count,reduced_map->row_count);
     printf("Level 0 deletions: %d canonical/reflected cycles; remaining checked: %d; fixed point yes\n",
            deletions.count,reduced_scan.checked);
+    printf("variant order checked: %d; failures: %d\n",
+           attach_stats.variant_order_checked,attach_stats.variant_order_failures);
+    printf("forced reduced RL0 scan: records=%d forced=%d attach_success=%d attach_fail=%d\n",
+           forced_scan.records_checked,
+           forced_scan.forced_vertices,
+           forced_scan.forced_attach_successes,
+           forced_scan.forced_attach_failures);
+    assert_true(forced_scan.forced_attach_failures==0,
+                "all reduced forced completions attach concretely");
+    printf("forced closure scan: records=%d failures=%d forced_steps=%d forced_vertices=%d zero=%d unresolved=%d\n",
+           closure_scan.records_checked,
+           closure_scan.records_failed,
+           closure_scan.forced_steps,
+           closure_scan.forced_vertices,
+           closure_scan.zero_choice_failures,
+           closure_scan.unresolved_vertices);
+    assert_true(closure_scan.records_failed==0,
+                "forced live-dead closure has no new reduced RL0 failures");
     printf("rl0 deletion fixed-point tests passed\n");
 
     free(raw_map);

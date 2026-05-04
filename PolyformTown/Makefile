@@ -9,11 +9,12 @@ CORE = $(SRC)/core/cycle.o $(SRC)/core/tile.o $(SRC)/core/hash.o \
        $(SRC)/core/boundary.o $(SRC)/core/numerics.o
 POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
+RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate_naive \
 	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_rl0 check_rl0_forget_map
+	hat_boundary_dfs_check check_rl0 check_rl0_forget_map rl0_search0
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -34,6 +35,7 @@ clean:
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
+		$(BIN)/rl0_search0 \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check \
 		tests/check_rl0 tests/check_rl0_forget_map
@@ -58,8 +60,8 @@ tests/check_rl0: tests/check_rl0.c
 	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
 
 check_rl0_forget_map: tests/check_rl0_forget_map
-tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(CORE) $(VCOMP_SURFACE)
-	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl0_forget_map.c 		$(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o 		$(SRC)/rl0/vcomp0.o $(CORE) $(VCOMP_SURFACE)
+tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl0_forget_map.c 		$(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 vcomp_count: $(BIN)/vcomp_count
 $(BIN)/vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -107,6 +109,10 @@ $(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFA
 rl1_depict_naive: $(BIN)/rl1_depict_naive
 $(BIN)/rl1_depict_naive: $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o
+
+rl0_search0: $(BIN)/rl0_search0
+$(BIN)/rl0_search0: $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 test: all
 	./tests/smoke.sh
