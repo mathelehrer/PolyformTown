@@ -63,10 +63,41 @@ typedef struct {
 } PortChoice;
 
 typedef struct {
+    int id;
+    char key[SEARCH0_MAX_KEY];
+} PrintNodeRef;
+
+typedef struct {
     FILE *fp;
     int next_id;
     int limit;
+    PrintNodeRef *nodes;
+    int node_count;
+    int node_cap;
 } PrintCtx;
+
+static void emit_transition0(PrintCtx *print,
+                             const Tile *tile,
+                             const RL0ForgetMap *map,
+                             const Search0State *src,
+                             const Search0State *dst,
+                             int step,
+                             const PortChoice *choice,
+                             const RL0FMArc *arc);
+
+static void emit_relation0(PrintCtx *print,
+                           const Tile *tile,
+                           const RL0ForgetMap *map,
+                           const Search0State *src,
+                           const Search0State *dst,
+                           int step,
+                           const char *dst_kind,
+                           const char *edge_kind);
+
+static void emit_focus0(PrintCtx *print,
+                        const Search0State *src,
+                        int step,
+                        Coord port);
 
 static int optimized_record0(int file_no) {
     return file_no == 43 || file_no == 20 || file_no == 39 ||
@@ -635,11 +666,14 @@ static int refilter_states0(StateVec *cur,
                             int hidden_bound,
                             unsigned char *escaped,
                             Attach0Stats *astats,
-                            Attach0ClosureStats *cstats) {
+                            Attach0ClosureStats *cstats,
+                            PrintCtx *print,
+                            int step) {
     StateVec next;
     statevec_init0(&next);
     for (int i = 0; i < cur->count; i++) {
-        Search0State s = cur->data[i];
+        Search0State src = cur->data[i];
+        Search0State s = src;
         if (!attach0_force_live_closure(&s.poly,
                                         tile,
                                         s.tiles,
@@ -657,6 +691,9 @@ static int refilter_states0(StateVec *cur,
             continue;
         }
         poly_to_key0(&s.poly, s.key, sizeof(s.key));
+        if (strcmp(src.key, s.key) != 0) {
+            emit_relation0(print, tile, map, &src, &s, step, "closure", "closure");
+        }
         if (!statevec_add_merge0(&next, &s)) {
             statevec_free0(&next);
             return 0;
@@ -683,7 +720,9 @@ static int checkpoint_fixed_point0(StateVec *cur,
                                    Attach0Stats *astats,
                                    Attach0ClosureStats *cstats,
                                    int *new_dead,
-                                   int *new_dead_count) {
+                                   int *new_dead_count,
+                                   PrintCtx *print,
+                                   int step) {
     for (;;) {
         unsigned char active[SEARCH0_MAX_PROV];
         int added;
@@ -702,7 +741,7 @@ static int checkpoint_fixed_point0(StateVec *cur,
         if (added < 0) return 0;
         if (added == 0) return 1;
         if (!rebuild_map0(map, completions_path, deletions, level)) return 0;
-        if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats)) return 0;
+        if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats, print, step)) return 0;
     }
 }
 
@@ -906,6 +945,36 @@ static int min_distance_all0(const StateVec *v, const Tile *tile, const RL0Forge
 
 
 
+static void fprint_coord_list_line0(FILE *fp, const Coord *coords, int count) {
+    fprintf(fp, "[");
+    for (int i = 0; i < count; i++) {
+        if (i) fprintf(fp, ",");
+        fprintf(fp, "(%d,%d,%d)", coords[i].v, coords[i].x, coords[i].y);
+    }
+    fprintf(fp, "]");
+}
+
+static void fprint_mark_list0(FILE *fp, const unsigned char *marks) {
+    int first = 1;
+    fprintf(fp, "[");
+    for (int i = 0; i < SEARCH0_MAX_PROV; i++) {
+        if (!marks[i]) continue;
+        if (!first) fprintf(fp, ",");
+        fprintf(fp, "%d", i);
+        first = 0;
+    }
+    fprintf(fp, "]");
+}
+
+static void fprint_arc0(FILE *fp, const RL0FMArc *arc) {
+    fprintf(fp, "[");
+    for (int i = 0; i < arc->n; i++) {
+        if (i) fprintf(fp, ",");
+        fprintf(fp, "[%d,%d]", arc->item[i].p, arc->item[i].i);
+    }
+    fprintf(fp, "]");
+}
+
 static void fprint_imgtable_cycle_raw0(FILE *fp, const Cycle *c) {
     fputc('(', fp);
     for (int i = 0; i < c->n; i++) {
@@ -947,51 +1016,230 @@ static void fprint_imgtable_shape0(FILE *fp, const Tile *tile, const Poly *poly)
     fprintf(fp, " ]\n");
 }
 
-static void emit_imgtable_state0(PrintCtx *print,
-                                 const Tile *tile,
-                                 const Search0State *s,
-                                 const char *label,
-                                 int step) {
-    if (!print || !print->fp) return;
-    if (print->limit > 0 && print->next_id >= print->limit) return;
+static void fprint_tile_list0(FILE *fp, const Cycle *tiles, int tile_count) {
+    for (int i = 0; i < tile_count; i++) {
+        fprintf(fp, "tile: ");
+        fprint_imgtable_cycle_raw0(fp, &tiles[i]);
+        fprintf(fp, "\n");
+    }
+}
 
-    fprintf(print->fp, "[%d]\n", print->next_id++);
-    fprintf(print->fp, "Label\n");
-    fprintf(print->fp, "%s step=%d hidden=%d tiles=%d\n",
-            label ? label : "state",
-            step,
-            s->hidden_count,
-            s->tile_count);
-    fprintf(print->fp, "Aggregate\n");
+static void printctx_free0(PrintCtx *print) {
+    if (!print) return;
+    free(print->nodes);
+    print->nodes = NULL;
+    print->node_count = 0;
+    print->node_cap = 0;
+}
+
+static int print_find_node0(const PrintCtx *print, const char *key) {
+    if (!print) return -1;
+    for (int i = 0; i < print->node_count; i++) {
+        if (strcmp(print->nodes[i].key, key) == 0) return i;
+    }
+    return -1;
+}
+
+static int emit_graph_node0(PrintCtx *print,
+                            const Tile *tile,
+                            const Search0State *s,
+                            const char *kind,
+                            int discover_step) {
+    PrintNodeRef *next_nodes;
+    PrintNodeRef *slot;
+    int id;
+    if (!print || !print->fp) return -1;
+    if (print->limit > 0 && print->next_id >= print->limit) return -1;
+    if (print->node_count == print->node_cap) {
+        int nc = print->node_cap ? 2 * print->node_cap : 256;
+        next_nodes = realloc(print->nodes, (size_t)nc * sizeof(*next_nodes));
+        if (!next_nodes) return -1;
+        print->nodes = next_nodes;
+        print->node_cap = nc;
+    }
+    id = print->next_id++;
+    slot = &print->nodes[print->node_count++];
+    memset(slot, 0, sizeof(*slot));
+    slot->id = id;
+    snprintf(slot->key, sizeof(slot->key), "%s", s->key);
+
+    fprintf(print->fp, "---node %d---\n", id);
+    fprintf(print->fp, "kind: %s\n", kind ? kind : "state");
+    fprintf(print->fp, "discover_step: %d\n", discover_step);
+    fprintf(print->fp, "tile_count: %d\n", s->tile_count);
+    fprintf(print->fp, "hidden_count: %d\n", s->hidden_count);
+    fprintf(print->fp, "prov: ");
+    fprint_mark_list0(print->fp, s->prov);
+    fprintf(print->fp, "\n");
+    fprintf(print->fp, "hidden: ");
+    fprint_coord_list_line0(print->fp, s->hidden, s->hidden_count);
+    fprintf(print->fp, "\n");
+    fprint_tile_list0(print->fp, s->tiles, s->tile_count);
+    fprintf(print->fp, "key: %s\n", s->key);
+    fprintf(print->fp, "aggregate:\n");
     fprint_imgtable_shape0(print->fp, tile, &s->poly);
-    fprintf(print->fp, "Tiles\n");
-    for (int i = 0; i < s->tile_count; i++) {
-        Poly p;
-        memset(&p, 0, sizeof(p));
-        p.cycle_count = 1;
-        p.cycles[0] = s->tiles[i];
-        fprint_imgtable_shape0(print->fp, tile, &p);
+    fprintf(print->fp, "---end-node---\n");
+    fflush(print->fp);
+    return id;
+}
+
+static int ensure_graph_node0(PrintCtx *print,
+                              const Tile *tile,
+                              const Search0State *s,
+                              const char *kind,
+                              int discover_step,
+                              int *is_new) {
+    int idx;
+    if (!print || !print->fp) {
+        if (is_new) *is_new = 0;
+        return -1;
     }
-    fprintf(print->fp, "Hidden\n");
-    for (int i = 0; i < s->hidden_count; i++) {
-        fprintf(print->fp, "(%d,%d,%d)\n",
-                s->hidden[i].v,
-                s->hidden[i].x,
-                s->hidden[i].y);
+    idx = print_find_node0(print, s->key);
+    if (idx >= 0) {
+        if (is_new) *is_new = 0;
+        return print->nodes[idx].id;
     }
+    if (is_new) *is_new = 1;
+    return emit_graph_node0(print, tile, s, kind, discover_step);
+}
+
+static void emit_graph_edge0(PrintCtx *print,
+                             int src_id,
+                             int dst_id,
+                             int step,
+                             int distance,
+                             Coord port,
+                             const RL0FMArc *arc,
+                             const char *kind) {
+    if (!print || !print->fp) return;
+    if (src_id < 0 || dst_id < 0) return;
+    fprintf(print->fp, "---edge---\n");
+    fprintf(print->fp, "kind: %s\n", kind ? kind : "edge");
+    fprintf(print->fp, "src: %d\n", src_id);
+    fprintf(print->fp, "dst: %d\n", dst_id);
+    fprintf(print->fp, "step: %d\n", step);
+    fprintf(print->fp, "distance: %d\n", distance);
+    fprintf(print->fp, "port: (%d,%d,%d)\n", port.v, port.x, port.y);
+    fprintf(print->fp, "arc: ");
+    if (arc) fprint_arc0(print->fp, arc);
+    else fprintf(print->fp, "[]");
+    fprintf(print->fp, "\n");
+    fprintf(print->fp, "---end-edge---\n");
     fflush(print->fp);
 }
 
-static void emit_statevec0(PrintCtx *print,
-                           const Tile *tile,
-                           const StateVec *v,
-                           const char *label,
-                           int step) {
+static void emit_focus0(PrintCtx *print,
+                        const Search0State *src,
+                        int step,
+                        Coord port) {
+    if (!print || !print->fp || !src) return;
+    fprintf(print->fp, "---focus---\n");
+    fprintf(print->fp, "key: %s\n", src->key);
+    fprintf(print->fp, "step: %d\n", step);
+    fprintf(print->fp, "port: (%d,%d,%d)\n", port.v, port.x, port.y);
+    fprintf(print->fp, "---end-focus---\n");
+    fflush(print->fp);
+}
+
+static int coord_less0(Coord a, Coord b) {
+    if (a.v != b.v) return a.v < b.v;
+    if (a.x != b.x) return a.x < b.x;
+    return a.y < b.y;
+}
+
+static Coord default_focus_coord0(const Search0State *s) {
+    Coord boundary[SEARCH0_MAX_COORDS];
+    int vc = build_boundary_vertices(&s->poly, boundary);
+    Coord best = {0,0,0};
+    if (vc <= 0) return best;
+    best = boundary[0];
+    for (int i = 1; i < vc; i++) {
+        if (coord_less0(boundary[i], best)) best = boundary[i];
+    }
+    return best;
+}
+
+static Coord choose_focus_coord0(const Search0State *s,
+                                 const Tile *tile,
+                                 const RL0ForgetMap *map) {
+    PortChoice choice;
+    int port_count = 0;
+    int min_distance = SEARCH0_INF;
+    int r = choose_port0(s, tile, map, &choice, &port_count, &min_distance);
+    if (r != 0 && choice.q.v > 0) return choice.q;
+    return default_focus_coord0(s);
+}
+
+static void emit_state_focus0(PrintCtx *print,
+                              const Tile *tile,
+                              const RL0ForgetMap *map,
+                              const Search0State *s,
+                              int step) {
+    emit_focus0(print, s, step, choose_focus_coord0(s, tile, map));
+}
+
+static void emit_seed_statevec0(PrintCtx *print,
+                                const Tile *tile,
+                                const RL0ForgetMap *map,
+                                const StateVec *v) {
     if (!print || !print->fp) return;
     for (int i = 0; i < v->count; i++) {
-        emit_imgtable_state0(print, tile, &v->data[i], label, step);
+        int is_new = 0;
+        ensure_graph_node0(print, tile, &v->data[i], "seed", -1, &is_new);
+        if (is_new) emit_state_focus0(print, tile, map, &v->data[i], -1);
         if (print->limit > 0 && print->next_id >= print->limit) return;
     }
+}
+
+static void emit_transition0(PrintCtx *print,
+                             const Tile *tile,
+                             const RL0ForgetMap *map,
+                             const Search0State *src,
+                             const Search0State *dst,
+                             int step,
+                             const PortChoice *choice,
+                             const RL0FMArc *arc) {
+    int src_id;
+    int dst_id;
+    int is_new = 0;
+    if (!print || !print->fp || !src || !dst) return;
+    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, NULL);
+    dst_id = ensure_graph_node0(print, tile, dst, "generated", step, &is_new);
+    if (is_new) emit_state_focus0(print, tile, map, dst, step);
+    emit_graph_edge0(print,
+                     src_id,
+                     dst_id,
+                     step,
+                     choice ? choice->distance : SEARCH0_INF,
+                     choice ? choice->q : (Coord){0,0,0},
+                     arc,
+                     is_new ? "discover" : "collision");
+}
+
+static void emit_relation0(PrintCtx *print,
+                           const Tile *tile,
+                           const RL0ForgetMap *map,
+                           const Search0State *src,
+                           const Search0State *dst,
+                           int step,
+                           const char *dst_kind,
+                           const char *edge_kind) {
+    int src_id;
+    int dst_id;
+    int is_new = 0;
+    if (!print || !print->fp || !src || !dst) return;
+    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, NULL);
+    dst_id = ensure_graph_node0(print, tile, dst, dst_kind ? dst_kind : "carry", step, &is_new);
+    if (is_new) emit_state_focus0(print, tile, map, dst, step);
+    if (src_id == dst_id) return;
+    emit_graph_edge0(print,
+                     src_id,
+                     dst_id,
+                     step,
+                     SEARCH0_INF,
+                     (Coord){0,0,0},
+                     NULL,
+                     edge_kind ? edge_kind : "carry");
 }
 
 
@@ -1171,7 +1419,7 @@ int main(int argc, char **argv) {
                     dead_prov,
                     initial_exclusions,
                     initial_exclusion_count);
-    emit_statevec0(&print, &tile, &cur, "seed", -1);
+    emit_seed_statevec0(&print, &tile, map, &cur);
 
     while (cur.count > 0 && step < 1000) {
         int global_min = min_distance_all0(&cur, &tile, map);
@@ -1191,9 +1439,10 @@ int main(int argc, char **argv) {
             PortChoice ch;
             int pc = 0, d = SEARCH0_INF;
             int r = choose_port0(&cur.data[i], &tile, map, &ch, &pc, &d);
-            if (r < 0) { zero++; dropped++; continue; }
+            if (r < 0) { emit_focus0(&print, &cur.data[i], step, ch.q); zero++; dropped++; continue; }
             if (r == 0) { no_ports++; statevec_add_merge0(&next, &cur.data[i]); continue; }
             if (d != global_min) { statevec_add_merge0(&next, &cur.data[i]); continue; }
+            emit_focus0(&print, &cur.data[i], step, ch.q);
             expanded++;
             for (int k = 0; k < ch.value_count; k++) {
                 Search0State out;
@@ -1203,6 +1452,7 @@ int main(int argc, char **argv) {
                 {
                     int ar = state_after_attach0(&cur.data[i], &tile, map, &ch, k, hidden_bound, &out, &astats, &cstats);
                     if (ar > 0) {
+                        emit_transition0(&print, &tile, map, &cur.data[i], &out, step, &ch, &ch.values[k]);
                         statevec_add_merge0(&next, &out);
                     } else if (ar < 0) {
                         add_state_prov0(escaped_prov, &out);
@@ -1220,7 +1470,6 @@ int main(int argc, char **argv) {
         (void)dropped;
         (void)zero;
         (void)no_ports;
-        emit_statevec0(&print, &tile, &next, "live", step);
         if (next.count == 0) {
             int new_dead[SEARCH0_MAX_PROV];
             int new_dead_count = 0;
@@ -1240,7 +1489,9 @@ int main(int argc, char **argv) {
                                          &astats,
                                          &cstats,
                                          new_dead,
-                                         &new_dead_count)) {
+                                         &new_dead_count,
+                                         &print,
+                                         step)) {
                 fprintf(stderr, "checkpoint fixed point failed\n");
                 return 1;
             }
@@ -1277,7 +1528,9 @@ int main(int argc, char **argv) {
                                              &astats,
                                              &cstats,
                                              new_dead,
-                                             &new_dead_count)) {
+                                             &new_dead_count,
+                                             &print,
+                                             step)) {
                     fprintf(stderr, "checkpoint fixed point failed\n");
                     return 1;
                 }
@@ -1297,6 +1550,7 @@ int main(int argc, char **argv) {
     (void)total_branches;
     (void)total_dropped;
     if (print.fp) fclose(print.fp);
+    printctx_free0(&print);
     statevec_free0(&cur);
     statevec_free0(&next);
     free(records);
