@@ -12,7 +12,7 @@ VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
-	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate_naive \
+	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
 	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
 	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_search0 depict_search0_graph
 
@@ -34,7 +34,7 @@ clean:
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
-		$(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
+		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
 		$(BIN)/rl0_search0 \
 		$(BIN)/depict_search0_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
@@ -110,6 +110,10 @@ rl0_stats: $(BIN)/rl0_stats
 $(BIN)/rl0_stats: $(SRC)/usage/rl0_stats.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl0_stats.o $(CORE) $(SRC)/throughput/vcomp.o
 
+rl1_generate: $(BIN)/rl1_generate
+$(BIN)/rl1_generate: $(SRC)/rl1/generate_rl1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
 rl1_generate_naive: $(BIN)/rl1_generate_naive
 $(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE)
@@ -135,6 +139,10 @@ rl0_data: rl0_generate
 rl0_svg: rl0_data rl0_depict imgtable
 	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl0_all.svg
+
+rl1_data: rl1_generate
+	mkdir -p data/rl1
+	$(BIN)/rl1_generate tiles/hat.tile data/rl1/completions.dat 20 --live-only
 
 rl1_data_naive: rl1_generate_naive
 	mkdir -p data/rl1
