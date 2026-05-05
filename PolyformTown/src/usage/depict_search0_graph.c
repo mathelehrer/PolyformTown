@@ -41,6 +41,8 @@ typedef struct {
     int division;
     int tile_count;
     int hidden_count;
+    int prov_count;
+    int prov[64];
     int tile_path_count;
     int tile_path_cap;
     int focus_count;
@@ -503,6 +505,23 @@ static int graphnode_add_focus0(GraphNode *n, VPoint port) {
     return 1;
 }
 
+static void parse_prov_numbers0(const char *s, GraphNode *n) {
+    const char *p = s;
+    n->prov_count = 0;
+    while (*p && n->prov_count < 64) {
+        if ((*p == '-') || isdigit((unsigned char)*p)) {
+            char *end = NULL;
+            long v = strtol(p, &end, 10);
+            if (end != p) {
+                n->prov[n->prov_count++] = (int)v;
+                p = end;
+                continue;
+            }
+        }
+        p++;
+    }
+}
+
 static void free_nodes(NodeVec *v) {
     for (int i = 0; i < v->count; i++) {
         free(v->data[i].focus_ports);
@@ -537,6 +556,8 @@ static int parse_graph_file(FILE *fp, NodeVec *nodes, EdgeVec *edges) {
                     n.tile_count = atoi(line + 11);
                 } else if (strncmp(line, "hidden_count:", 13) == 0) {
                     n.hidden_count = atoi(line + 13);
+                } else if (strncmp(line, "prov:", 5) == 0) {
+                    parse_prov_numbers0(line + 5, &n);
                 } else if (strncmp(line, "hidden:", 7) == 0) {
                     if (!parse_hidden_list(line + 7, &n.hidden, &n.hidden_count)) return 0;
                 } else if (strncmp(line, "tile:", 5) == 0) {
@@ -591,8 +612,8 @@ static int parse_graph_file(FILE *fp, NodeVec *nodes, EdgeVec *edges) {
             if (id >= 0) {
                 for (int ni = 0; ni < nodes->count; ni++) {
                     if (nodes->data[ni].id == id) {
-                        if (discover_step > nodes->data[ni].discover_step) nodes->data[ni].discover_step = discover_step;
-                        if (division > nodes->data[ni].division) nodes->data[ni].division = division;
+                        if (discover_step >= 0) nodes->data[ni].discover_step = discover_step;
+                        if (division >= -1) nodes->data[ni].division = division;
                         break;
                     }
                 }
@@ -926,7 +947,7 @@ static void draw_node_red_marks0(FILE *fp,
     }
 }
 
-static void choose_primary_parents0(const NodeVec *nodes,
+static void __attribute__((unused)) choose_primary_parents0(const NodeVec *nodes,
                                    const EdgeVec *edges,
                                    int *parent) {
     int n = nodes->count;
@@ -979,7 +1000,7 @@ static double compute_subtree_width0(int idx,
                                      const int *child_counts,
                                      const int *children,
                                      double *subtree_width) {
-    const double child_gap = BOX_GAP_X * 1.00;
+    const double child_gap = BOX_GAP_X * 1.55;
     int count = child_counts[idx];
     if (count <= 0) {
         subtree_width[idx] = BOX_W;
@@ -1003,7 +1024,7 @@ static void assign_subtree_centers0(int idx,
                                     const int *children,
                                     const double *subtree_width,
                                     double *center_x) {
-    const double child_gap = BOX_GAP_X * 1.00;
+    const double child_gap = BOX_GAP_X * 1.55;
     int count = child_counts[idx];
     double width = subtree_width[idx];
     if (count <= 0) {
@@ -1031,6 +1052,21 @@ static void assign_subtree_centers0(int idx,
 
 
 
+static int compute_subtree_count0(int idx,
+                                  const int *child_offsets,
+                                  const int *child_counts,
+                                  const int *children,
+                                  int *count_cache) {
+    int total = 1;
+    if (count_cache[idx] >= 0) return count_cache[idx];
+    for (int k = 0; k < child_counts[idx]; k++) {
+        int child = children[child_offsets[idx] + k];
+        total += compute_subtree_count0(child, child_offsets, child_counts, children, count_cache);
+    }
+    count_cache[idx] = total;
+    return total;
+}
+
 static int compute_subtree_maxdiv0(int idx,
                                    const int *child_offsets,
                                    const int *child_counts,
@@ -1052,12 +1088,14 @@ static void sort_children_by_metric0(int *children,
                                      int start,
                                      int count,
                                      const int *metric_cache,
+                                     const int *count_cache,
                                      const int *order_in_row) {
     for (int i = start; i < start + count; i++) {
         for (int j = i + 1; j < start + count; j++) {
             int ci = children[i], cj = children[j];
             if (metric_cache[cj] < metric_cache[ci] ||
-                (metric_cache[cj] == metric_cache[ci] && order_in_row[cj] < order_in_row[ci])) {
+                (metric_cache[cj] == metric_cache[ci] && count_cache[cj] < count_cache[ci]) ||
+                (metric_cache[cj] == metric_cache[ci] && count_cache[cj] == count_cache[ci] && order_in_row[cj] < order_in_row[ci])) {
                 int tmp = children[i];
                 children[i] = children[j];
                 children[j] = tmp;
@@ -1071,10 +1109,11 @@ static void sort_tree_children_by_metric0(int n,
                                           const int *child_counts,
                                           int *children,
                                           const int *metric_cache,
+                                          const int *count_cache,
                                           const int *order_in_row) {
     for (int i = 0; i < n; i++) {
         if (child_counts[i] > 1) {
-            sort_children_by_metric0(children, child_offsets[i], child_counts[i], metric_cache, order_in_row);
+            sort_children_by_metric0(children, child_offsets[i], child_counts[i], metric_cache, count_cache, order_in_row);
         }
     }
 }
@@ -1097,7 +1136,7 @@ static const char *edge_marker0(int sublevel) {
     }
 }
 
-static void compute_node_sublevels0(const NodeVec *nodes,
+static void __attribute__((unused)) compute_node_sublevels0(const NodeVec *nodes,
                                     const EdgeVec *edges,
                                     int *node_sublevels) {
     for (int i = 0; i < nodes->count; i++) node_sublevels[i] = 0;
@@ -1110,19 +1149,21 @@ static void compute_node_sublevels0(const NodeVec *nodes,
     }
 }
 
+
 static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     int n = nodes->count;
     int topo_rows;
     int div_rows = 0;
     int *levels = (int *)calloc((size_t)n, sizeof(int));
     int *division_levels = (int *)calloc((size_t)n, sizeof(int));
-    int *normal_step = (int *)calloc((size_t)n, sizeof(int));
     int *local_step = (int *)calloc((size_t)n, sizeof(int));
     int *row_nodes = NULL;
     int *row_offsets = NULL;
     int *row_counts = NULL;
     int *order_in_row = NULL;
     int *primary_parent = (int *)calloc((size_t)n, sizeof(int));
+    int *parent_edge = (int *)calloc((size_t)n, sizeof(int));
+    int *root_of = (int *)calloc((size_t)n, sizeof(int));
     int *child_offsets = NULL;
     int *child_counts = NULL;
     int *children = NULL;
@@ -1131,134 +1172,169 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     double *cx = (double *)calloc((size_t)n, sizeof(double));
     double *box_y = (double *)calloc((size_t)n, sizeof(double));
     double *box_x = (double *)calloc((size_t)n, sizeof(double));
-    int *node_sublevels = (int *)calloc((size_t)n, sizeof(int));
     int *rows_per_div = NULL;
     int *metric_cache = NULL;
-    double *div_start = NULL;
-    double *div_height = NULL;
+    int *count_cache = NULL;
+    double *divider_y = NULL;
+    double *division_start = NULL;
+    int *seed_for_prov = (int *)calloc(64, sizeof(int));
+    int *process_order = (int *)calloc((size_t)n, sizeof(int));
     double min_box_x = 0.0, max_box_x = 0.0;
     double width, height, dx;
     int first_box = 1;
-    const double ROW_DY = BOX_H + 22.0;
+    const double ROW_DY = BOX_H + 50.0;
     const double DIV_GAP = 30.0;
-    const double INIT_GAP = 28.0;
-    int has_init = 0;
-    double init_y = PAGE_MARGIN;
-    if (!levels || !division_levels || !normal_step || !local_step || !primary_parent || !center_x || !subtree_width || !cx || !box_y || !box_x || !node_sublevels) exit(1);
-    if (!compute_vertex_strata(nodes, edges, levels, &topo_rows)) exit(1);
-    compute_node_sublevels0(nodes, edges, node_sublevels);
-    build_row_layout0(nodes, edges, levels, topo_rows, &row_nodes, &row_offsets, &row_counts, &order_in_row);
-    choose_primary_parents0(nodes, edges, primary_parent);
-    build_primary_tree0(n, primary_parent, &child_offsets, &child_counts, &children);
+    const double ROOT_GAP = 4.0;
+    const double DIV_TOP_GAP = 8.0;
+    const double ROOT_GAP_X = BOX_GAP_X * 1.05;
+    const double LABEL_FONT = 72.0;
 
+    if (!levels || !division_levels || !local_step || !primary_parent || !parent_edge || !root_of ||
+        !center_x || !subtree_width || !cx || !box_y || !box_x || !seed_for_prov || !process_order) exit(1);
+
+    if (!compute_vertex_strata(nodes, edges, levels, &topo_rows)) exit(1);
+    build_row_layout0(nodes, edges, levels, topo_rows, &row_nodes, &row_offsets, &row_counts, &order_in_row);
+
+    for (int i = 0; i < 64; i++) seed_for_prov[i] = -1;
     for (int i = 0; i < n; i++) {
-        division_levels[i] = (nodes->data[i].discover_step < 0 || strcmp(nodes->data[i].kind, "seed") == 0) ? -1 : ((nodes->data[i].division >= 0) ? nodes->data[i].division : levels[i]);
-        normal_step[i] = levels[i];
-        if (division_levels[i] < 0) has_init = 1;
-        if (division_levels[i] + 1 > div_rows) div_rows = division_levels[i] + 1;
+        primary_parent[i] = -1;
+        parent_edge[i] = -1;
+        root_of[i] = i;
+        local_step[i] = 0;
+        if (nodes->data[i].discover_step < 0 || strcmp(nodes->data[i].kind, "seed") == 0) {
+            division_levels[i] = -1;
+            if (nodes->data[i].prov_count == 1) {
+                int p0 = nodes->data[i].prov[0];
+                if (p0 >= 0 && p0 < 64 && seed_for_prov[p0] < 0) seed_for_prov[p0] = i;
+            }
+        } else {
+            int d = nodes->data[i].division;
+            if (d < 0) d = nodes->data[i].discover_step > 0 ? nodes->data[i].discover_step - 1 : 0;
+            if (d < 0) d = 0;
+            division_levels[i] = d;
+            if (d + 1 > div_rows) div_rows = d + 1;
+        }
+        process_order[i] = i;
     }
     if (div_rows <= 0) div_rows = 1;
+
+    for (int a = 0; a < n; a++) {
+        for (int b = a + 1; b < n; b++) {
+            int ia = process_order[a], ib = process_order[b];
+            int da = nodes->data[ia].discover_step;
+            int db = nodes->data[ib].discover_step;
+            if (db < da || (db == da && nodes->data[ib].id < nodes->data[ia].id)) {
+                int tmp = process_order[a];
+                process_order[a] = process_order[b];
+                process_order[b] = tmp;
+            }
+        }
+    }
+
+    for (int oi = 0; oi < n; oi++) {
+        int di = process_order[oi];
+        int best_si = -1;
+        int best_edge = -1;
+        int best_same = -1;
+        int target_root = -1;
+        if (division_levels[di] < 0) {
+            primary_parent[di] = -1;
+            root_of[di] = di;
+            continue;
+        }
+        if (nodes->data[di].prov_count == 1) {
+            int p0 = nodes->data[di].prov[0];
+            if (p0 >= 0 && p0 < 64) target_root = seed_for_prov[p0];
+        }
+        for (int e = 0; e < edges->count; e++) {
+            int si = find_node_index_by_id(nodes, edges->data[e].src);
+            int dsti = find_node_index_by_id(nodes, edges->data[e].dst);
+            int same = 0;
+            if (si < 0 || dsti != di || si == di) continue;
+            if (!(nodes->data[si].discover_step < nodes->data[di].discover_step ||
+                  nodes->data[si].discover_step < 0)) continue;
+            if (target_root >= 0 && root_of[si] == target_root) same = 1;
+            if (best_si < 0 ||
+                same > best_same ||
+                (same == best_same && nodes->data[si].discover_step > nodes->data[best_si].discover_step) ||
+                (same == best_same && nodes->data[si].discover_step == nodes->data[best_si].discover_step && nodes->data[si].id < nodes->data[best_si].id)) {
+                best_si = si;
+                best_edge = e;
+                best_same = same;
+            }
+        }
+        primary_parent[di] = best_si;
+        parent_edge[di] = best_edge;
+        root_of[di] = (best_si >= 0) ? root_of[best_si] : di;
+    }
+
+    build_primary_tree0(n, primary_parent, &child_offsets, &child_counts, &children);
+
     rows_per_div = (int *)calloc((size_t)div_rows, sizeof(int));
     metric_cache = (int *)calloc((size_t)n, sizeof(int));
-    div_start = (double *)calloc((size_t)div_rows, sizeof(double));
-    div_height = (double *)calloc((size_t)div_rows, sizeof(double));
-    if (!rows_per_div || !metric_cache || !div_start || !div_height) exit(1);
-    for (int i = 0; i < n; i++) metric_cache[i] = -1;
+    count_cache = (int *)calloc((size_t)n, sizeof(int));
+    divider_y = (double *)calloc((size_t)(div_rows + 1), sizeof(double));
+    division_start = (double *)calloc((size_t)div_rows, sizeof(double));
+    if (!rows_per_div || !metric_cache || !count_cache || !divider_y || !division_start) exit(1);
+    for (int i = 0; i < n; i++) { metric_cache[i] = -1; count_cache[i] = -1; }
 
-    for (int d = 0; d < div_rows; d++) {
-        int pair_count = 0;
-        int *pair_step = (int *)calloc((size_t)n, sizeof(int));
-        int *pair_sub = (int *)calloc((size_t)n, sizeof(int));
-        if (!pair_step || !pair_sub) exit(1);
-        for (int i = 0; i < n; i++) {
-            int found = -1;
-            if (division_levels[i] < 0) { local_step[i] = 0; continue; }
-            if (division_levels[i] != d) continue;
-            for (int k = 0; k < pair_count; k++) {
-                if (pair_step[k] == normal_step[i] && pair_sub[k] == node_sublevels[i]) { found = k; break; }
-            }
-            if (found < 0) {
-                pair_step[pair_count] = normal_step[i];
-                pair_sub[pair_count] = node_sublevels[i];
-                found = pair_count++;
-            }
-            local_step[i] = found;
+    for (int i = 0; i < n; i++) {
+        if (primary_parent[i] < 0) {
+            compute_subtree_maxdiv0(i, child_offsets, child_counts, children, division_levels, metric_cache);
+            compute_subtree_count0(i, child_offsets, child_counts, children, count_cache);
         }
-        for (int a = 0; a < pair_count; a++) {
-            for (int b = a + 1; b < pair_count; b++) {
-                if (pair_step[b] < pair_step[a] ||
-                    (pair_step[b] == pair_step[a] && pair_sub[b] < pair_sub[a])) {
-                    int ts = pair_step[a], tu = pair_sub[a];
-                    pair_step[a] = pair_step[b];
-                    pair_sub[a] = pair_sub[b];
-                    pair_step[b] = ts;
-                    pair_sub[b] = tu;
-                }
-            }
-        }
-        for (int i = 0; i < n; i++) {
-            if (division_levels[i] != d) continue;
-            for (int k = 0; k < pair_count; k++) {
-                if (pair_step[k] == normal_step[i] && pair_sub[k] == node_sublevels[i]) {
-                    local_step[i] = k;
-                    break;
-                }
-            }
-        }
-        if (pair_count <= 0) pair_count = 1;
-        rows_per_div[d] = pair_count;
-        free(pair_step);
-        free(pair_sub);
     }
-    for (int d = 0; d < div_rows; d++) {
-        div_height[d] = BOX_H + (rows_per_div[d] - 1) * ROW_DY;
-        if (d == 0) div_start[d] = PAGE_MARGIN + (has_init ? (BOX_H + INIT_GAP) : 0.0);
-        else div_start[d] = div_start[d - 1] + div_height[d - 1] + DIV_GAP;
-    }
-    if (has_init) init_y = div_start[0] - BOX_H - 12.0;
+    sort_tree_children_by_metric0(n, child_offsets, child_counts, children, metric_cache, count_cache, order_in_row);
 
     {
-        double root_gap = BOX_GAP_X * 1.15;
         int *roots = (int *)calloc((size_t)n, sizeof(int));
-        int *root_metric = (int *)calloc((size_t)n, sizeof(int));
         int root_count = 0;
         double cur_left = 0.0;
-        if (!roots || !root_metric) exit(1);
-        for (int i = 0; i < n; i++) {
-            if (nodes->data[i].discover_step < 0 || strcmp(nodes->data[i].kind, "seed") == 0) {
-                roots[root_count++] = i;
-            }
-        }
-        for (int r = 0; r < root_count; r++) {
-            root_metric[r] = compute_subtree_maxdiv0(roots[r], child_offsets, child_counts, children, division_levels, metric_cache);
-        }
-        sort_tree_children_by_metric0(n, child_offsets, child_counts, children, metric_cache, order_in_row);
-        for (int r = 0; r < root_count; r++) {
-            compute_subtree_width0(roots[r], child_offsets, child_counts, children, subtree_width);
-        }
+        if (!roots) exit(1);
+        for (int i = 0; i < n; i++) if (primary_parent[i] < 0) roots[root_count++] = i;
         for (int a = 0; a < root_count; a++) {
             for (int b = a + 1; b < root_count; b++) {
-                if (root_metric[b] < root_metric[a] ||
-                    (root_metric[b] == root_metric[a] && nodes->data[roots[b]].id < nodes->data[roots[a]].id)) {
-                    int ti = roots[a]; roots[a] = roots[b]; roots[b] = ti;
-                    ti = root_metric[a]; root_metric[a] = root_metric[b]; root_metric[b] = ti;
+                int ia = roots[a], ib = roots[b];
+                if (metric_cache[ib] < metric_cache[ia] ||
+                    (metric_cache[ib] == metric_cache[ia] && count_cache[ib] < count_cache[ia]) ||
+                    (metric_cache[ib] == metric_cache[ia] && count_cache[ib] == count_cache[ia] && order_in_row[ib] < order_in_row[ia])) {
+                    int tmp = roots[a];
+                    roots[a] = roots[b];
+                    roots[b] = tmp;
                 }
             }
         }
         for (int r = 0; r < root_count; r++) {
             int idx = roots[r];
-            if (r > 0) cur_left += root_gap;
+            compute_subtree_width0(idx, child_offsets, child_counts, children, subtree_width);
+            if (r > 0) cur_left += ROOT_GAP_X;
             assign_subtree_centers0(idx, cur_left, child_offsets, child_counts, children, subtree_width, center_x);
             cur_left += subtree_width[idx];
         }
         free(roots);
-        free(root_metric);
+    }
+
+    for (int oi = 0; oi < n; oi++) {
+        int i = process_order[oi];
+        int p = primary_parent[i];
+        if (division_levels[i] < 0) continue;
+        if (p < 0 || root_of[p] != root_of[i] || division_levels[p] != division_levels[i]) local_step[i] = 0;
+        else local_step[i] = local_step[p] + 1;
+        if (local_step[i] + 1 > rows_per_div[division_levels[i]]) rows_per_div[division_levels[i]] = local_step[i] + 1;
+    }
+    for (int d = 0; d < div_rows; d++) if (rows_per_div[d] <= 0) rows_per_div[d] = 1;
+
+    divider_y[0] = PAGE_MARGIN + BOX_H + ROOT_GAP;
+    for (int d = 0; d < div_rows; d++) {
+        double div_height = BOX_H + (rows_per_div[d] - 1) * ROW_DY;
+        division_start[d] = divider_y[d] + DIV_TOP_GAP;
+        divider_y[d + 1] = division_start[d] + div_height + DIV_GAP;
     }
 
     for (int i = 0; i < n; i++) {
-        double y0 = (division_levels[i] < 0)
-                        ? init_y
-                        : (div_start[division_levels[i]] + local_step[i] * ROW_DY);
+        double y0;
+        if (division_levels[i] < 0) y0 = divider_y[0] - BOX_H - ROOT_GAP;
+        else y0 = division_start[division_levels[i]] + local_step[i] * ROW_DY;
         box_x[i] = center_x[i] - BOX_W * 0.5;
         box_y[i] = y0;
         cx[i] = center_x[i];
@@ -1271,27 +1347,16 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
             if (box_x[i] + BOX_W > max_box_x) max_box_x = box_x[i] + BOX_W;
         }
     }
+
     dx = PAGE_MARGIN - min_box_x;
     for (int i = 0; i < n; i++) {
         box_x[i] += dx;
         cx[i] += dx;
     }
-    width = (max_box_x - min_box_x) + 2 * PAGE_MARGIN;
-    if (width < 2 * PAGE_MARGIN + BOX_W) width = 2 * PAGE_MARGIN + BOX_W;
-    height = div_start[div_rows - 1] + div_height[div_rows - 1] + PAGE_MARGIN;
-    if (has_init && div_rows <= 0) height = PAGE_MARGIN + BOX_H + INIT_GAP + PAGE_MARGIN;
-    {
-        double pad_x = width * 0.05;
-        double pad_y = height * 0.05;
-        for (int i = 0; i < n; i++) {
-            box_x[i] += pad_x;
-            box_y[i] += pad_y;
-            cx[i] += pad_x;
-        }
-        for (int d = 0; d < div_rows; d++) div_start[d] += pad_y;
-        width += 2 * pad_x;
-        height += 2 * pad_y;
-    }
+    width = (max_box_x - min_box_x) + 2.0 * PAGE_MARGIN;
+    if (width < 2.0 * PAGE_MARGIN + BOX_W) width = 2.0 * PAGE_MARGIN + BOX_W;
+    height = divider_y[div_rows] + PAGE_MARGIN;
+
     printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
     printf("<defs>\n");
     printf("<marker id=\"arrow-gray\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#555555\"/></marker>\n");
@@ -1300,28 +1365,32 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     printf("<marker id=\"arrow-blue\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#3366cc\"/></marker>\n");
     printf("</defs>\n");
     printf("<rect x=\"0\" y=\"0\" width=\"%.0f\" height=\"%.0f\" fill=\"white\"/>\n", width, height);
-    for (int d = 0; d < div_rows; d++) {
+
+    for (int d = 0; d <= div_rows; d++) {
         const char *div_color = "#b8b8b8";
         const char *text_color = "#666666";
+        double yline = divider_y[d];
         if (d == 4) { div_color = "#cc3333"; text_color = "#cc3333"; }
         else if (d == 5) { div_color = "#2f8f46"; text_color = "#2f8f46"; }
         else if (d == 6) { div_color = "#3366cc"; text_color = "#3366cc"; }
-        printf("<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-width=\"2.2\"/>\n", div_start[d] - 10.0, width, div_start[d] - 10.0, div_color);
-        printf("<text x=\"16\" y=\"%.1f\" font-size=\"13\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">division %d</text>\n", div_start[d] - 14.0, text_color, d);
+        printf("<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-width=\"2.2\"/>\n", yline, width, yline, div_color);
+        printf("<text x=\"18\" y=\"%.1f\" font-size=\"%.0f\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">%d</text>\n", yline - 8.0, LABEL_FONT, text_color, d);
     }
-    for (int i = 0; i < edges->count; i++) {
-        int si = find_node_index_by_id(nodes, edges->data[i].src);
-        int di = find_node_index_by_id(nodes, edges->data[i].dst);
+
+    for (int i = 0; i < n; i++) {
+        int p = primary_parent[i];
+        int e = parent_edge[i];
         double x1, y1, x2, y2;
-        if (si < 0 || di < 0 || si == di) continue;
-        x1 = cx[si];
-        y1 = box_y[si] + BOX_H + 2.0;
-        x2 = cx[di];
-        y2 = box_y[di] - 2.0;
+        if (p < 0 || e < 0) continue;
+        x1 = cx[p];
+        y1 = box_y[p] + BOX_H + 2.0;
+        x2 = cx[i];
+        y2 = box_y[i] - 2.0;
         if (y2 <= y1) continue;
         printf("<line x1=\"%.2f\" y1=\"%.2f\" x2=\"%.2f\" y2=\"%.2f\" stroke=\"%s\" stroke-opacity=\"0.84\" stroke-width=\"1.8\" marker-end=\"url(#%s)\"/>\n",
-               x1, y1, x2, y2, edge_color0(edges->data[i].sublevel), edge_marker0(edges->data[i].sublevel));
+               x1, y1, x2, y2, edge_color0(edges->data[e].sublevel), edge_marker0(edges->data[e].sublevel));
     }
+
     for (int row = 0; row < topo_rows; row++) {
         for (int slot = 0; slot < row_counts[row]; slot++) {
             int idx = row_nodes[row_offsets[row] + slot];
@@ -1351,10 +1420,12 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         }
     }
     printf("</svg>\n");
-    free(levels); free(division_levels); free(normal_step); free(local_step); free(row_nodes); free(row_offsets); free(row_counts); free(order_in_row); free(primary_parent);
-    free(child_offsets); free(child_counts); free(children);
-    free(center_x); free(subtree_width); free(cx); free(box_y); free(box_x); free(node_sublevels);
-    free(rows_per_div); free(metric_cache); free(div_start); free(div_height);
+
+    free(levels); free(division_levels); free(local_step); free(row_nodes); free(row_offsets); free(row_counts); free(order_in_row);
+    free(primary_parent); free(parent_edge); free(root_of); free(child_offsets); free(child_counts); free(children);
+    free(center_x); free(subtree_width); free(cx); free(box_y); free(box_x);
+    free(rows_per_div); free(metric_cache); free(count_cache); free(divider_y); free(division_start);
+    free(seed_for_prov); free(process_order);
 }
 
 int main(int argc, char **argv) {

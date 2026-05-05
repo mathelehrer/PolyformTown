@@ -120,6 +120,11 @@ static int ensure_graph_node0(PrintCtx *print,
                               int node_division,
                               int *is_new);
 
+static int graph_division_from_distance0(int distance) {
+    if (distance <= 0 || distance >= SEARCH0_INF) return 0;
+    return distance - 1;
+}
+
 static int singleton_prov0(const Search0State *s) {
     int found = -1;
     for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
@@ -1206,14 +1211,17 @@ static int ensure_graph_node0(PrintCtx *print,
     poly_display_key0(&s->poly, display_key, sizeof(display_key));
     idx = print_find_node0(print, display_key);
     if (idx >= 0) {
-        if (discover_step > print->nodes[idx].discover_step ||
-            node_division > print->nodes[idx].division) {
-            if (discover_step > print->nodes[idx].discover_step) {
-                print->nodes[idx].discover_step = discover_step;
-            }
-            if (node_division > print->nodes[idx].division) {
-                print->nodes[idx].division = node_division;
-            }
+        int update = 0;
+        if (discover_step > print->nodes[idx].discover_step) {
+            print->nodes[idx].discover_step = discover_step;
+            update = 1;
+        }
+        if (node_division >= 0 &&
+            (print->nodes[idx].division < 0 || node_division < print->nodes[idx].division)) {
+            print->nodes[idx].division = node_division;
+            update = 1;
+        }
+        if (update) {
             emit_graph_node_update0(print,
                                     print->nodes[idx].id,
                                     print->nodes[idx].discover_step,
@@ -1579,7 +1587,7 @@ int main(int argc, char **argv) {
             int r = choose_port0(&cur.data[i], &tile, map, &ch, &pc, &d);
             if (r < 0) {
                 if (print.fp) {
-                    int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, global_min, NULL);
+                    int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, graph_division_from_distance0(global_min), NULL);
                     emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
                 }
                 zero++; dropped++; continue;
@@ -1587,7 +1595,7 @@ int main(int argc, char **argv) {
             if (r == 0) { no_ports++; statevec_add_merge0(&next, &cur.data[i]); continue; }
             if (d != global_min) { statevec_add_merge0(&next, &cur.data[i]); continue; }
             if (print.fp) {
-                int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, global_min, NULL);
+                int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, graph_division_from_distance0(global_min), NULL);
                 emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
             }
             expanded++;
@@ -1599,7 +1607,7 @@ int main(int argc, char **argv) {
                 {
                     int ar = state_after_attach0(&cur.data[i], &tile, map, &ch, k, hidden_bound, &out, &astats, &cstats);
                     if (ar > 0) {
-                        if (print.fp) emit_transition0(&print, &tile, map, &cur.data[i], &out, step, global_min, &ch, &ch.values[k]);
+                        if (print.fp) emit_transition0(&print, &tile, map, &cur.data[i], &out, step, graph_division_from_distance0(global_min), &ch, &ch.values[k]);
                         statevec_add_merge0(&next, &out);
                     } else if (ar < 0) {
                         add_state_prov0(escaped_prov, &out);
@@ -1639,7 +1647,7 @@ int main(int argc, char **argv) {
                                          &new_dead_count,
                                          &print,
                                          step,
-                                         global_min)) {
+                                         graph_division_from_distance0(global_min))) {
                 fprintf(stderr, "checkpoint fixed point failed\n");
                 return 1;
             }
@@ -1679,7 +1687,7 @@ int main(int argc, char **argv) {
                                              &new_dead_count,
                                              &print,
                                              step,
-                                             completed_distance)) {
+                                             graph_division_from_distance0(completed_distance))) {
                     fprintf(stderr, "checkpoint fixed point failed\n");
                     return 1;
                 }
