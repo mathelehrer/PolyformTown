@@ -508,34 +508,33 @@ static int state_after_attach0(const Search0State *s,
                                Attach0Stats *astats,
                                Attach0ClosureStats *cstats) {
     int hidden_count;
+    Cycle grown_tiles[ATTACH0_MAX_TILES];
+    int grown_tile_count = 0;
+
     *out = *s;
 
-    for (int k = 0; k < choice->values[value_index].n; k++) {
-        Poly grown;
-        Cycle aligned;
-
-        if (!attach0_try_attach_one(&out->poly,
-                                    tile,
-                                    choice->q,
-                                    choice->values[value_index].item[k],
-                                    &grown,
-                                    &aligned,
-                                    astats)) {
-            return 0;
-        }
-        out->poly = grown;
-        if (out->tile_count >= ATTACH0_MAX_TILES) return 0;
-        out->tiles[out->tile_count++] = aligned;
-
-        hidden_count = rebuild_hidden0(&out->poly, out->tiles, out->tile_count, out->hidden);
-        if (hidden_count < 0) return 0;
-        out->hidden_count = hidden_count;
-        if (out->hidden_count > hidden_bound) return -1;
+    if (!attach0_try_attach_arc(&s->poly,
+                                tile,
+                                s->tiles,
+                                s->tile_count,
+                                choice->q,
+                                &choice->values[value_index],
+                                &out->poly,
+                                grown_tiles,
+                                &grown_tile_count,
+                                astats)) {
+        return 0;
     }
+    if (grown_tile_count < 0 || grown_tile_count > ATTACH0_MAX_TILES) return 0;
+    out->tile_count = grown_tile_count;
+    for (int i = 0; i < grown_tile_count; i++) out->tiles[i] = grown_tiles[i];
 
-    /* Force only after the requested arc has completed.  Forcing inside the
-       arc can invalidate the exposed-edge context for the remaining requested
-       items and makes the search too greedy. */
+    hidden_count = rebuild_hidden0(&out->poly, out->tiles, out->tile_count, out->hidden);
+    if (hidden_count < 0) return 0;
+    out->hidden_count = hidden_count;
+    if (out->hidden_count > hidden_bound) return -1;
+
+    /* Force only after the requested arc has completed. */
     if (!attach0_force_live_closure(&out->poly,
                                     tile,
                                     out->tiles,

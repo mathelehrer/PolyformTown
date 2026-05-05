@@ -18,80 +18,125 @@ void attach0_closure_stats_init(Attach0ClosureStats *stats) {
     if (stats) memset(stats, 0, sizeof(*stats));
 }
 
-static int cycle_same_cyclic0(const Cycle *a, const Cycle *b) {
-    if (a->n != b->n) return 0;
-    int n = a->n;
-    for (int shift = 0; shift < n; shift++) {
-        int ok = 1;
-        for (int k = 0; k < n; k++) {
-            if (!coord_eq(a->v[k], b->v[(shift + k) % n])) {
-                ok = 0;
-                break;
-            }
-        }
-        if (ok) return 1;
-    }
-    return 0;
-}
-
-static int cycle_same_reversed_cyclic0(const Cycle *a, const Cycle *b) {
-    if (a->n != b->n) return 0;
-    int n = a->n;
-    for (int shift = 0; shift < n; shift++) {
-        int ok = 1;
-        for (int k = 0; k < n; k++) {
-            int j = (shift - k) % n;
-            if (j < 0) j += n;
-            if (!coord_eq(a->v[k], b->v[j])) {
-                ok = 0;
-                break;
-            }
-        }
-        if (ok) return 1;
-    }
-    return 0;
-}
-
 static int cycle_equal0(const Cycle *a, const Cycle *b) {
     return !cycle_less(a, b) && !cycle_less(b, a);
 }
 
-static void normalize_like_tile_build0(const Tile *tile, Cycle *c) {
-    if (cycle_signed_area2(c, tile->lattice) < 0) cycle_reverse(c);
-    cycle_normalize_position(c, tile->lattice);
-    cycle_canonicalize_shift(c);
+static int source_index_to_variant_slot0(int n, int parity, int source_index) {
+    if (source_index < 0 || source_index >= n) return -1;
+    if (parity == 1) return source_index;
+    if (parity == -1) return n - 1 - source_index;
+    return -1;
+}
+
+static int variant_matches_transform0(const Tile *tile,
+                                      const Cycle *variant,
+                                      int transform,
+                                      int *parity_out) {
+    Cycle cur = {0};
+    int p;
+    cycle_transform_lattice(&tile->base, &cur, tile->lattice, transform);
+    p = cycle_signed_area2(&cur, tile->lattice) >= 0 ? 1 : -1;
+    if (p < 0) {
+        Cycle rev = {0};
+        rev.n = cur.n;
+        for (int i = 0; i < cur.n; i++) rev.v[i] = cur.v[cur.n - 1 - i];
+        cur = rev;
+    }
+    cycle_normalize_position(&cur, tile->lattice);
+    if (!cycle_equal0(&cur, variant)) return 0;
+    if (parity_out) *parity_out = p;
+    return 1;
+}
+
+static int variant_has_parity0(const Tile *tile, const Cycle *variant, int parity) {
+    int tcount = lattice_transform_count(tile->lattice);
+    for (int t = 0; t < tcount; t++) {
+        int p = 0;
+        if (variant_matches_transform0(tile, variant, t, &p) && p == parity) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int edge_equal0(Edge a, Edge b) {
+    return coord_eq(a.a, b.a) && coord_eq(a.b, b.b);
+}
+
+static int find_boundary_edge0(const Poly *p, Edge wanted) {
+    Edge edges[A0_MAX_EDGES];
+    int ec = build_boundary_edges(p, edges);
+    if (ec < 0 || ec > A0_MAX_EDGES) return -1;
+    for (int i = 0; i < ec; i++) {
+        if (edge_equal0(edges[i], wanted)) return i;
+    }
+    return -1;
+}
+
+static Edge previous_edge_at_vertex0(const Cycle *c, Coord target) {
+    Edge e;
+    e.a = target;
+    e.b = target;
+    for (int i = 0; i < c->n; i++) {
+        if (!coord_eq(c->v[i], target)) continue;
+        e.a = c->v[(i + c->n - 1) % c->n];
+        e.b = c->v[i];
+        return e;
+    }
+    return e;
+}
+
+static int attach0_try_attach_one_on_edge(const Poly *base,
+                                          const Tile *tile,
+                                          Coord target,
+                                          Edge current_edge,
+                                          RL0FMItem item,
+                                          Poly *out,
+                                          Cycle *aligned_out,
+                                          Edge *next_edge,
+                                          Attach0Stats *stats) {
+    int be = find_boundary_edge0(base, current_edge);
+    if (be < 0) return 0;
+
+    for (int v = 0; v < tile->variant_count; v++) {
+        const Cycle *tv = &tile->variants[v];
+        int te;
+        Poly grown;
+        Cycle aligned;
+        if (!variant_has_parity0(tile, tv, item.p)) continue;
+        te = source_index_to_variant_slot0(tv->n, item.p, item.i);
+        if (te < 0 || te >= tv->n) continue;
+        if (stats) stats->attach_one_attempts++;
+        if (!try_attach_tile_poly_ex(base,
+                                     tv,
+                                     tile->lattice,
+                                     be,
+                                     te,
+                                     &grown,
+                                     &aligned)) {
+            continue;
+        }
+        *out = grown;
+        if (aligned_out) *aligned_out = aligned;
+        if (next_edge) *next_edge = previous_edge_at_vertex0(&aligned, target);
+        if (stats) stats->attach_one_successes++;
+        return 1;
+    }
+    return 0;
 }
 
 int attach0_verify_variant_order(const Tile *tile, Attach0Stats *stats) {
-    int tcount = lattice_transform_count(tile->lattice);
-    long long base_area;
     if (!tile || tile->base.n <= 0) return 0;
-    base_area = cycle_signed_area2(&tile->base, tile->lattice);
-    if (base_area < 0) base_area = -base_area;
 
     for (int v = 0; v < tile->variant_count; v++) {
         int matched = 0;
         if (stats) stats->variant_order_checked++;
-        for (int t = 0; t < tcount; t++) {
-            Cycle raw = {0};
-            Cycle oriented = {0};
-            Cycle norm = {0};
-            long long area;
-            cycle_transform_lattice(&tile->base, &raw, tile->lattice, t);
-            area = cycle_signed_area2(&raw, tile->lattice);
-            oriented = raw;
-            cycle_normalize_position(&oriented, tile->lattice);
-            norm = raw;
-            normalize_like_tile_build0(tile, &norm);
-            if (!cycle_equal0(&norm, &tile->variants[v])) continue;
-
-            if (area >= 0) {
-                if (!cycle_same_cyclic0(&tile->variants[v], &oriented)) continue;
-            } else {
-                if (!cycle_same_reversed_cyclic0(&tile->variants[v], &oriented)) continue;
+        for (int t = 0; t < lattice_transform_count(tile->lattice); t++) {
+            if (variant_matches_transform0(tile, &tile->variants[v], t, NULL)) {
+                matched = 1;
+                break;
             }
-            matched = 1;
-            break;
         }
         if (!matched) {
             if (stats) stats->variant_order_failures++;
@@ -99,10 +144,6 @@ int attach0_verify_variant_order(const Tile *tile, Attach0Stats *stats) {
         }
     }
     return 1;
-}
-
-static int item_equal0(RL0FMItem a, RL0FMItem b) {
-    return a.p == b.p && a.i == b.i;
 }
 
 int attach0_try_attach_one(const Poly *base,
@@ -120,31 +161,16 @@ int attach0_try_attach_one(const Poly *base,
 
     for (int be = 0; be < fc; be++) {
         if (!coord_eq(frontier[be].b, target)) continue;
-        for (int v = 0; v < tile->variant_count; v++) {
-            const Cycle *tv = &tile->variants[v];
-            for (int te = 0; te < tv->n; te++) {
-                Poly grown;
-                Cycle aligned;
-                RL0FMItem got;
-                if (stats) stats->attach_one_attempts++;
-                if (!try_attach_tile_poly_ex(base,
-                                             tv,
-                                             tile->lattice,
-                                             be,
-                                             te,
-                                             &grown,
-                                             &aligned)) {
-                    continue;
-                }
-                if (!boundary0_tile_item_at_vertex(tile, &aligned, target, &got)) {
-                    continue;
-                }
-                if (!item_equal0(got, item)) continue;
-                *out = grown;
-                if (aligned_out) *aligned_out = aligned;
-                if (stats) stats->attach_one_successes++;
-                return 1;
-            }
+        if (attach0_try_attach_one_on_edge(base,
+                                           tile,
+                                           target,
+                                           frontier[be],
+                                           item,
+                                           out,
+                                           aligned_out,
+                                           NULL,
+                                           stats)) {
+            return 1;
         }
     }
     return 0;
@@ -160,41 +186,71 @@ int attach0_try_attach_arc(const Poly *base,
                            Cycle *out_tiles,
                            int *out_tile_count,
                            Attach0Stats *stats) {
-    Poly cur;
-    Cycle carried[ATTACH0_MAX_TILES];
-    int carried_count;
+    Edge frontier[A0_MAX_EDGES];
+    int fc;
     if (!base || !tile || !arc || !out || !out_tiles || !out_tile_count) return 0;
     if (tile_count < 0 || tile_count > ATTACH0_MAX_TILES) return 0;
     if (arc->n < 0 || arc->n > RL0_FM_MAX_ITEMS) return 0;
     if (tile_count + arc->n > ATTACH0_MAX_TILES) return 0;
+    fc = build_boundary_edges(base, frontier);
+    if (fc < 0 || fc > A0_MAX_EDGES) return 0;
 
     if (stats) stats->attach_arc_attempts++;
-    cur = *base;
-    carried_count = tile_count;
-    for (int i = 0; i < tile_count; i++) carried[i] = tiles[i];
 
-    for (int k = 0; k < arc->n; k++) {
-        Poly grown;
-        Cycle aligned;
-        if (!attach0_try_attach_one(&cur,
-                                    tile,
-                                    target,
-                                    arc->item[k],
-                                    &grown,
-                                    &aligned,
-                                    stats)) {
-            return 0;
-        }
-        cur = grown;
-        carried[carried_count++] = aligned;
+    if (arc->n == 0) {
+        *out = *base;
+        for (int i = 0; i < tile_count; i++) out_tiles[i] = tiles[i];
+        *out_tile_count = tile_count;
+        if (stats) stats->attach_arc_successes++;
+        return 1;
     }
 
-    *out = cur;
-    for (int i = 0; i < carried_count; i++) out_tiles[i] = carried[i];
-    *out_tile_count = carried_count;
-    if (stats) stats->attach_arc_successes++;
-    return 1;
+    for (int start = 0; start < fc; start++) {
+        Poly cur;
+        Cycle carried[ATTACH0_MAX_TILES];
+        int carried_count;
+        Edge current;
+        int ok = 1;
+
+        if (!coord_eq(frontier[start].b, target)) continue;
+
+        cur = *base;
+        carried_count = tile_count;
+        for (int i = 0; i < tile_count; i++) carried[i] = tiles[i];
+        current = frontier[start];
+
+        for (int k = 0; k < arc->n; k++) {
+            Poly grown;
+            Cycle aligned;
+            Edge next;
+            if (!attach0_try_attach_one_on_edge(&cur,
+                                                tile,
+                                                target,
+                                                current,
+                                                arc->item[k],
+                                                &grown,
+                                                &aligned,
+                                                &next,
+                                                stats)) {
+                ok = 0;
+                break;
+            }
+            cur = grown;
+            carried[carried_count++] = aligned;
+            current = next;
+        }
+
+        if (ok) {
+            *out = cur;
+            for (int i = 0; i < carried_count; i++) out_tiles[i] = carried[i];
+            *out_tile_count = carried_count;
+            if (stats) stats->attach_arc_successes++;
+            return 1;
+        }
+    }
+    return 0;
 }
+
 int attach0_force_live_closure(Poly *poly,
                                const Tile *tile,
                                Cycle *tiles,

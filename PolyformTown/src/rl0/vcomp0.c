@@ -7,7 +7,9 @@
 
 #include "core/boundary.h"
 #include "core/attach.h"
+#include "core/lattice.h"
 #include "rl0/boundary0.h"
+#include "rl0/attach0.h"
 #include "core/hash.h"
 #include "throughput/vcomp.h"
 
@@ -177,14 +179,6 @@ static int stateset_insert(StateSet *s,
 }
 
 
-static int item_equal0(RL0FMItem a, RL0FMItem b) {
-    return a.p == b.p && a.i == b.i;
-}
-
-static int edge_equal0(Edge a, Edge b) {
-    return coord_eq(a.a, b.a) && coord_eq(a.b, b.b);
-}
-
 static int coord_on_boundary0(const Poly *p, Coord q) {
     Coord verts[MAX_VERTS * MAX_CYCLES];
     int vc = build_boundary_vertices(p, verts);
@@ -193,116 +187,27 @@ static int coord_on_boundary0(const Poly *p, Coord q) {
     return 0;
 }
 
-static int find_boundary_edge0(const Poly *p, Edge wanted) {
-    Edge edges[MAX_VERTS * MAX_CYCLES];
-    int ec = build_boundary_edges(p, edges);
-    if (ec < 0) return -1;
-    for (int i = 0; i < ec; i++) if (edge_equal0(edges[i], wanted)) return i;
-    return -1;
-}
-
-static Edge previous_edge_at_vertex0(const Cycle *c, Coord target) {
-    Edge e;
-    e.a = target;
-    e.b = target;
-    for (int i = 0; i < c->n; i++) {
-        if (!coord_eq(c->v[i], target)) continue;
-        e.a = c->v[(i + c->n - 1) % c->n];
-        e.b = c->v[i];
-        return e;
-    }
-    return e;
-}
-
-static int aligned_tile_item_at0(const Tile *tile,
-                                 const Cycle *aligned,
-                                 Coord target,
-                                 RL0FMItem *out) {
-    RL0FMArc one;
-    if (!boundary0_build_vertex_arc(tile, aligned, 1, target, &one)) return 0;
-    if (one.n != 1) return 0;
-    *out = one.item[0];
-    return 1;
-}
-
-static int attach_one_prescribed0(const Poly *base,
-                                  const Tile *tile,
-                                  Coord target,
-                                  Edge current_edge,
-                                  RL0FMItem item,
-                                  Poly *out,
-                                  Cycle *aligned_out,
-                                  Edge *next_edge) {
-    int be = find_boundary_edge0(base, current_edge);
-    if (be < 0) return 0;
-
-    for (int v = 0; v < tile->variant_count; v++) {
-        const Cycle *tv = &tile->variants[v];
-        for (int te = 0; te < tv->n; te++) {
-            Poly grown;
-            Cycle aligned;
-            RL0FMItem got;
-            if (!try_attach_tile_poly_ex(base,
-                                         tv,
-                                         tile->lattice,
-                                         be,
-                                         te,
-                                         &grown,
-                                         &aligned)) {
-                continue;
-            }
-            if (!aligned_tile_item_at0(tile, &aligned, target, &got)) continue;
-            if (!item_equal0(got, item)) continue;
-            *out = grown;
-            *aligned_out = aligned;
-            *next_edge = previous_edge_at_vertex0(&aligned, target);
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static int try_prescribed_arc0(const VCompState *state,
                                const Tile *tile,
                                Coord target,
                                const RL0FMArc *forgotten) {
-    Edge edges[MAX_VERTS * MAX_CYCLES];
-    int ec;
-
+    Poly grown;
+    Cycle out_tiles[ATTACH0_MAX_TILES];
+    int out_tile_count = 0;
     if (forgotten->n <= 0) return 0;
-    ec = build_boundary_edges(&state->poly, edges);
-    if (ec < 0) return 0;
-
-    for (int start = 0; start < ec; start++) {
-        Poly cur;
-        Cycle aligned;
-        Edge current;
-        Edge next;
-        int ok = 1;
-
-        if (!coord_eq(edges[start].b, target)) continue;
-        cur = state->poly;
-        current = edges[start];
-
-        for (int k = 0; k < forgotten->n; k++) {
-            Poly grown;
-            if (!attach_one_prescribed0(&cur,
-                                        tile,
-                                        target,
-                                        current,
-                                        forgotten->item[k],
-                                        &grown,
-                                        &aligned,
-                                        &next)) {
-                ok = 0;
-                break;
-            }
-            cur = grown;
-            current = next;
-        }
-        if (ok && !coord_on_boundary0(&cur, target)) return 1;
+    if (!attach0_try_attach_arc(&state->poly,
+                                tile,
+                                state->tiles,
+                                state->tile_count,
+                                target,
+                                forgotten,
+                                &grown,
+                                out_tiles,
+                                &out_tile_count,
+                                NULL)) {
+        return 0;
     }
-    return 0;
+    return !coord_on_boundary0(&grown, target);
 }
 
 static void probe_prescribed_growth0(const VCompState *state,

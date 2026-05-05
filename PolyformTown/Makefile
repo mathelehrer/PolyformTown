@@ -14,7 +14,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate_naive \
 	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_rl0 check_rl0_forget_map rl0_search0 depict_search0_graph
+	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_search0 depict_search0_graph
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -38,7 +38,7 @@ clean:
 		$(BIN)/rl0_search0 \
 		$(BIN)/depict_search0_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
-		$(BIN)/hat_boundary_dfs_check \
+		$(BIN)/hat_boundary_dfs_check $(BIN)/check_indexed_variants \
 		tests/check_rl0 tests/check_rl0_forget_map
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
@@ -55,6 +55,13 @@ hat_boundary_dfs_check: $(BIN)/hat_boundary_dfs_check
 $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(SRC)/core/dfs.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/hat_boundary_dfs_check.o \
 		$(CORE) $(SRC)/core/dfs.o
+
+check_indexed_variants: $(BIN)/check_indexed_variants
+$(BIN)/check_indexed_variants: $(SRC)/usage/check_indexed_variants.o $(SRC)/core/tile.o \
+	$(SRC)/core/cycle.o $(SRC)/core/tetrille.o $(SRC)/core/lattice.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/check_indexed_variants.o \
+		$(SRC)/core/tile.o $(SRC)/core/cycle.o \
+		$(SRC)/core/tetrille.o $(SRC)/core/lattice.o
 
 check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c

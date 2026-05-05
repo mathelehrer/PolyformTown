@@ -13,11 +13,11 @@
 #define MAX_CYCLES 32
 #define MAX_VERTS_PER_CYCLE 4096
 #define BOX_W 210.0
-#define BOX_H 180.0
+#define BOX_H 165.0
 #define BOX_GAP_X 36.0
 #define BOX_GAP_Y 70.0
 #define PAGE_MARGIN 28.0
-#define SHAPE_PAD 12.0
+#define SHAPE_PAD 8.0
 
 typedef struct { char name[MAX_NAME]; char expr[MAX_EXPR]; double value; int have_value; } Constant;
 typedef struct { int valence; char e11[MAX_EXPR], e12[MAX_EXPR], e21[MAX_EXPR], e22[MAX_EXPR]; double a11, a12, a21, a22; } Basis;
@@ -631,13 +631,33 @@ static void emit_shape_path(FILE *fp, const Shape *s, double tx, double ty, doub
 static void emit_tile_paths(FILE *fp, const GraphNode *node, double tx, double ty, double scale) {
     for (int t = 0; t < node->tile_path_count; t++) {
         const Path *p = &node->tiles[t];
+        const char *fill = "#ff4444";
+        const char *stroke = "#7a0000";
+        int suspicious = 0;
         if (p->n <= 0) continue;
+        if (p->v[0].v == 6) {
+            fill = "#eeeeee";
+            stroke = "#666666";
+        } else if (p->v[0].v == 4) {
+            fill = "#9a9a9a";
+            stroke = "#555555";
+        }
+        for (int i = 0; i < p->n; i++) {
+            if (!(p->v[i].v == 3 || p->v[i].v == 4 || p->v[i].v == 6)) {
+                suspicious = 1;
+                break;
+            }
+        }
+        if (suspicious) {
+            fill = "#ff4444";
+            stroke = "#7a0000";
+        }
         fprintf(fp, "<path d=\"");
         for (int i = 0; i < p->n; i++) {
             DPoint q = vertex_to_xy(&node->aggregate, p->v[i]);
             fprintf(fp, "%c %.3f %.3f ", i ? 'L' : 'M', tx + scale * q.x, ty - scale * q.y);
         }
-        fprintf(fp, "Z\" fill=\"none\" stroke=\"#666666\" stroke-width=\"0.6\"/>\n");
+        fprintf(fp, "Z\" fill=\"%s\" fill-opacity=\"0.85\" stroke=\"%s\" stroke-width=\"0.7\"/>\n", fill, stroke);
     }
 }
 
@@ -845,26 +865,189 @@ static void draw_node_red_marks0(FILE *fp,
     }
 }
 
+static void choose_primary_parents0(const NodeVec *nodes,
+                                   const EdgeVec *edges,
+                                   const int *levels,
+                                   int *parent) {
+    int n = nodes->count;
+    for (int i = 0; i < n; i++) parent[i] = -1;
+    for (int e = 0; e < edges->count; e++) {
+        int si = find_node_index_by_id(nodes, edges->data[e].src);
+        int di = find_node_index_by_id(nodes, edges->data[e].dst);
+        if (si < 0 || di < 0 || si == di) continue;
+        if (levels[si] >= levels[di]) continue;
+        if (parent[di] < 0 ||
+            levels[si] > levels[parent[di]] ||
+            (levels[si] == levels[parent[di]] && nodes->data[si].id < nodes->data[parent[di]].id)) {
+            parent[di] = si;
+        }
+    }
+}
+
+
+static void sort_children_by_row0(int *children,
+                                  int start,
+                                  int count,
+                                  const int *order_in_row) {
+    for (int i = start; i < start + count; i++) {
+        for (int j = i + 1; j < start + count; j++) {
+            if (order_in_row[children[j]] < order_in_row[children[i]]) {
+                int tmp = children[i];
+                children[i] = children[j];
+                children[j] = tmp;
+            }
+        }
+    }
+}
+
+static void build_primary_tree0(int n,
+                                const int *parent,
+                                const int *order_in_row,
+                                int **child_offsets_out,
+                                int **child_counts_out,
+                                int **children_out) {
+    int *child_counts = (int *)calloc((size_t)n, sizeof(int));
+    int *child_offsets = (int *)calloc((size_t)(n + 1), sizeof(int));
+    int *fill = (int *)calloc((size_t)n, sizeof(int));
+    int *children = (int *)calloc((size_t)n, sizeof(int));
+    if (!child_counts || !child_offsets || !fill || !children) exit(1);
+    for (int i = 0; i < n; i++) if (parent[i] >= 0) child_counts[parent[i]]++;
+    for (int i = 0; i < n; i++) child_offsets[i + 1] = child_offsets[i] + child_counts[i];
+    for (int i = 0; i < n; i++) {
+        if (parent[i] >= 0) {
+            int p = parent[i];
+            int pos = child_offsets[p] + fill[p]++;
+            children[pos] = i;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        if (child_counts[i] > 1) {
+            sort_children_by_row0(children, child_offsets[i], child_counts[i], order_in_row);
+        }
+    }
+    free(fill);
+    *child_offsets_out = child_offsets;
+    *child_counts_out = child_counts;
+    *children_out = children;
+}
+
+static double compute_subtree_width0(int idx,
+                                     const int *child_offsets,
+                                     const int *child_counts,
+                                     const int *children,
+                                     double *subtree_width) {
+    const double child_gap = BOX_GAP_X * 0.75;
+    int count = child_counts[idx];
+    if (count <= 0) {
+        subtree_width[idx] = BOX_W;
+        return subtree_width[idx];
+    }
+    double total = 0.0;
+    for (int k = 0; k < count; k++) {
+        int child = children[child_offsets[idx] + k];
+        total += compute_subtree_width0(child, child_offsets, child_counts, children, subtree_width);
+    }
+    total += child_gap * (count - 1);
+    if (total < BOX_W) total = BOX_W;
+    subtree_width[idx] = total;
+    return total;
+}
+
+static void assign_subtree_centers0(int idx,
+                                    double left,
+                                    const int *child_offsets,
+                                    const int *child_counts,
+                                    const int *children,
+                                    const double *subtree_width,
+                                    double *center_x) {
+    const double child_gap = BOX_GAP_X * 0.75;
+    int count = child_counts[idx];
+    double width = subtree_width[idx];
+    if (count <= 0) {
+        center_x[idx] = left + width * 0.5;
+        return;
+    }
+    double child_total = 0.0;
+    for (int k = 0; k < count; k++) {
+        int child = children[child_offsets[idx] + k];
+        child_total += subtree_width[child];
+    }
+    child_total += child_gap * (count - 1);
+    double cur = left + (width - child_total) * 0.5;
+    for (int k = 0; k < count; k++) {
+        int child = children[child_offsets[idx] + k];
+        assign_subtree_centers0(child, cur, child_offsets, child_counts, children, subtree_width, center_x);
+        cur += subtree_width[child] + child_gap;
+    }
+    {
+        int first_child = children[child_offsets[idx]];
+        int last_child = children[child_offsets[idx] + count - 1];
+        center_x[idx] = 0.5 * (center_x[first_child] + center_x[last_child]);
+    }
+}
+
 static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     int n = nodes->count;
     int rows;
-    int max_cols = 1;
     int *levels = (int *)calloc((size_t)n, sizeof(int));
     int *row_nodes = NULL;
     int *row_offsets = NULL;
     int *row_counts = NULL;
     int *order_in_row = NULL;
+    int *primary_parent = (int *)calloc((size_t)n, sizeof(int));
+    int *child_offsets = NULL;
+    int *child_counts = NULL;
+    int *children = NULL;
+    double *center_x = (double *)calloc((size_t)n, sizeof(double));
+    double *subtree_width = (double *)calloc((size_t)n, sizeof(double));
     double *cx = (double *)calloc((size_t)n, sizeof(double));
     double *box_y = (double *)calloc((size_t)n, sizeof(double));
-    double *txs = (double *)calloc((size_t)n, sizeof(double));
-    double *tys = (double *)calloc((size_t)n, sizeof(double));
-    double *scales = (double *)calloc((size_t)n, sizeof(double));
-    double width, height;
-    if (!levels || !cx || !box_y || !txs || !tys || !scales) exit(1);
+    double *box_x = (double *)calloc((size_t)n, sizeof(double));
+    double min_box_x = 0.0, max_box_x = 0.0;
+    double width, height, dx;
+    int first_box = 1;
+    if (!levels || !primary_parent || !center_x || !subtree_width || !cx || !box_y || !box_x) exit(1);
     if (!compute_vertex_strata(nodes, edges, levels, &rows)) exit(1);
     build_row_layout0(nodes, edges, levels, rows, &row_nodes, &row_offsets, &row_counts, &order_in_row);
-    for (int r = 0; r < rows; r++) if (row_counts[r] > max_cols) max_cols = row_counts[r];
-    width = PAGE_MARGIN * 2 + max_cols * BOX_W + (max_cols - 1) * BOX_GAP_X;
+    choose_primary_parents0(nodes, edges, levels, primary_parent);
+    build_primary_tree0(n, primary_parent, order_in_row, &child_offsets, &child_counts, &children);
+
+    {
+        double root_gap = BOX_GAP_X * 2.2;
+        double cur_left = 0.0;
+        int root_count = 0;
+        for (int rowpos = 0; rowpos < n; rowpos++) {
+            int idx = row_nodes[rowpos];
+            if (primary_parent[idx] >= 0) continue;
+            compute_subtree_width0(idx, child_offsets, child_counts, children, subtree_width);
+            if (root_count > 0) cur_left += root_gap;
+            assign_subtree_centers0(idx, cur_left, child_offsets, child_counts, children, subtree_width, center_x);
+            cur_left += subtree_width[idx];
+            root_count++;
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        double y0 = PAGE_MARGIN + levels[i] * (BOX_H + BOX_GAP_Y);
+        box_x[i] = center_x[i] - BOX_W * 0.5;
+        box_y[i] = y0;
+        cx[i] = center_x[i];
+        if (first_box) {
+            min_box_x = box_x[i];
+            max_box_x = box_x[i] + BOX_W;
+            first_box = 0;
+        } else {
+            if (box_x[i] < min_box_x) min_box_x = box_x[i];
+            if (box_x[i] + BOX_W > max_box_x) max_box_x = box_x[i] + BOX_W;
+        }
+    }
+    dx = PAGE_MARGIN - min_box_x;
+    for (int i = 0; i < n; i++) {
+        box_x[i] += dx;
+        cx[i] += dx;
+    }
+    width = (max_box_x - min_box_x) + 2 * PAGE_MARGIN;
+    if (width < 2 * PAGE_MARGIN + BOX_W) width = 2 * PAGE_MARGIN + BOX_W;
     height = PAGE_MARGIN * 2 + rows * BOX_H + (rows - 1) * BOX_GAP_Y;
     printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
     printf("<defs><marker id=\"arrowhead\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#555555\"/></marker></defs>\n");
@@ -875,17 +1058,6 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         printf("<line x1=\"12\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"#d0d0d0\" stroke-width=\"1.0\"/>\n", y_line, width - 12.0, y_line);
         printf("<text x=\"16\" y=\"%.1f\" font-size=\"12\" font-family=\"monospace\" fill=\"#666666\">stratum %d</text>\n", y_line - 4.0, row);
     }
-    for (int row = 0; row < rows; row++) {
-        double row_width = row_counts[row] * BOX_W + (row_counts[row] - 1) * BOX_GAP_X;
-        for (int slot = 0; slot < row_counts[row]; slot++) {
-            int idx = row_nodes[row_offsets[row] + slot];
-            double x0 = PAGE_MARGIN + (width - 2 * PAGE_MARGIN - row_width) * 0.5 + slot * (BOX_W + BOX_GAP_X);
-            double y0 = PAGE_MARGIN + row * (BOX_H + BOX_GAP_Y);
-            cx[idx] = x0 + BOX_W * 0.5;
-            box_y[idx] = y0;
-        }
-    }
-    /* Edges first, behind node frames. */
     for (int i = 0; i < edges->count; i++) {
         int si = find_node_index_by_id(nodes, edges->data[i].src);
         int di = find_node_index_by_id(nodes, edges->data[i].dst);
@@ -899,14 +1071,13 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         printf("<line x1=\"%.2f\" y1=\"%.2f\" x2=\"%.2f\" y2=\"%.2f\" stroke=\"#555555\" stroke-opacity=\"0.82\" stroke-width=\"1.8\" marker-end=\"url(#arrowhead)\"/>\n", x1, y1, x2, y2);
     }
     for (int row = 0; row < rows; row++) {
-        double row_width = row_counts[row] * BOX_W + (row_counts[row] - 1) * BOX_GAP_X;
         for (int slot = 0; slot < row_counts[row]; slot++) {
             int idx = row_nodes[row_offsets[row] + slot];
             const GraphNode *node = &nodes->data[idx];
-            double x0 = PAGE_MARGIN + (width - 2 * PAGE_MARGIN - row_width) * 0.5 + slot * (BOX_W + BOX_GAP_X);
-            double y0 = PAGE_MARGIN + row * (BOX_H + BOX_GAP_Y);
+            double x0 = box_x[idx];
+            double y0 = box_y[idx];
             double minx, miny, maxx, maxy, bw, bh, scale, tx, ty;
-            double shape_h = BOX_H - 70.0;
+            double shape_h = BOX_H - 18.0;
             printf("<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" rx=\"8\" ry=\"8\" fill=\"#fafafa\" stroke=\"black\" stroke-width=\"1.2\"/>\n", x0, y0, BOX_W, BOX_H);
             shape_bbox(&node->aggregate, &minx, &miny, &maxx, &maxy);
             bw = maxx - minx; bh = maxy - miny;
@@ -914,8 +1085,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
             if (bh < 1e-9) bh = 1.0;
             scale = (BOX_W - 2 * SHAPE_PAD < shape_h - 2 * SHAPE_PAD ? BOX_W - 2 * SHAPE_PAD : shape_h - 2 * SHAPE_PAD) / (bw > bh ? bw : bh);
             tx = x0 + (BOX_W - scale * bw) * 0.5 - scale * minx;
-            ty = y0 + 46.0 + (shape_h - scale * bh) * 0.5 + scale * maxy;
-            txs[idx] = tx; tys[idx] = ty; scales[idx] = scale;
+            ty = y0 + 9.0 + (shape_h - scale * bh) * 0.5 + scale * maxy;
             emit_shape_path(stdout, &node->aggregate, tx, ty, scale);
             emit_tile_paths(stdout, node, tx, ty, scale);
             {
@@ -929,8 +1099,9 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         }
     }
     printf("</svg>\n");
-    free(levels); free(row_nodes); free(row_offsets); free(row_counts); free(order_in_row);
-    free(cx); free(box_y); free(txs); free(tys); free(scales);
+    free(levels); free(row_nodes); free(row_offsets); free(row_counts); free(order_in_row); free(primary_parent);
+    free(child_offsets); free(child_counts); free(children);
+    free(center_x); free(subtree_width); free(cx); free(box_y); free(box_x);
 }
 
 int main(int argc, char **argv) {

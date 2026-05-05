@@ -65,8 +65,7 @@ long long cycle_signed_area2(const Cycle *c, int lattice) {
 void cycle_reverse(Cycle *c) {
     if (c->n <= 1) return;
     Coord tmp[MAX_VERTS];
-    tmp[0] = c->v[0];
-    for (int i = 1; i < c->n; i++) tmp[i] = c->v[c->n - i];
+    for (int i = 0; i < c->n; i++) tmp[i] = c->v[c->n - i - 1];
     for (int i = 0; i < c->n; i++) c->v[i] = tmp[i];
 }
 

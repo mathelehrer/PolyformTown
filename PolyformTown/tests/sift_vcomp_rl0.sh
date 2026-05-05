@@ -29,6 +29,12 @@ function canonb(s){
   return "[" out "]"
 }
 /^center:/ {center=substr($0,8); gsub(/[()]/,"",center); gsub(/,/," ",center); gsub(/[[:space:]]+/," ",center); center=trim(center)}
+/^boundary:/ {
+  b=substr($0,index($0,":")+1)
+  b=trim(b)
+  print center "|" canonb(b)
+  next
+}
 /^canonical_boundary:/ {
   b=substr($0,index($0,":")+1)
   b=trim(b)

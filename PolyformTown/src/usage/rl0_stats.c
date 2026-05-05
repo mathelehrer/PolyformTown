@@ -182,6 +182,10 @@ int main(int argc, char **argv) {
             rec.have_tile_count = 1;
             continue;
         }
+        if (strncmp(line, "boundary:", 9) == 0) {
+            rec.have_boundary = parse_poly(line + 9, &rec.boundary);
+            continue;
+        }
         if (strncmp(line, "canonical_boundary:", 19) == 0) {
             rec.have_boundary = parse_poly(line + 19, &rec.boundary);
             continue;
