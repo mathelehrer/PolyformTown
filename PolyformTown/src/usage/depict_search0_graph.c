@@ -1486,6 +1486,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
         if (use_color && d == 4) { div_color = "#cc3333"; text_color = "#cc3333"; }
         else if (use_color && d == 5) { div_color = "#2f8f46"; text_color = "#2f8f46"; }
         else if (use_color && d == 6) { div_color = "#3366cc"; text_color = "#3366cc"; }
+        else if (use_color && d == 10) { div_color = "#7a3db8"; text_color = "#7a3db8"; }
         printf("<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-width=\"2.2\"/>\n", yline, width, yline, div_color);
         printf("<text x=\"18\" y=\"%.1f\" font-size=\"%.0f\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">%d</text>\n", yline - 8.0, LABEL_FONT, text_color, d);
     }
