@@ -64,16 +64,21 @@ typedef struct {
 
 typedef struct {
     int id;
+    int discover_step;
+    int division;
     char key[SEARCH0_MAX_KEY];
+    char display_key[SEARCH0_MAX_KEY];
 } PrintNodeRef;
 
 typedef struct {
     FILE *fp;
     int next_id;
     int limit;
+    int sublevel;
     PrintNodeRef *nodes;
     int node_count;
     int node_cap;
+    int last_node_for_prov[SEARCH0_MAX_PROV];
 } PrintCtx;
 
 static void emit_transition0(PrintCtx *print,
@@ -82,6 +87,7 @@ static void emit_transition0(PrintCtx *print,
                              const Search0State *src,
                              const Search0State *dst,
                              int step,
+                             int graph_level,
                              const PortChoice *choice,
                              const RL0FMArc *arc);
 
@@ -91,13 +97,38 @@ static void emit_relation0(PrintCtx *print,
                            const Search0State *src,
                            const Search0State *dst,
                            int step,
+                           int graph_level,
                            const char *dst_kind,
                            const char *edge_kind);
 
 static void emit_focus0(PrintCtx *print,
+                        int node_id,
                         const Search0State *src,
                         int step,
                         Coord port);
+
+static void emit_graph_node_update0(PrintCtx *print,
+                                   int id,
+                                   int discover_step,
+                                   int node_division);
+
+static int ensure_graph_node0(PrintCtx *print,
+                              const Tile *tile,
+                              const Search0State *s,
+                              const char *kind,
+                              int discover_step,
+                              int node_division,
+                              int *is_new);
+
+static int singleton_prov0(const Search0State *s) {
+    int found = -1;
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        if (!s->prov[p]) continue;
+        if (found >= 0) return -1;
+        found = p;
+    }
+    return found;
+}
 
 static int optimized_record0(int file_no) {
     return file_no == 43 || file_no == 20 || file_no == 39 ||
@@ -667,7 +698,8 @@ static int refilter_states0(StateVec *cur,
                             Attach0Stats *astats,
                             Attach0ClosureStats *cstats,
                             PrintCtx *print,
-                            int step) {
+                            int step,
+                            int graph_level) {
     StateVec next;
     statevec_init0(&next);
     for (int i = 0; i < cur->count; i++) {
@@ -690,8 +722,8 @@ static int refilter_states0(StateVec *cur,
             continue;
         }
         poly_to_key0(&s.poly, s.key, sizeof(s.key));
-        if (strcmp(src.key, s.key) != 0) {
-            emit_relation0(print, tile, map, &src, &s, step, "closure", "closure");
+        if (print && print->fp && strcmp(src.key, s.key) != 0) {
+            emit_relation0(print, tile, map, &src, &s, step, graph_level, "closure", "closure");
         }
         if (!statevec_add_merge0(&next, &s)) {
             statevec_free0(&next);
@@ -721,10 +753,16 @@ static int checkpoint_fixed_point0(StateVec *cur,
                                    int *new_dead,
                                    int *new_dead_count,
                                    PrintCtx *print,
-                                   int step) {
+                                   int step,
+                                   int graph_level) {
     for (;;) {
         unsigned char active[SEARCH0_MAX_PROV];
         int added;
+        if (print && print->fp) {
+            for (int i = 0; i < cur->count; i++) {
+                ensure_graph_node0(print, tile, &cur->data[i], "carry", step, graph_level, NULL);
+            }
+        }
         count_prov0(cur, active);
         added = add_new_dead0(initial,
                               active,
@@ -738,9 +776,22 @@ static int checkpoint_fixed_point0(StateVec *cur,
                               new_dead,
                               new_dead_count);
         if (added < 0) return 0;
+        if (print && print->fp) {
+            for (int i = 0; i < *new_dead_count; i++) {
+                int prov_id = new_dead[i];
+                if (prov_id >= 0 && prov_id < SEARCH0_MAX_PROV &&
+                    print->last_node_for_prov[prov_id] >= 0) {
+                    emit_graph_node_update0(print,
+                                            print->last_node_for_prov[prov_id],
+                                            step,
+                                            graph_level);
+                }
+            }
+        }
         if (added == 0) return 1;
         if (!rebuild_map0(map, completions_path, deletions, level)) return 0;
-        if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats, print, step)) return 0;
+        if (print && print->fp) print->sublevel++;
+        if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats, print, step, graph_level)) return 0;
     }
 }
 
@@ -1031,10 +1082,48 @@ static void printctx_free0(PrintCtx *print) {
     print->node_cap = 0;
 }
 
-static int print_find_node0(const PrintCtx *print, const char *key) {
-    if (!print) return -1;
+static int append_key_text0(char *buf, size_t cap, size_t *used, const char *text) {
+    int n;
+    if (!buf || !used || !text || cap == 0) return 0;
+    if (*used >= cap) return 0;
+    n = snprintf(buf + *used, cap - *used, "%s", text);
+    if (n < 0 || (size_t)n >= cap - *used) {
+        buf[cap - 1] = '\0';
+        return 0;
+    }
+    *used += (size_t)n;
+    return 1;
+}
+
+static int append_key_vertex0(char *buf, size_t cap, size_t *used, Coord q) {
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "(%d,%d,%d)", q.v, q.x, q.y);
+    return append_key_text0(buf, cap, used, tmp);
+}
+
+static void poly_display_key0(const Poly *p, char *buf, size_t cap) {
+    size_t used = 0;
+    if (!buf || cap == 0) return;
+    buf[0] = '\0';
+    if (!p) return;
+    append_key_text0(buf, cap, &used, "poly{");
+    for (int c = 0; c < p->cycle_count; c++) {
+        const Cycle *cy = &p->cycles[c];
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), "c%d:", cy->n);
+        append_key_text0(buf, cap, &used, tmp);
+        for (int i = 0; i < cy->n; i++) {
+            append_key_vertex0(buf, cap, &used, cy->v[i]);
+        }
+        append_key_text0(buf, cap, &used, ";");
+    }
+    append_key_text0(buf, cap, &used, "}");
+}
+
+static int print_find_node0(const PrintCtx *print, const char *display_key) {
+    if (!print || !display_key) return -1;
     for (int i = 0; i < print->node_count; i++) {
-        if (strcmp(print->nodes[i].key, key) == 0) return i;
+        if (strcmp(print->nodes[i].display_key, display_key) == 0) return i;
     }
     return -1;
 }
@@ -1043,7 +1132,8 @@ static int emit_graph_node0(PrintCtx *print,
                             const Tile *tile,
                             const Search0State *s,
                             const char *kind,
-                            int discover_step) {
+                            int discover_step,
+                            int node_division) {
     PrintNodeRef *next_nodes;
     PrintNodeRef *slot;
     int id;
@@ -1060,11 +1150,15 @@ static int emit_graph_node0(PrintCtx *print,
     slot = &print->nodes[print->node_count++];
     memset(slot, 0, sizeof(*slot));
     slot->id = id;
+    slot->discover_step = discover_step;
+    slot->division = node_division;
     snprintf(slot->key, sizeof(slot->key), "%s", s->key);
+    poly_display_key0(&s->poly, slot->display_key, sizeof(slot->display_key));
 
     fprintf(print->fp, "---node %d---\n", id);
     fprintf(print->fp, "kind: %s\n", kind ? kind : "state");
     fprintf(print->fp, "discover_step: %d\n", discover_step);
+    fprintf(print->fp, "division: %d\n", node_division);
     fprintf(print->fp, "tile_count: %d\n", s->tile_count);
     fprintf(print->fp, "hidden_count: %d\n", s->hidden_count);
     fprintf(print->fp, "prov: ");
@@ -1075,6 +1169,7 @@ static int emit_graph_node0(PrintCtx *print,
     fprintf(print->fp, "\n");
     fprint_tile_list0(print->fp, s->tiles, s->tile_count);
     fprintf(print->fp, "key: %s\n", s->key);
+    fprintf(print->fp, "display_key: %s\n", slot->display_key);
     fprintf(print->fp, "aggregate:\n");
     fprint_imgtable_shape0(print->fp, tile, &s->poly);
     fprintf(print->fp, "---end-node---\n");
@@ -1082,24 +1177,60 @@ static int emit_graph_node0(PrintCtx *print,
     return id;
 }
 
+static void emit_graph_node_update0(PrintCtx *print,
+                                   int id,
+                                   int discover_step,
+                                   int node_division) {
+    if (!print || !print->fp || id < 0) return;
+    fprintf(print->fp, "---node-update---\n");
+    fprintf(print->fp, "id: %d\n", id);
+    fprintf(print->fp, "discover_step: %d\n", discover_step);
+    fprintf(print->fp, "division: %d\n", node_division);
+    fprintf(print->fp, "---end-node-update---\n");
+    fflush(print->fp);
+}
+
 static int ensure_graph_node0(PrintCtx *print,
                               const Tile *tile,
                               const Search0State *s,
                               const char *kind,
                               int discover_step,
+                              int node_division,
                               int *is_new) {
     int idx;
+    char display_key[SEARCH0_MAX_KEY];
     if (!print || !print->fp) {
         if (is_new) *is_new = 0;
         return -1;
     }
-    idx = print_find_node0(print, s->key);
+    poly_display_key0(&s->poly, display_key, sizeof(display_key));
+    idx = print_find_node0(print, display_key);
     if (idx >= 0) {
+        if (discover_step > print->nodes[idx].discover_step ||
+            node_division > print->nodes[idx].division) {
+            if (discover_step > print->nodes[idx].discover_step) {
+                print->nodes[idx].discover_step = discover_step;
+            }
+            if (node_division > print->nodes[idx].division) {
+                print->nodes[idx].division = node_division;
+            }
+            emit_graph_node_update0(print,
+                                    print->nodes[idx].id,
+                                    print->nodes[idx].discover_step,
+                                    print->nodes[idx].division);
+        }
+        {
+            int prov_id = singleton_prov0(s);
+            if (prov_id >= 0 && prov_id < SEARCH0_MAX_PROV) {
+                print->last_node_for_prov[prov_id] = print->nodes[idx].id;
+            }
+        }
         if (is_new) *is_new = 0;
         return print->nodes[idx].id;
     }
     if (is_new) *is_new = 1;
-    return emit_graph_node0(print, tile, s, kind, discover_step);
+    return emit_graph_node0(print, tile, s, kind, discover_step,
+                            node_division);
 }
 
 static void emit_graph_edge0(PrintCtx *print,
@@ -1117,6 +1248,7 @@ static void emit_graph_edge0(PrintCtx *print,
     fprintf(print->fp, "src: %d\n", src_id);
     fprintf(print->fp, "dst: %d\n", dst_id);
     fprintf(print->fp, "step: %d\n", step);
+    fprintf(print->fp, "sublevel: %d\n", print->sublevel);
     fprintf(print->fp, "distance: %d\n", distance);
     fprintf(print->fp, "port: (%d,%d,%d)\n", port.v, port.x, port.y);
     fprintf(print->fp, "arc: ");
@@ -1128,11 +1260,14 @@ static void emit_graph_edge0(PrintCtx *print,
 }
 
 static void emit_focus0(PrintCtx *print,
+                        int node_id,
                         const Search0State *src,
                         int step,
                         Coord port) {
     if (!print || !print->fp || !src) return;
+    if (node_id < 0) return;
     fprintf(print->fp, "---focus---\n");
+    fprintf(print->fp, "node: %d\n", node_id);
     fprintf(print->fp, "key: %s\n", src->key);
     fprintf(print->fp, "step: %d\n", step);
     fprintf(print->fp, "port: (%d,%d,%d)\n", port.v, port.x, port.y);
@@ -1173,8 +1308,9 @@ static void emit_state_focus0(PrintCtx *print,
                               const Tile *tile,
                               const RL0ForgetMap *map,
                               const Search0State *s,
+                              int node_id,
                               int step) {
-    emit_focus0(print, s, step, choose_focus_coord0(s, tile, map));
+    emit_focus0(print, node_id, s, step, choose_focus_coord0(s, tile, map));
 }
 
 static void emit_seed_statevec0(PrintCtx *print,
@@ -1184,8 +1320,8 @@ static void emit_seed_statevec0(PrintCtx *print,
     if (!print || !print->fp) return;
     for (int i = 0; i < v->count; i++) {
         int is_new = 0;
-        ensure_graph_node0(print, tile, &v->data[i], "seed", -1, &is_new);
-        if (is_new) emit_state_focus0(print, tile, map, &v->data[i], -1);
+        int node_id = ensure_graph_node0(print, tile, &v->data[i], "seed", -1, -1, &is_new);
+        if (is_new) emit_state_focus0(print, tile, map, &v->data[i], node_id, -1);
         if (print->limit > 0 && print->next_id >= print->limit) return;
     }
 }
@@ -1196,15 +1332,16 @@ static void emit_transition0(PrintCtx *print,
                              const Search0State *src,
                              const Search0State *dst,
                              int step,
+                             int graph_level,
                              const PortChoice *choice,
                              const RL0FMArc *arc) {
     int src_id;
     int dst_id;
     int is_new = 0;
     if (!print || !print->fp || !src || !dst) return;
-    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, NULL);
-    dst_id = ensure_graph_node0(print, tile, dst, "generated", step, &is_new);
-    if (is_new) emit_state_focus0(print, tile, map, dst, step);
+    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
+    dst_id = ensure_graph_node0(print, tile, dst, "generated", step, graph_level, &is_new);
+    if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
     emit_graph_edge0(print,
                      src_id,
                      dst_id,
@@ -1221,15 +1358,16 @@ static void emit_relation0(PrintCtx *print,
                            const Search0State *src,
                            const Search0State *dst,
                            int step,
+                           int graph_level,
                            const char *dst_kind,
                            const char *edge_kind) {
     int src_id;
     int dst_id;
     int is_new = 0;
     if (!print || !print->fp || !src || !dst) return;
-    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, NULL);
-    dst_id = ensure_graph_node0(print, tile, dst, dst_kind ? dst_kind : "carry", step, &is_new);
-    if (is_new) emit_state_focus0(print, tile, map, dst, step);
+    src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
+    dst_id = ensure_graph_node0(print, tile, dst, dst_kind ? dst_kind : "carry", step, graph_level, &is_new);
+    if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
     if (src_id == dst_id) return;
     emit_graph_edge0(print,
                      src_id,
@@ -1268,7 +1406,7 @@ int main(int argc, char **argv) {
     int initial_exclusion_count = 0;
     RL0FMDeletionSet deletions;
     int completed_distance = 0;
-    int step = 0;
+        int step = 0;
     int total_branches = 0;
     int total_dropped = 0;
     Attach0Stats astats;
@@ -1300,6 +1438,7 @@ int main(int argc, char **argv) {
     }
 
     memset(&print, 0, sizeof(print));
+    for (int i = 0; i < SEARCH0_MAX_PROV; i++) print.last_node_for_prov[i] = -1;
     print.limit = print_limit;
 
     if (!map || !records) {
@@ -1438,10 +1577,19 @@ int main(int argc, char **argv) {
             PortChoice ch;
             int pc = 0, d = SEARCH0_INF;
             int r = choose_port0(&cur.data[i], &tile, map, &ch, &pc, &d);
-            if (r < 0) { emit_focus0(&print, &cur.data[i], step, ch.q); zero++; dropped++; continue; }
+            if (r < 0) {
+                if (print.fp) {
+                    int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, global_min, NULL);
+                    emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
+                }
+                zero++; dropped++; continue;
+            }
             if (r == 0) { no_ports++; statevec_add_merge0(&next, &cur.data[i]); continue; }
             if (d != global_min) { statevec_add_merge0(&next, &cur.data[i]); continue; }
-            emit_focus0(&print, &cur.data[i], step, ch.q);
+            if (print.fp) {
+                int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, global_min, NULL);
+                emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
+            }
             expanded++;
             for (int k = 0; k < ch.value_count; k++) {
                 Search0State out;
@@ -1451,7 +1599,7 @@ int main(int argc, char **argv) {
                 {
                     int ar = state_after_attach0(&cur.data[i], &tile, map, &ch, k, hidden_bound, &out, &astats, &cstats);
                     if (ar > 0) {
-                        emit_transition0(&print, &tile, map, &cur.data[i], &out, step, &ch, &ch.values[k]);
+                        if (print.fp) emit_transition0(&print, &tile, map, &cur.data[i], &out, step, global_min, &ch, &ch.values[k]);
                         statevec_add_merge0(&next, &out);
                     } else if (ar < 0) {
                         add_state_prov0(escaped_prov, &out);
@@ -1490,7 +1638,8 @@ int main(int argc, char **argv) {
                                          new_dead,
                                          &new_dead_count,
                                          &print,
-                                         step)) {
+                                         step,
+                                         global_min)) {
                 fprintf(stderr, "checkpoint fixed point failed\n");
                 return 1;
             }
@@ -1529,7 +1678,8 @@ int main(int argc, char **argv) {
                                              new_dead,
                                              &new_dead_count,
                                              &print,
-                                             step)) {
+                                             step,
+                                             completed_distance)) {
                     fprintf(stderr, "checkpoint fixed point failed\n");
                     return 1;
                 }

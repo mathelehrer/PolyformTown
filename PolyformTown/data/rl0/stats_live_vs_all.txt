@@ -1,9 +1,0 @@
-total_records=163
-live_records=93
-dead_records=70
-valence_3_total=35 live=26 dead=9
-valence_4_total=112 live=51 dead=61
-valence_6_total=16 live=16 dead=0
-tile_count_2_total=38 live=37 dead=1
-tile_count_3_total=67 live=40 dead=27
-tile_count_4_total=58 live=16 dead=42
