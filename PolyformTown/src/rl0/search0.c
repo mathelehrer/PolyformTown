@@ -125,6 +125,11 @@ static int graph_division_from_distance0(int distance) {
     return distance - 1;
 }
 
+static int graph_division_for_state0(const Search0State *s,
+                                     const Tile *tile,
+                                     const RL0ForgetMap *map,
+                                     int fallback);
+
 static int singleton_prov0(const Search0State *s) {
     int found = -1;
     for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
@@ -480,6 +485,20 @@ static int choose_port0(const Search0State *s,
     return 1;
 }
 
+static int graph_division_for_state0(const Search0State *s,
+                                     const Tile *tile,
+                                     const RL0ForgetMap *map,
+                                     int fallback) {
+    PortChoice ch;
+    int pc = 0;
+    int d = SEARCH0_INF;
+    int r;
+    if (!s || !tile || !map) return fallback;
+    r = choose_port0(s, tile, map, &ch, &pc, &d);
+    if (r == 0 || d <= 0 || d >= SEARCH0_INF) return fallback;
+    return graph_division_from_distance0(d);
+}
+
 static void statevec_init0(StateVec *v) { v->data = NULL; v->count = 0; v->cap = 0; }
 static void statevec_free0(StateVec *v) { free(v->data); v->data = NULL; v->count = v->cap = 0; }
 
@@ -781,18 +800,15 @@ static int checkpoint_fixed_point0(StateVec *cur,
                               new_dead,
                               new_dead_count);
         if (added < 0) return 0;
-        if (print && print->fp) {
-            for (int i = 0; i < *new_dead_count; i++) {
-                int prov_id = new_dead[i];
-                if (prov_id >= 0 && prov_id < SEARCH0_MAX_PROV &&
-                    print->last_node_for_prov[prov_id] >= 0) {
-                    emit_graph_node_update0(print,
-                                            print->last_node_for_prov[prov_id],
-                                            step,
-                                            graph_level);
-                }
-            }
-        }
+        /*
+           Newly-dead records are provenance-level events, not state-placement
+           events.  The deletion/checkpoint logic below is real search state:
+           it records the dead provenance, rebuilds the map with the new
+           deletion, and refilters current states.  Do not express that by
+           moving the "last node for provenance" in the graph.  A provenance
+           may have merged into or merely last touched an unrelated visible
+           state, so updating that node's division corrupts the layout.
+        */
         if (added == 0) return 1;
         if (!rebuild_map0(map, completions_path, deletions, level)) return 0;
         if (print && print->fp) print->sublevel++;
@@ -1217,7 +1233,7 @@ static int ensure_graph_node0(PrintCtx *print,
             update = 1;
         }
         if (node_division >= 0 &&
-            (print->nodes[idx].division < 0 || node_division < print->nodes[idx].division)) {
+            (print->nodes[idx].division < 0 || node_division > print->nodes[idx].division)) {
             print->nodes[idx].division = node_division;
             update = 1;
         }
@@ -1348,7 +1364,13 @@ static void emit_transition0(PrintCtx *print,
     int is_new = 0;
     if (!print || !print->fp || !src || !dst) return;
     src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
-    dst_id = ensure_graph_node0(print, tile, dst, "generated", step, graph_level, &is_new);
+    dst_id = ensure_graph_node0(print,
+                                tile,
+                                dst,
+                                "generated",
+                                step,
+                                graph_division_for_state0(dst, tile, map, graph_level),
+                                &is_new);
     if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
     emit_graph_edge0(print,
                      src_id,
@@ -1374,7 +1396,13 @@ static void emit_relation0(PrintCtx *print,
     int is_new = 0;
     if (!print || !print->fp || !src || !dst) return;
     src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
-    dst_id = ensure_graph_node0(print, tile, dst, dst_kind ? dst_kind : "carry", step, graph_level, &is_new);
+    dst_id = ensure_graph_node0(print,
+                                tile,
+                                dst,
+                                dst_kind ? dst_kind : "carry",
+                                step,
+                                graph_division_for_state0(dst, tile, map, graph_level),
+                                &is_new);
     if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
     if (src_id == dst_id) return;
     emit_graph_edge0(print,

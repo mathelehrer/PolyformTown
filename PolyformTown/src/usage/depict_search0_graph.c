@@ -715,7 +715,7 @@ static void emit_tile_paths(FILE *fp, const GraphNode *node, double tx, double t
             stroke = "#666666";
         } else if (p->v[0].v == 4) {
             fill = "#9a9a9a";
-            stroke = "#555555";
+            stroke = "#777777";
         }
         for (int i = 0; i < p->n; i++) {
             if (!(p->v[i].v == 3 || p->v[i].v == 4 || p->v[i].v == 6)) {
@@ -894,6 +894,64 @@ static void build_row_layout0(const NodeVec *nodes,
     *row_offsets_out = row_offsets;
     *row_counts_out = row_counts;
     *order_in_row_out = order_in_row;
+}
+
+
+static void build_division_row_layout0(const int *division_levels,
+                                       const int *local_step,
+                                       int n,
+                                       int div_rows,
+                                       int **row_nodes_out,
+                                       int **row_offsets_out,
+                                       int **row_counts_out) {
+    int rows = div_rows + 1;
+    int root_row = 0;
+    int *row_counts = (int *)calloc((size_t)rows, sizeof(int));
+    int *row_offsets = (int *)calloc((size_t)(rows + 1), sizeof(int));
+    int *fill = (int *)calloc((size_t)rows, sizeof(int));
+    int *row_nodes = NULL;
+    if (!row_counts || !row_offsets || !fill) exit(1);
+
+    for (int i = 0; i < n; i++) {
+        int row = division_levels[i] < 0 ? root_row : division_levels[i] + 1;
+        if (row < 0) row = 0;
+        if (row >= rows) row = rows - 1;
+        row_counts[row]++;
+    }
+    for (int r = 0; r < rows; r++) row_offsets[r + 1] = row_offsets[r] + row_counts[r];
+
+    row_nodes = (int *)calloc((size_t)n, sizeof(int));
+    if (!row_nodes) exit(1);
+    for (int i = 0; i < n; i++) {
+        int row = division_levels[i] < 0 ? root_row : division_levels[i] + 1;
+        int pos;
+        if (row < 0) row = 0;
+        if (row >= rows) row = rows - 1;
+        pos = row_offsets[row] + fill[row]++;
+        row_nodes[pos] = i;
+    }
+
+    for (int r = 0; r < rows; r++) {
+        int start = row_offsets[r];
+        int count = row_counts[r];
+        for (int a = 0; a < count; a++) {
+            for (int b = a + 1; b < count; b++) {
+                int ia = row_nodes[start + a];
+                int ib = row_nodes[start + b];
+                if (local_step[ib] < local_step[ia] ||
+                    (local_step[ib] == local_step[ia] && ia > ib)) {
+                    int tmp = row_nodes[start + a];
+                    row_nodes[start + a] = row_nodes[start + b];
+                    row_nodes[start + b] = tmp;
+                }
+            }
+        }
+    }
+
+    free(fill);
+    *row_nodes_out = row_nodes;
+    *row_offsets_out = row_offsets;
+    *row_counts_out = row_counts;
 }
 
 static int same_point0(VPoint a, VPoint b) {
@@ -1118,16 +1176,19 @@ static void sort_tree_children_by_metric0(int n,
     }
 }
 
-static const char *edge_color0(int sublevel) {
+
+static const char *edge_color0(int sublevel, int use_color) {
+    if (!use_color) return "#777777";
     switch (sublevel & 3) {
         case 1: return "#cc3333";
         case 2: return "#2f8f46";
         case 3: return "#3366cc";
-        default: return "#555555";
+        default: return "#777777";
     }
 }
 
-static const char *edge_marker0(int sublevel) {
+static const char *edge_marker0(int sublevel, int use_color) {
+    if (!use_color) return "arrow-gray";
     switch (sublevel & 3) {
         case 1: return "arrow-red";
         case 2: return "arrow-green";
@@ -1150,7 +1211,7 @@ static void __attribute__((unused)) compute_node_sublevels0(const NodeVec *nodes
 }
 
 
-static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
+static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) {
     int n = nodes->count;
     int topo_rows;
     int div_rows = 0;
@@ -1160,6 +1221,10 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     int *row_nodes = NULL;
     int *row_offsets = NULL;
     int *row_counts = NULL;
+    int *draw_nodes = NULL;
+    int *draw_offsets = NULL;
+    int *draw_counts = NULL;
+    int draw_rows = 0;
     int *order_in_row = NULL;
     int *primary_parent = (int *)calloc((size_t)n, sizeof(int));
     int *parent_edge = (int *)calloc((size_t)n, sizeof(int));
@@ -1179,18 +1244,20 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     double *division_start = NULL;
     int *seed_for_prov = (int *)calloc(64, sizeof(int));
     int *process_order = (int *)calloc((size_t)n, sizeof(int));
+    int *parent_ready = (int *)calloc((size_t)n, sizeof(int));
     double min_box_x = 0.0, max_box_x = 0.0;
     double width, height, dx;
     int first_box = 1;
     const double ROW_DY = BOX_H + 50.0;
+    const double ROW_GAP = ROW_DY - BOX_H;
     const double DIV_GAP = 30.0;
-    const double ROOT_GAP = 4.0;
-    const double DIV_TOP_GAP = 8.0;
+    const double ROOT_GAP = ROW_GAP;
+    const double DIV_TOP_GAP = ROW_GAP;
     const double ROOT_GAP_X = BOX_GAP_X * 1.05;
     const double LABEL_FONT = 72.0;
 
     if (!levels || !division_levels || !local_step || !primary_parent || !parent_edge || !root_of ||
-        !center_x || !subtree_width || !cx || !box_y || !box_x || !seed_for_prov || !process_order) exit(1);
+        !center_x || !subtree_width || !cx || !box_y || !box_x || !seed_for_prov || !process_order || !parent_ready) exit(1);
 
     if (!compute_vertex_strata(nodes, edges, levels, &topo_rows)) exit(1);
     build_row_layout0(nodes, edges, levels, topo_rows, &row_nodes, &row_offsets, &row_counts, &order_in_row);
@@ -1240,6 +1307,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         if (division_levels[di] < 0) {
             primary_parent[di] = -1;
             root_of[di] = di;
+            parent_ready[di] = 1;
             continue;
         }
         if (nodes->data[di].prov_count == 1) {
@@ -1251,8 +1319,12 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
             int dsti = find_node_index_by_id(nodes, edges->data[e].dst);
             int same = 0;
             if (si < 0 || dsti != di || si == di) continue;
-            if (!(nodes->data[si].discover_step < nodes->data[di].discover_step ||
-                  nodes->data[si].discover_step < 0)) continue;
+            /* Parentage must come from raw graph edges.  Node discover_step is
+               mutable via node-update records, so an edge emitted from an
+               earlier state can appear to connect equal-step nodes after later
+               updates.  Use process-order readiness to keep the primary tree
+               acyclic instead of rejecting valid raw incoming edges. */
+            if (!parent_ready[si]) continue;
             if (target_root >= 0 && root_of[si] == target_root) same = 1;
             if (best_si < 0 ||
                 same > best_same ||
@@ -1266,6 +1338,17 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         primary_parent[di] = best_si;
         parent_edge[di] = best_edge;
         root_of[di] = (best_si >= 0) ? root_of[best_si] : di;
+        parent_ready[di] = 1;
+    }
+
+    for (int oi = 0; oi < n; oi++) {
+        int i = process_order[oi];
+        int p = primary_parent[i];
+        if (division_levels[i] < 0) continue;
+        if (p >= 0 && division_levels[p] > division_levels[i]) {
+            division_levels[i] = division_levels[p];
+        }
+        if (division_levels[i] + 1 > div_rows) div_rows = division_levels[i] + 1;
     }
 
     build_primary_tree0(n, primary_parent, &child_offsets, &child_counts, &children);
@@ -1303,6 +1386,17 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
                     roots[b] = tmp;
                 }
             }
+        }
+        /*
+           Optimized multi-seed layout needs one ordering exception:
+           after normal metric sorting, place the first root component last.
+           This is a renderer-only translation/order hack; it does not alter
+           graph nodes, edges, or divisions.
+        */
+        if (root_count == 5) {
+            int first_root = roots[0];
+            for (int r = 1; r < root_count; r++) roots[r - 1] = roots[r];
+            roots[root_count - 1] = first_root;
         }
         for (int r = 0; r < root_count; r++) {
             int idx = roots[r];
@@ -1348,21 +1442,40 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         }
     }
 
-    dx = PAGE_MARGIN - min_box_x;
-    for (int i = 0; i < n; i++) {
-        box_x[i] += dx;
-        cx[i] += dx;
+    draw_rows = div_rows + 1;
+    build_division_row_layout0(division_levels, local_step, n, div_rows, &draw_nodes, &draw_offsets, &draw_counts);
+
+    {
+        double content_width = max_box_x - min_box_x;
+        double pad_x = content_width / 18.0;
+        double pad_y = divider_y[div_rows] / 18.0;
+        double extra_y;
+        if (pad_x < PAGE_MARGIN) pad_x = PAGE_MARGIN;
+        if (pad_y < PAGE_MARGIN) pad_y = PAGE_MARGIN;
+
+        dx = pad_x - min_box_x;
+        for (int i = 0; i < n; i++) {
+            box_x[i] += dx;
+            cx[i] += dx;
+        }
+
+        extra_y = pad_y - PAGE_MARGIN;
+        if (extra_y != 0.0) {
+            for (int i = 0; i < n; i++) box_y[i] += extra_y;
+            for (int d = 0; d <= div_rows; d++) divider_y[d] += extra_y;
+        }
+
+        width = content_width + 2.0 * pad_x;
+        if (width < 2.0 * pad_x + BOX_W) width = 2.0 * pad_x + BOX_W;
+        height = divider_y[div_rows] + pad_y;
     }
-    width = (max_box_x - min_box_x) + 2.0 * PAGE_MARGIN;
-    if (width < 2.0 * PAGE_MARGIN + BOX_W) width = 2.0 * PAGE_MARGIN + BOX_W;
-    height = divider_y[div_rows] + PAGE_MARGIN;
 
     printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
     printf("<defs>\n");
-    printf("<marker id=\"arrow-gray\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#555555\"/></marker>\n");
-    printf("<marker id=\"arrow-red\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#cc3333\"/></marker>\n");
-    printf("<marker id=\"arrow-green\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#2f8f46\"/></marker>\n");
-    printf("<marker id=\"arrow-blue\" markerWidth=\"8\" markerHeight=\"6\" refX=\"6.2\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M 0 0 L 6 3 L 0 6 z\" fill=\"#3366cc\"/></marker>\n");
+    printf("<marker id=\"arrow-gray\" markerWidth=\"36\" markerHeight=\"36\" refX=\"30\" refY=\"18\" orient=\"auto\" markerUnits=\"userSpaceOnUse\"><path d=\"M 0 0 L 36 18 L 0 36 z\" fill=\"#777777\"/></marker>\n");
+    printf("<marker id=\"arrow-red\" markerWidth=\"36\" markerHeight=\"36\" refX=\"30\" refY=\"18\" orient=\"auto\" markerUnits=\"userSpaceOnUse\"><path d=\"M 0 0 L 36 18 L 0 36 z\" fill=\"#cc3333\"/></marker>\n");
+    printf("<marker id=\"arrow-green\" markerWidth=\"36\" markerHeight=\"36\" refX=\"30\" refY=\"18\" orient=\"auto\" markerUnits=\"userSpaceOnUse\"><path d=\"M 0 0 L 36 18 L 0 36 z\" fill=\"#2f8f46\"/></marker>\n");
+    printf("<marker id=\"arrow-blue\" markerWidth=\"36\" markerHeight=\"36\" refX=\"30\" refY=\"18\" orient=\"auto\" markerUnits=\"userSpaceOnUse\"><path d=\"M 0 0 L 36 18 L 0 36 z\" fill=\"#3366cc\"/></marker>\n");
     printf("</defs>\n");
     printf("<rect x=\"0\" y=\"0\" width=\"%.0f\" height=\"%.0f\" fill=\"white\"/>\n", width, height);
 
@@ -1370,9 +1483,9 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         const char *div_color = "#b8b8b8";
         const char *text_color = "#666666";
         double yline = divider_y[d];
-        if (d == 4) { div_color = "#cc3333"; text_color = "#cc3333"; }
-        else if (d == 5) { div_color = "#2f8f46"; text_color = "#2f8f46"; }
-        else if (d == 6) { div_color = "#3366cc"; text_color = "#3366cc"; }
+        if (use_color && d == 4) { div_color = "#cc3333"; text_color = "#cc3333"; }
+        else if (use_color && d == 5) { div_color = "#2f8f46"; text_color = "#2f8f46"; }
+        else if (use_color && d == 6) { div_color = "#3366cc"; text_color = "#3366cc"; }
         printf("<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-width=\"2.2\"/>\n", yline, width, yline, div_color);
         printf("<text x=\"18\" y=\"%.1f\" font-size=\"%.0f\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">%d</text>\n", yline - 8.0, LABEL_FONT, text_color, d);
     }
@@ -1387,13 +1500,13 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
         x2 = cx[i];
         y2 = box_y[i] - 2.0;
         if (y2 <= y1) continue;
-        printf("<line x1=\"%.2f\" y1=\"%.2f\" x2=\"%.2f\" y2=\"%.2f\" stroke=\"%s\" stroke-opacity=\"0.84\" stroke-width=\"1.8\" marker-end=\"url(#%s)\"/>\n",
-               x1, y1, x2, y2, edge_color0(edges->data[e].sublevel), edge_marker0(edges->data[e].sublevel));
+        printf("<line x1=\"%.2f\" y1=\"%.2f\" x2=\"%.2f\" y2=\"%.2f\" stroke=\"%s\" stroke-opacity=\"0.88\" stroke-width=\"7.0\" marker-end=\"url(#%s)\"/>\n",
+               x1, y1, x2, y2, edge_color0(edges->data[e].sublevel, use_color), edge_marker0(edges->data[e].sublevel, use_color));
     }
 
-    for (int row = 0; row < topo_rows; row++) {
-        for (int slot = 0; slot < row_counts[row]; slot++) {
-            int idx = row_nodes[row_offsets[row] + slot];
+    for (int row = 0; row < draw_rows; row++) {
+        for (int slot = 0; slot < draw_counts[row]; slot++) {
+            int idx = draw_nodes[draw_offsets[row] + slot];
             const GraphNode *node = &nodes->data[idx];
             double x0 = box_x[idx];
             double y0 = box_y[idx];
@@ -1421,10 +1534,11 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges) {
     }
     printf("</svg>\n");
 
-    free(levels); free(division_levels); free(local_step); free(row_nodes); free(row_offsets); free(row_counts); free(order_in_row);
+    free(levels); free(division_levels); free(local_step); free(row_nodes); free(row_offsets); free(row_counts); free(draw_nodes); free(draw_offsets); free(draw_counts); free(order_in_row);
     free(primary_parent); free(parent_edge); free(root_of); free(child_offsets); free(child_counts); free(children);
     free(center_x); free(subtree_width); free(cx); free(box_y); free(box_x);
     free(rows_per_div); free(metric_cache); free(count_cache); free(divider_y); free(division_start);
+    free(parent_ready);
     free(seed_for_prov); free(process_order);
 }
 
@@ -1433,12 +1547,18 @@ int main(int argc, char **argv) {
     FILE *fp = stdin;
     NodeVec nodes = {0};
     EdgeVec edges = {0};
-    if (argc > 2) {
-        fprintf(stderr, "usage: %s [graph_dump.txt]\n", argv[0]);
-        return 1;
+    int use_color = 0;
+    for (int ai = 1; ai < argc; ai++) {
+        if (strcmp(argv[ai], "--color") == 0 || strcmp(argv[ai], "--colors") == 0) {
+            use_color = 1;
+        } else if (!path) {
+            path = argv[ai];
+        } else {
+            fprintf(stderr, "usage: %s [--color] [graph_dump.txt]\n", argv[0]);
+            return 1;
+        }
     }
-    if (argc == 2) {
-        path = argv[1];
+    if (path) {
         fp = fopen(path, "r");
         if (!fp) {
             fprintf(stderr, "failed to open graph dump: %s\n", path);
@@ -1454,7 +1574,7 @@ int main(int argc, char **argv) {
     }
     if (fp != stdin) fclose(fp);
     qsort(nodes.data, (size_t)nodes.count, sizeof(GraphNode), cmp_node_step_id);
-    emit_svg(&nodes, &edges);
+    emit_svg(&nodes, &edges, use_color);
     free_nodes(&nodes);
     free(edges.data);
     return 0;
