@@ -13,7 +13,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
-	rl1_depict_naive tiling_3x3_demo tiling_4x4_demo \
+	rl1_depict_naive rl1_hexagons tiling_3x3_demo tiling_4x4_demo \
 	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_search0 depict_search0_graph
 
 poly_count: $(BIN)/poly_count
@@ -35,6 +35,7 @@ clean:
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
+		$(BIN)/rl1_hexagons \
 		$(BIN)/rl0_search0 \
 		$(BIN)/depict_search0_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
@@ -121,6 +122,10 @@ $(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFA
 rl1_depict_naive: $(BIN)/rl1_depict_naive
 $(BIN)/rl1_depict_naive: $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o
+
+rl1_hexagons: $(BIN)/rl1_hexagons
+$(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl0_search0: $(BIN)/rl0_search0
 $(BIN)/rl0_search0: $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)

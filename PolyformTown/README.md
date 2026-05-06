@@ -190,6 +190,38 @@ Quick build for the full default RL0 SVG:
 make rl0_svg
 ```
 
+
+## RL1 hexagon extraction
+
+`rl1_hexagons` is a read-only RL1 data extraction tool. It parses
+`data/rl1/completions.dat`, filters the reflected-central surround case,
+groups the remaining RL1 records by mirror-tile placement, and prints compact
+cyclic CCW lists of parity-index vertex figures.
+
+Build and run:
+
+```bash
+make rl1_hexagons
+./bin/rl1_hexagons data/rl1/completions.dat > out/rl1_hexagons.txt
+```
+
+The checked-in derived data file is:
+
+```text
+data/rl1/hexagons.dat
+```
+
+It contains:
+
+- grouped cyclic CCW vertex-figure lists,
+- extracted six-label hexagon models,
+- unique hexagon label sets,
+- compact edge equivalence rules.
+
+The vertex-figure section uses headers like `---[4:11100]---`, where the
+bit mask marks which vertex-figure positions are identical across all items in
+the group after cyclic alignment.
+
 ## QC / smoke test
 
 Run the project smoke test with:
