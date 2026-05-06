@@ -10,7 +10,7 @@
 
 <p><em>Figure: Booting through 0.x efficiency surfaces.</em></p>
 
-<h1>RL1.0 Valid surrounds of one central tile</h2>
+<h2>RL1.0 Valid surrounds of one central tile</h2>
 
 <img src="./PolyformTown/img/rl1_one_patches.svg" alt="RL1.0 One Patches" />
 
