@@ -14,7 +14,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
 	rl1_depict_naive rl1_hexagons tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_search0 depict_search0_graph
+	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_refine depict_search0_graph
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -36,7 +36,7 @@ clean:
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
 		$(BIN)/rl1_hexagons \
-		$(BIN)/rl0_search0 \
+		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check $(BIN)/check_indexed_variants \
@@ -127,8 +127,8 @@ rl1_hexagons: $(BIN)/rl1_hexagons
 $(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
-rl0_search0: $(BIN)/rl0_search0
-$(BIN)/rl0_search0: $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+rl0_refine: $(BIN)/rl0_refine
+$(BIN)/rl0_refine: $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 depict_search0_graph: $(BIN)/depict_search0_graph
@@ -139,7 +139,7 @@ test: all
 	./tests/smoke.sh
 
 rl0_data: rl0_generate
-	$(BIN)/rl0_generate tiles/hat.tile data/rl0/completions.dat
+	$(BIN)/rl0_generate preferences/focus.tile
 
 rl0_svg: rl0_data rl0_depict imgtable
 	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
@@ -147,15 +147,15 @@ rl0_svg: rl0_data rl0_depict imgtable
 
 rl1_data: rl1_generate
 	mkdir -p data/rl1
-	$(BIN)/rl1_generate tiles/hat.tile data/rl1/completions.dat 20 --live-only
+	$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
 
 rl1_data_naive: rl1_generate_naive
 	mkdir -p data/rl1
-	$(BIN)/rl1_generate_naive tiles/hat.tile data/rl1/naive_hat_n20.dat 20 --live-only
+	$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_hat_n20.dat 20 --live-only
 
 rl1_svg_naive: rl1_data_naive rl1_depict_naive imgtable
 	mkdir -p img
-	$(BIN)/rl1_depict_naive tiles/hat.tile data/rl1/naive_hat_n20.dat --grouped | \
+	$(BIN)/rl1_depict_naive preferences/focus.tile data/rl1/naive_hat_n20.dat --grouped | \
 		$(BIN)/imgtable > img/rl1_naive_hat_n20.svg
 
 $(BIN):
