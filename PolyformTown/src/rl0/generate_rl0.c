@@ -494,11 +494,10 @@ static int ensure_dir(const char *path) {
 }
 
 int main(int argc, char **argv) {
-    const char *tile_path = "tiles/hat.tile";
+    const char *tile_path = "preferences/focus.tile";
     const char *output_path = "data/rl0/completions.dat";
 
     if (argc > 1) tile_path = argv[1];
-    if (argc > 2) output_path = argv[2];
 
     Tile tile;
     if (!tile_load(tile_path, &tile)) {

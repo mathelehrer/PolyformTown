@@ -133,13 +133,26 @@ Each record has attributes:
 Records are emitted as multi-line blocks delimited by `---[N]---`.
 
 ```bash
-./bin/rl0_generate [tilefile] [output_path]
+./bin/rl0_generate [tilefile]
 ```
 
 Quick refresh using defaults:
 
 ```bash
 make rl0_data
+```
+
+Default tile is `preferences/focus.tile`.
+
+### rl0_refine (provisional)
+
+Refine RL0 completion/deletion state. This stage is currently
+provisional because product data was rushed and is still being
+verified.
+
+```bash
+./bin/rl0_refine [--tile FILE] \
+  [--hidden-bound N] [--optimized] [--optimize-list FILE] [--keep-deletions]
 ```
 
 ### rl0_depict
