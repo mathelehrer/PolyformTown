@@ -1,14 +1,8 @@
-# Eliminate
+# Refine
 
-Use this method to remove stale, duplicate, or out-of-policy records.
+Eliminate false positives from en gros data
 
-## Inputs
-
-- RL0 completion data
-- RL0 deletion map
-- Optional refine parameters
-
-## Usage
+## Definitions
 
 Run RL0 refine and keep the resulting deletion decisions:
 
@@ -22,6 +16,19 @@ Validate that deletion logic still matches expected behavior:
 ```bash
 bash tests/validate_rl0_parity.sh
 ```
+
+## Inputs
+
+- RL0 completion data
+- RL0 deletion map
+- Optional refine parameters
+
+
+
+## Inputs (implicit)
+
+- tile: datum read from `preferences/focus.tile`
+- options: `--live-only` assumed true
 
 ## Output
 

@@ -1,11 +1,14 @@
 # Manual
 
 This directory is the user-facing manual for work-in-progress tooling.
-The project currently exposes many focused binaries, so this manual is
-method-first rather than binary-first.
+We don't yet have functionalization much less integration through a 
+single binary or a session-based CLI. Despite our primitive status, 
+the manual is method-first rather than binary-first. Documentation 
+is aiming toward a future where it will be more useful. 
 
-Pages describe goals in plain language, then map those goals to the
-current command set.
+Pages describe programmatic capabilities in plain language, and these 
+articles will help human users understand how to use our computations 
+to generate knowledge about the hat tiling and other geometries.
 
 ## Methods
 

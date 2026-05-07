@@ -1,19 +1,16 @@
-# Wang Tiles Data
+# Wang Tiles
 
-This page merges the old RL1 data notes with Wang-tile-facing outputs.
+A well-behaved, easy-to-draw logical abstraction layer 
 
-## Primary files
+## Filesystem
+ 
+## Schema
 
-- `data/rl1/completions.dat`
-- `data/rl1/naive_hat.dat`
-- derived extraction outputs
-
-## What this data represents
-
-- Ring-level seed generation products
-- Downstream reductions and extracted structures
 
 ## Notes
 
-- RL1 outputs are provisional unless provenance is recorded.
-- Treat RL1-derived artifacts as audit-required.
+- vertices have more constraining power
+- but wang tiles are edge based
+- vertex and edge matching rules
+- SAT solver may become available
+- hexagonal emulation or hex first?

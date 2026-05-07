@@ -1,20 +1,16 @@
-# Vertex Figures Data
+# Vertex figures
 
-This page merges the old RL0 data notes with the vertex-figure view.
+Comprehensive tabulation of figures around an arbitrary vertex
 
-## Primary files
+## Filesystem
 
 - `data/rl0/completions.dat`
 - `data/rl0/deletions.dat`
-- `data/rl0/completions.meta`
 
-## What this data represents
+## Schema
 
-- Base completion records grouped by local vertex behavior
-- Refinement/deletion state used by downstream runlevels
-- Metadata describing schema and generation context
+To Do: give schema
 
 ## Notes
 
-- RL0 is currently the most trusted entry stage.
-- Refinement semantics are still under active audit.
+To Do: notes on schema

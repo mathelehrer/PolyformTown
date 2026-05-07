@@ -1,36 +1,35 @@
 # Complete
 
-Use this method to generate completion datasets used by runlevels.
+Generate completion datasets inherent to each runlevel.
 
-## Inputs
+## Definition
 
-- Seed tile (typically `preferences/focus.tile`)
-- Target runlevel and output path
-- Optional policy flags (`--live-only`, optimization flags)
-
-## Usage
-
-Generate RL0 completions:
+Generate all completions around an arbitrary vertex by copies of tile
 
 ```bash
-./bin/rl0_generate [tilefile]
+./bin/rl0_generate [tile : fs pointer]
 ```
 
-Generate RL1 completions from RL0 products:
+Generate all completions around tile by copies of tile
 
 ```bash
-./bin/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 \
-    --completions data/rl0/completions.dat \
-    --deletions data/rl0/deletions.dat \
-    --live-only
+./bin/rl1_generate [tile : fs pointer]
 ```
+
+
+## Inputs (implicit)
+
+- tile: datum read from `preferences/focus.tile`
+- options: `--live-only` assumed true
 
 ## Output
 
-- RL0: `data/rl0/completions.dat` (+ related metadata)
+- RL0: `data/rl0/completions.dat` 
 - RL1: `data/rl1/completions.dat`
+
+To Do: add another usage for RL1 ring completions
 
 ## Notes
 
-- Complete RL0 first, then RL1.
-- Keep commands and commit hash with every generated artifact.
+- Complete RL0 first and produce lookup dictionaries 
+- Vertex filtration is needed for lots of work on RL1

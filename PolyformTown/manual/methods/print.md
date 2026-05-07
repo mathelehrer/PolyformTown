@@ -1,34 +1,37 @@
 # Print
 
-Use this method when you need canonical representatives at one level.
+Output canonical polyform data per level
+
+## Definitions
+
+Output the polyforms of tile at a certain level:
+
+```bash
+./bin/poly_print [level : integer] [tile : fs pointer] [options]
+```
+
+Output the polyform constellations of tile at a certain level:
+
+```bash
+./bin/vcomp_print [level : integer] [tile : fs pointer] [options]
+```
 
 ## Inputs
 
-- Level `N`
-- Tile file (optional; defaults from binary)
-- Optional filter flags (`--live-only`)
-
-## Usage
-
-Canonical polyform boundaries:
-
-```bash
-./bin/poly_print N [tilefile] [--live-only]
-```
-
-Vertex-completion representatives:
-
-```bash
-./bin/vcomp_print N [tilefile] [--live-only]
-```
+- level: number of tiles to combine into each polyform
+- tile: filesystem pointer to an edge-path tile datum 
+- options: 
+    --live-only: filters out any configuration with at least one edge 
+                 that can not be grown from in the next iteration. 
 
 ## Output
 
-- One canonical record per equivalence class at level `N`
-- Hole marker and cycle payload for `poly_print`
-- Aggregate/tiles/hidden blocks for `vcomp_print`
+- One record per canonical equivalence class at level 
+
+## Examples 
+
+To Do: need good examples for both usages.
 
 ## Notes
 
-- Prefer this method when count totals are known but structure is not.
 - Pipe into `imgtable` when you need a fast visual scan.
