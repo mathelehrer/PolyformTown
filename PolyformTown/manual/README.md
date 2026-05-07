@@ -1,11 +1,11 @@
 # Manual
 
-This directory is a human user facing manual for work-in-progress tooling. 
-We're current lacking a unified binary with terminal sessions and functionalization, 
-and we have to deal with a size-increasing library of individual binaries.
+This directory is the user-facing manual for work-in-progress tooling.
+The project currently exposes many focused binaries, so this manual is
+method-first rather than binary-first.
 
-The language is method-first rather than binary-first. Pages describe what 
-to do in plain terms, then map to current commands.
+Pages describe goals in plain language, then map those goals to the
+current command set.
 
 ## Methods
 
@@ -23,6 +23,7 @@ to do in plain terms, then map to current commands.
 
 ## Data
 
+- `data/input-tiles.md`
 - `data/vertex-figures.md`
 - `data/wang-tiles.md`
 
