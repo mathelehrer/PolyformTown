@@ -21,7 +21,7 @@
 #define SEARCH0_DEFAULT_COMPLETIONS "data/rl0/completions.dat"
 #define SEARCH0_DEFAULT_DELETIONS "data/rl0/deletions.dat"
 #define SEARCH0_DEFAULT_OPTIMIZE "preferences/optimize.dat"
-#define SEARCH0_DEFAULT_HIDDEN_BOUND 500
+#define SEARCH0_DEFAULT_HIDDEN_BOUND 250
 
 typedef struct {
     int file_no;
