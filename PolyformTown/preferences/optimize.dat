@@ -1,5 +1,6 @@
-# Provisional optimized record list for rl0_refine/rl0_search0.
-# One record id per line.
+# Optimized record list for rl0_refine/rl0_search0.
+# These can be found by individual timeout searches
+# Not guaranteed to be maximal: can we prove that?
 43
 20
 39
