@@ -1,0 +1,9 @@
+# F0040 — Reconcile agent and metadata documentation
+
+Audit the project-facing metadata files for current workflow truth.  In
+particular, decide whether the project should have an `AGENTS.md`/`Agents.md`
+file at all, and if so make it point to the current `meta/` memory model,
+source/data/bin separation rules, and runlevel data products.
+
+Also make the generated dependency report part of normal build hygiene without
+confusing it for essential runlevel data.

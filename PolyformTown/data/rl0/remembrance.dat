@@ -1,4 +1,4 @@
-# RL0 rememberance dictionary.
+# RL0 remembrance dictionary.
 # Generated with data/rl0/completions.dat by rl0_generate.
 # Format: v=<valence> <key_arc> :
 # Values are listed one per indented line. Each value satisfies canonical(key + value) = valid vertex figure.

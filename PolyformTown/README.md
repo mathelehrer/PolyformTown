@@ -125,7 +125,7 @@ Print the canonical vertex-completion representatives at level `N`.
 
 Generate RL0 completion records and write them to
 `data/rl0/completions.dat`.  The same run also writes the derived
-split/join rememberance dictionary to `data/rl0/rememberance.dat`.
+split/join remembrance dictionary to `data/rl0/remembrance.dat`.
 Schema notes are stored in `data/rl0/completions.meta` and `../SCHEMA.md`.
 
 Each record has attributes:
@@ -145,25 +145,55 @@ make rl0_data
 
 Default tile is `preferences/focus.tile`.
 
-Rememberance accounting check:
+Remembrance accounting check:
 
 ```bash
-make check_rl0_rememberance_counts
+make check_rl0_remembrance_counts
 ```
 
 This regenerates RL0 data and writes level-by-level LHS/RHS counts to
-`data/rl0/rememberance_counts.txt`.  The rememberance file groups rows by
+`data/rl0/remembrance_counts.txt`.  The remembrance file groups rows by
 key size and prints each alternative value on its own indented line.
 
-### rl0_refine (provisional)
+### rl0_refine
 
-Refine RL0 completion/deletion state. This stage is currently
-provisional because product data was rushed and is still being
-verified.
+Refine RL0 deletion state from the saved remembrance dictionary.
+By default it reads the saved dictionary from `data/rl0/remembrance.dat`,
+uses `data/rl0/completions.dat` only as the seed-record source, reads
+`preferences/optimize.dat`, prints progress stats to stdout, and updates the
+essential data product `data/rl0/deletions.dat`. It does not write a graph
+dump unless `--print` or `--print PATH` is given. With bare `--print`, graph data goes to stdout and the progress table moves to stderr so the graph can be piped directly into the depictor.
 
 ```bash
-./bin/rl0_refine [--tile FILE] \
-  [--hidden-bound N] [--optimized] [--optimize-list FILE] [--keep-deletions]
+./bin/rl0_refine
+./bin/rl0_refine 25 28 36
+./bin/rl0_refine 25,28,36
+./bin/rl0_refine All
+```
+
+Print graph data to stdout and pipe directly into the colored depictor with:
+
+```bash
+./bin/rl0_refine --print | ./bin/depict_search0_graph --colors > img/rl0_refine.svg
+```
+
+Or build the colored boot graph explicitly with:
+
+```bash
+make rl0_refine_svg
+```
+
+That target leaves `img/rl0_refine.svg` and does not create a temporary tracked graph file.
+
+### meta dependency graph
+
+The dependency scanner source lives in `src/meta/gen_graph.c`; the binary is
+built as `bin/gen_graph`.  A normal `make` refreshes the generated report at
+`data/meta/dependencies.txt`.  Do not write generated graph output back into
+`src/meta/`.
+
+```bash
+make meta_graph_data
 ```
 
 ### rl0_depict
@@ -423,8 +453,10 @@ keep runtime workflow files separate from user-facing docs and source:
 - `../meta/memory/` (indexed lesson/future records)
 - `../meta/history/` (planning artifacts)
 
-`../AGENTS.md` is the policy entry point for runtime initialization
-and task execution.
+There is no active `../AGENTS.md` in this snapshot; agent-facing workflow state
+is currently represented by the `../meta/` files above. If an AGENTS file is
+restored later, it should point to those files rather than duplicating stale
+workflow rules.
 
 `../meta/LESSONS.md` is interaction-first. Keep titles short in the
 index and place detailed prompt context in

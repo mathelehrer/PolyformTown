@@ -1,6 +1,6 @@
-# F0039 — Strengthen rememberance proof beyond count accounting
+# F0039 — Strengthen remembrance proof beyond count accounting
 
-Current rememberance count checking verifies that split/join rows account for
+Current remembrance count checking verifies that split/join rows account for
 variant multiplicities by level.  After the accounting is stable, add the
 stronger geometric proof checker: for each candidate join, reconstruct the
 indexed vertex figure with actual boundary conditions and validate it against

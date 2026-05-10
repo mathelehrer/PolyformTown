@@ -72,6 +72,8 @@ void rl0_fm_init(RL0ForgetMap *map) {
 
 static void skip_ws(const char **p);
 static int parse_int(const char **p, int *out);
+static RL0FMRow *find_or_add_row(RL0ForgetMap *map, const RL0FMArc *key);
+static int row_add_value(RL0FMRow *row, const RL0FMArc *value);
 
 void rl0_fm_deletions_init(RL0FMDeletionSet *set) {
     memset(set, 0, sizeof(*set));
@@ -319,6 +321,128 @@ int rl0_fm_load_completions_filtered(RL0ForgetMap *map,
     }
     fclose(fp);
     return 1;
+}
+
+
+static int parse_arc_text(const char *text, const char **end_out, RL0FMArc *out) {
+    const char *p = text;
+    out->n = 0;
+    skip_ws(&p);
+    if (*p != '[') return 0;
+    p++;
+    skip_ws(&p);
+    if (*p == ']') {
+        p++;
+        if (end_out) *end_out = p;
+        return 1;
+    }
+    while (out->n < RL0_FM_MAX_ITEMS) {
+        RL0FMItem it;
+        skip_ws(&p);
+        if (*p != '[') return 0;
+        p++;
+        if (!parse_int(&p, &it.p)) return 0;
+        skip_ws(&p);
+        if (*p != ',') return 0;
+        p++;
+        if (!parse_int(&p, &it.i)) return 0;
+        skip_ws(&p);
+        if (*p != ']') return 0;
+        p++;
+        out->item[out->n++] = it;
+        skip_ws(&p);
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (*p == ']') {
+            p++;
+            if (end_out) *end_out = p;
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+static int parse_remembrance_row(const char *line, RL0FMArc *key) {
+    const char *p = line;
+    int valence = 0;
+    (void)valence;
+    skip_ws(&p);
+    if (p[0] != 'v' || p[1] != '=') return 0;
+    p += 2;
+    if (!parse_int(&p, &valence)) return 0;
+    if (!parse_arc_text(p, &p, key)) return 0;
+    skip_ws(&p);
+    return *p == ':';
+}
+
+static int parse_remembrance_value(const char *line, RL0FMArc *value) {
+    const char *p = line;
+    skip_ws(&p);
+    if (*p != '-') return 0;
+    p++;
+    if (!parse_arc_text(p, &p, value)) return 0;
+    skip_ws(&p);
+    return *p == '\0' || *p == '\n' || *p == '\r' || *p == '#';
+}
+
+static void concatenate_arc_cycle(const RL0FMArc *key,
+                                  const RL0FMArc *value,
+                                  RL0FMCycle *out) {
+    int n = 0;
+    out->n = 0;
+    for (int i = 0; i < key->n && n < RL0_FM_MAX_ITEMS; i++) out->item[n++] = key->item[i];
+    for (int i = 0; i < value->n && n < RL0_FM_MAX_ITEMS; i++) out->item[n++] = value->item[i];
+    out->n = n;
+}
+
+int rl0_fm_load_remembrance_filtered(RL0ForgetMap *map,
+                                      const char *path,
+                                      const RL0FMDeletionSet *deletions,
+                                      int delete_through_level) {
+    FILE *fp = fopen(path, "r");
+    char line[262144];
+    RL0FMArc current_key;
+    int have_key = 0;
+    if (!fp) return 0;
+    memset(&current_key, 0, sizeof(current_key));
+    while (fgets(line, sizeof(line), fp)) {
+        const char *q = line;
+        RL0FMArc key, value;
+        if (strstr(line, "RL0 seed records")) break;
+        skip_ws(&q);
+        if (*q == '\0' || *q == '\n' || *q == '\r' || *q == '#') continue;
+        if (strncmp(q, "---[", 4) == 0) continue;
+        if (parse_remembrance_row(q, &key)) {
+            current_key = key;
+            have_key = 1;
+            continue;
+        }
+        if (!have_key || !parse_remembrance_value(q, &value)) {
+            fclose(fp);
+            return 0;
+        }
+        if (deletions && delete_through_level >= 0) {
+            RL0FMCycle full;
+            concatenate_arc_cycle(&current_key, &value, &full);
+            if (rl0_fm_deletions_contains_cycle(deletions, &full, delete_through_level)) {
+                continue;
+            }
+        }
+        RL0FMRow *row = find_or_add_row(map, &current_key);
+        if (!row || !row_add_value(row, &value)) {
+            fclose(fp);
+            return 0;
+        }
+    }
+    fclose(fp);
+    return 1;
+}
+
+int rl0_fm_load_remembrance(RL0ForgetMap *map, const char *path) {
+    return rl0_fm_load_remembrance_filtered(map, path, NULL, -1);
 }
 
 int rl0_fm_load_completions(RL0ForgetMap *map, const char *path) {

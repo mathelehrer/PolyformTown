@@ -1,0 +1,1671 @@
+Found 589 functions
+
+--- src/core/vec.c (4) ---
+vec_clear (1)
+vec_destroy (1)
+vec_init (1)
+vec_push (1)
+
+--- src/core/dfs.c (6) ---
+should_stop (1)
+dfs_walk (2)
+    src/core/dfs.c should_stop
+dfs_run (3)
+    src/core/dfs.c dfs_walk
+
+--- src/core/numerics.c (9) ---
+cycle (3)
+    src/core/lattice.c lattice_embed_point
+cycle_interior_point (6)
+    src/core/lattice.c lattice_embed_point
+    src/core/cycle.c cycle_signed_area2
+
+--- src/core/hash.c (13) ---
+hash_destroy (1)
+hash_init (1)
+poly_equal (1)
+poly_hash (1)
+hash_resize (3)
+    src/core/hash.c poly_hash
+    src/core/hash.c hash_init
+hash_insert (6)
+    src/core/hash.c poly_equal
+    src/core/hash.c poly_hash
+    src/core/hash.c hash_resize
+
+--- src/core/lattice.c (15) ---
+lattice_direction_count (1)
+lattice_transform_count (1)
+lattice_unit_direction (1)
+lattice_embed_point (2)
+    src/core/tetrille.c tetrille_embed_point_scaled
+lattice_direction_index (4)
+    src/core/tetrille.c tetrille_edge_tag
+lattice_coords_adjacent (6)
+    src/core/lattice.c lattice_unit_direction
+    src/core/tetrille.c tetrille_coords_adjacent
+
+--- src/core/tetrille.c (15) ---
+is_unit6 (1)
+tetrille_delta_to_6 (1)
+tetrille_embed_point_scaled (1)
+tetrille_point_to_sys3_scaled (1)
+tetrille_point_to_sys4 (1)
+tetrille_translate_cycle (1)
+tetrille_point_on_segment (2)
+    src/core/tetrille.c tetrille_embed_point_scaled
+tetrille_edge_tag (3)
+    src/core/tetrille.c tetrille_point_to_sys4
+    src/core/tetrille.c tetrille_point_to_sys3_scaled
+tetrille_coords_adjacent (4)
+    src/core/tetrille.c tetrille_point_to_sys4
+    src/core/tetrille.c is_unit6
+    src/core/tetrille.c tetrille_point_to_sys3_scaled
+
+--- src/core/tile.c (79) ---
+print_imgtable_basis (1)
+print_imgtable_constants (1)
+print_imgtable_cycle_raw (1)
+starts_with_label (1)
+trim_in_place (1)
+copy_trimmed (2)
+    src/core/tile.c trim_in_place
+parse_basis_row (4)
+    src/core/tile.c trim_in_place
+    src/core/tile.c copy_trimmed
+tile_print_imgtable_shape (4)
+    src/core/tile.c print_imgtable_cycle_raw
+    src/core/tile.c print_imgtable_basis
+    src/core/tile.c print_imgtable_constants
+tile_print_imgtable_cycle (5)
+    src/core/tile.c tile_print_imgtable_shape
+tile_build_variants (23)
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_canonicalize_shift
+    src/core/cycle.c cycle_normalize_position
+    src/core/cycle.c cycle_reverse
+    src/core/cycle.c cycle_signed_area2
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+tile_load (36)
+    src/core/tile.c tile_build_variants
+    src/core/cycle.c cycle_reverse
+    src/core/cycle.c cycle_signed_area2
+    src/core/tile.c parse_basis_row
+    src/core/tile.c trim_in_place
+    src/core/tile.c copy_trimmed
+    src/core/tile.c starts_with_label
+
+--- src/core/boundary.c (129) ---
+MAX_BOUNDARY_VERTS (2)
+    src/core/cycle.c coord_eq
+build_boundary_edges (2)
+    src/core/cycle.c cycle_edge
+point_on_poly_boundary (2)
+    src/core/cycle.c coord_eq
+build_boundary_vertices (3)
+    src/rl1/generate_rl1_naive.c coord_in_list
+dfs_has_completion (58)
+    src/core/boundary.c point_on_poly_boundary
+    src/core/attach.c try_attach_tile_poly_ex
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_edges
+poly_has_live_boundary (62)
+    src/core/boundary.c dfs_has_completion
+    src/core/boundary.c build_boundary_vertices
+
+--- src/rl0/boundary0.c (175) ---
+B0_MAX_BOUNDARY_VERTS (1)
+item_less0 (1)
+coord_in_cycle (2)
+    src/core/cycle.c coord_eq
+cycle_matches_cyclic_local (2)
+    src/core/cycle.c coord_eq
+cycle_vertex_index_local (2)
+    src/core/cycle.c coord_eq
+incident_less0 (2)
+    src/rl0/boundary0.c item_less0
+incidents_adjacent0 (2)
+    src/core/cycle.c coord_eq
+tile_vertex_pos0 (2)
+    src/core/cycle.c coord_eq
+edge_walk_order_incidents0 (4)
+    src/rl0/boundary0.c incident_less0
+    src/core/cycle.c coord_eq
+boundary0_build_vertex_arc (5)
+    src/rl0/boundary0.c edge_walk_order_incidents0
+lookup_maximal_arc0 (7)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+boundary0_tile_item_at_vertex (19)
+    src/rl0/boundary0.c cycle_vertex_index_local
+    src/rl0/boundary0.c cycle_matches_cyclic_local
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+    src/core/cycle.c cycle_signed_area2
+lookup_maximal_arc0 (24)
+    src/rl0/boundary0.c tile_vertex_pos0
+    src/rl0/boundary0.c boundary0_tile_item_at_vertex
+    src/rl0/boundary0.c coord_in_cycle
+lookup_component_arc0 (29)
+    src/rl0/boundary0.c lookup_maximal_arc0
+    src/rl0/boundary0.c edge_walk_order_incidents0
+boundary0_vertex_has_dictionary_completion0 (32)
+    src/rl0/boundary0.c lookup_component_arc0
+    src/rl0/boundary0.c incidents_adjacent0
+boundary0_poly_has_live_boundary (41)
+    src/rl0/boundary0.c boundary0_vertex_has_dictionary_completion0
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+
+--- src/throughput/poly_pipeline.c (202) ---
+run_poly_levels (202)
+    src/core/vec.c vec_destroy
+    src/core/hash.c hash_destroy
+    src/core/hash.c hash_insert
+    src/core/boundary.c poly_has_live_boundary
+    src/core/attach.c try_attach_tile_poly
+    src/core/boundary.c build_boundary_edges
+    src/core/vec.c vec_clear
+    src/core/hash.c hash_init
+    src/rl1/generate_rl1_naive.c on_level
+    src/core/vec.c vec_push
+    src/core/vec.c vec_init
+    src/core/cycle.c poly_hash_key_lattice
+
+--- src/core/attach.c (206) ---
+MAX_EDGES (1)
+coord_seen_before (2)
+    src/core/cycle.c coord_eq
+edge_opp (2)
+    src/core/cycle.c coord_eq
+edge_same (2)
+    src/core/cycle.c coord_eq
+find_outer_cycle (4)
+    src/core/cycle.c cycle_signed_area2
+build_union_edges (6)
+    src/core/attach.c edge_opp
+    src/core/attach.c edge_same
+    src/core/cycle.c cycle_edge
+find_start_edge (7)
+    src/core/lattice.c lattice_direction_index
+    src/core/lattice.c lattice_embed_point
+pick_next_edge (7)
+    src/core/lattice.c lattice_direction_index
+    src/core/cycle.c coord_eq
+    src/core/lattice.c lattice_direction_count
+align_tile (9)
+    src/core/cycle.c cycle_translate
+    src/core/cycle.c coord_eq
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/tetrille.c tetrille_edge_tag
+    src/core/cycle.c cycle_edge
+has_overlap_via_tile_test (11)
+    src/core/numerics.c cycle_interior_point
+    src/core/attach.c find_outer_cycle
+align_tile_to_frontier_edge (12)
+    src/core/attach.c align_tile
+    src/core/boundary.c build_boundary_edges
+walk_one_cycle (15)
+    src/core/attach.c pick_next_edge
+    src/core/lattice.c lattice_direction_index
+    src/core/cycle.c coord_eq
+    src/core/attach.c coord_seen_before
+extract_cycles (23)
+    src/core/attach.c walk_one_cycle
+    src/core/attach.c find_start_edge
+try_attach_tile_poly_ex (52)
+    src/core/attach.c has_overlap_via_tile_test
+    src/core/attach.c extract_cycles
+    src/core/attach.c build_union_edges
+    src/core/attach.c align_tile
+    src/core/boundary.c build_boundary_edges
+try_attach_tile_poly (53)
+    src/core/attach.c try_attach_tile_poly_ex
+
+--- src/rl0/forget_map.c (318) ---
+concatenate_arc_cycle (1)
+item_cmp (1)
+make_arc_raw (1)
+rl0_fm_arc_equal (1)
+rl0_fm_init (1)
+skip_ws (1)
+skip_ws (1)
+cycle_cmp (2)
+    src/rl0/forget_map.c item_cmp
+find_or_add_row (2)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+parse_int (2)
+    src/rl1/ring_complete.c skip_ws
+row_add_value (2)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+rl0_fm_canonicalize_cycle (3)
+    src/rl0/forget_map.c cycle_cmp
+rl0_fm_cycle_equal (3)
+    src/rl0/forget_map.c cycle_cmp
+parse_arc_text (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_index_cycle_line (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_int_list (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_level_header (4)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c parse_int
+rl0_fm_cycle_from_parity_indices (4)
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_reflect_cycle (4)
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_contains_complete (5)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_lookup (5)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+parse_remembrance_value (6)
+    src/rl0/forget_map.c parse_arc_text
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_lookup_any_rotation (6)
+    src/rl0/forget_map.c rl0_fm_lookup
+add_cycle (7)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_deletions_contains_cycle (7)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+parse_remembrance_row (8)
+    src/rl0/forget_map.c parse_arc_text
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_build_from_cycles (9)
+    src/rl0/forget_map.c row_add_value
+    src/rl0/forget_map.c find_or_add_row
+    src/rl0/forget_map.c make_arc_raw
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+maybe_add_current_record (12)
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/rl0/forget_map.c add_cycle
+rl0_fm_deletions_add_cycle (15)
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_load_deletions (25)
+    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
+    src/rl0/forget_map.c parse_index_cycle_line
+    src/rl0/forget_map.c parse_level_header
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_load_completions_filtered (28)
+    src/rl0/forget_map.c parse_int_list
+    src/rl0/forget_map.c maybe_add_current_record
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
+rl0_fm_load_remembrance_filtered (28)
+    src/rl0/forget_map.c row_add_value
+    src/rl0/forget_map.c find_or_add_row
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c concatenate_arc_cycle
+    src/rl0/forget_map.c parse_remembrance_value
+    src/rl0/forget_map.c parse_remembrance_row
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_load_completions (29)
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+rl0_fm_load_remembrance (29)
+    src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
+rl0_fm_load_completions_with_deletions (54)
+    src/rl0/forget_map.c rl0_fm_load_deletions
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+
+--- src/core/cycle.c (335) ---
+coord_eq (1)
+coord_less (1)
+cycle_abs_area_cmp_desc (1)
+cycle_edge (1)
+cycle_less (1)
+cycle_reverse (1)
+cycle_rotate_to_start (1)
+cycle_translate (1)
+cycle_translate_tetrille (1)
+floor_div6 (1)
+poly_less (1)
+tetrille_reflect (1)
+tri_reflect (1)
+tri_rot60 (1)
+poly_translate (2)
+    src/core/cycle.c cycle_translate
+tetrille_embed6_scaled (2)
+    src/core/tetrille.c tetrille_embed_point_scaled
+cycle_canonicalize_shift (3)
+    src/core/cycle.c coord_less
+    src/core/cycle.c coord_eq
+cycle_signed_area2 (3)
+    src/core/cycle.c tetrille_embed6_scaled
+tetrille_apply (3)
+    src/core/cycle.c tri_rot60
+    src/core/cycle.c tetrille_reflect
+triangular_apply (3)
+    src/core/cycle.c tri_rot60
+    src/core/cycle.c tri_reflect
+cycle_abs_area_cmp_desc (5)
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_signed_area2
+cycle_normalize_position (6)
+    src/core/cycle.c floor_div6
+    src/core/cycle.c cycle_translate_tetrille
+    src/core/cycle.c tetrille_embed6_scaled
+    src/core/cycle.c cycle_translate
+cycle_transform_lattice (7)
+    src/core/cycle.c tetrille_apply
+    src/core/cycle.c triangular_apply
+poly_normalize_position (7)
+    src/core/cycle.c cycle_translate_tetrille
+    src/core/cycle.c floor_div6
+    src/core/cycle.c tetrille_embed6_scaled
+    src/core/cycle.c poly_translate
+cycle_transform (8)
+    src/core/cycle.c cycle_transform_lattice
+poly_transform_lattice (8)
+    src/core/cycle.c cycle_transform_lattice
+poly_transform (9)
+    src/core/cycle.c poly_transform_lattice
+poly_prepare_cycles (10)
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_canonicalize_shift
+    src/core/cycle.c cycle_reverse
+    src/core/cycle.c cycle_signed_area2
+    src/core/cycle.c cycle_abs_area_cmp_desc
+cycle_canonicalize_lattice (25)
+    src/core/cycle.c cycle_translate_tetrille
+    src/core/cycle.c cycle_rotate_to_start
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_canonicalize_shift
+    src/core/cycle.c cycle_normalize_position
+    src/core/cycle.c cycle_reverse
+    src/core/cycle.c cycle_signed_area2
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+cycle_canonicalize (26)
+    src/core/cycle.c cycle_canonicalize_lattice
+poly_canonicalize_tetrille (27)
+    src/core/cycle.c poly_less
+    src/core/cycle.c poly_prepare_cycles
+    src/core/cycle.c poly_normalize_position
+    src/core/cycle.c poly_transform_lattice
+poly_canonicalize_lattice (55)
+    src/core/cycle.c poly_canonicalize_tetrille
+    src/core/cycle.c poly_less
+    src/core/cycle.c poly_prepare_cycles
+    src/core/cycle.c poly_normalize_position
+    src/core/cycle.c poly_transform_lattice
+    src/core/lattice.c lattice_transform_count
+poly_canonicalize (56)
+    src/core/cycle.c poly_canonicalize_lattice
+poly_hash_key_lattice (56)
+    src/core/cycle.c poly_canonicalize_lattice
+
+--- src/throughput/vcomp.c (405) ---
+MAX_BOUNDARY_VERTS (1)
+coord_cmp (1)
+floor_div6_local (1)
+raw_vec_push (1)
+vcomp_levels_destroy (1)
+vcomp_levels_init (1)
+coord_in_list (2)
+    src/core/cycle.c coord_eq
+edge_in_tiles (2)
+    src/core/cycle.c coord_eq
+build_consumed_ports (3)
+    src/rl1/generate_rl1_naive.c coord_in_list
+build_next_hidden (3)
+    src/rl1/generate_rl1_naive.c coord_in_list
+build_next_ports (3)
+    src/rl1/generate_rl1_naive.c coord_in_list
+coord_translate_lattice (3)
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+point_on_segment (3)
+    src/core/tetrille.c tetrille_point_on_segment
+point_on_cycle (4)
+    src/throughput/vcomp.c point_on_segment
+build_event_hidden (5)
+    src/core/boundary.c point_on_poly_boundary
+    src/rl1/generate_rl1_naive.c coord_in_list
+build_ports_from_boundary_hidden (5)
+    src/rl1/search1_naive.c edge_in_tiles
+    src/rl1/generate_rl1_naive.c coord_in_list
+cycle_abs_area_cmp_desc (5)
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_signed_area2
+hidden_port_connected (5)
+    src/rl1/search1_naive.c edge_in_tiles
+    src/rl1/generate_rl1_naive.c coord_in_list
+point_on_poly_boundary (5)
+    src/throughput/vcomp.c point_on_cycle
+coord_transform_lattice (8)
+    src/core/cycle.c cycle_transform_lattice
+normalize_payload (8)
+    src/core/cycle.c cycle_translate
+    src/throughput/vcomp.c coord_translate_lattice
+    src/core/tetrille.c tetrille_translate_cycle
+    src/throughput/vcomp.c floor_div6_local
+    src/core/tetrille.c tetrille_embed_point_scaled
+prepare_poly_cycles_local (10)
+    src/core/cycle.c cycle_less
+    src/core/cycle.c cycle_canonicalize_shift
+    src/core/cycle.c cycle_reverse
+    src/core/cycle.c cycle_signed_area2
+    src/core/cycle.c cycle_abs_area_cmp_desc
+canonicalize_result (45)
+    src/core/cycle.c poly_less
+    src/core/cycle.c coord_eq
+    src/throughput/vcomp.c prepare_poly_cycles_local
+    src/throughput/vcomp.c normalize_payload
+    src/core/cycle.c cycle_transform_lattice
+    src/throughput/vcomp.c coord_transform_lattice
+    src/core/cycle.c poly_transform_lattice
+    src/core/lattice.c lattice_transform_count
+dfs_levels (137)
+    src/throughput/vcomp.c raw_vec_push
+    src/core/hash.c hash_insert
+    src/throughput/vcomp.c canonicalize_result
+    src/throughput/vcomp.c hidden_port_connected
+    src/core/boundary.c point_on_poly_boundary
+    src/throughput/vcomp.c build_next_ports
+    src/throughput/vcomp.c build_ports_from_boundary_hidden
+    src/throughput/vcomp.c build_consumed_ports
+    src/throughput/vcomp.c build_next_hidden
+    src/throughput/vcomp.c build_event_hidden
+    src/core/boundary.c build_boundary_vertices
+    src/core/attach.c try_attach_tile_poly_ex
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_edges
+vcomp_enumerate_levels (143)
+    src/throughput/vcomp.c dfs_levels
+    src/core/hash.c hash_destroy
+    src/core/boundary.c build_boundary_vertices
+    src/core/hash.c hash_init
+
+--- src/rl0/attach0.c (430) ---
+A0_MAX_EDGES (1)
+attach0_closure_stats_init (1)
+source_index_to_variant_slot0 (1)
+cycle_equal0 (2)
+    src/core/cycle.c cycle_less
+edge_equal0 (2)
+    src/core/cycle.c coord_eq
+previous_edge_at_vertex0 (2)
+    src/core/cycle.c coord_eq
+find_boundary_edge0 (5)
+    src/rl0/attach0.c edge_equal0
+    src/core/boundary.c build_boundary_edges
+variant_matches_transform0 (19)
+    src/rl0/attach0.c cycle_equal0
+    src/core/cycle.c cycle_normalize_position
+    src/core/cycle.c cycle_signed_area2
+    src/core/cycle.c cycle_transform_lattice
+attach0_verify_variant_order (21)
+    src/rl0/attach0.c variant_matches_transform0
+    src/core/lattice.c lattice_transform_count
+variant_has_parity0 (21)
+    src/rl0/attach0.c variant_matches_transform0
+    src/core/lattice.c lattice_transform_count
+attach0_try_attach_one_on_edge (82)
+    src/rl0/attach0.c previous_edge_at_vertex0
+    src/core/attach.c try_attach_tile_poly_ex
+    src/rl0/attach0.c source_index_to_variant_slot0
+    src/rl0/attach0.c variant_has_parity0
+    src/rl0/attach0.c find_boundary_edge0
+attach0_try_attach_arc (86)
+    src/rl0/attach0.c attach0_try_attach_one_on_edge
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_edges
+attach0_try_attach_one (86)
+    src/rl0/attach0.c attach0_try_attach_one_on_edge
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_edges
+attach0_force_live_closure (101)
+    src/rl0/attach0.c attach0_try_attach_arc
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+
+--- src/rl1/hexagons.c (487) ---
+MAX_COORDS_LOCAL (1)
+build_figure_seq (1)
+derive_hex_and_rules (1)
+edge_find_root (1)
+group_add (1)
+hex_same (1)
+item_less (1)
+item_to_short_str (1)
+mask_rotation_better (1)
+parse_pi_figure_cell (1)
+print_full_header (1)
+print_signed_edge (1)
+rec_reset (1)
+shift_central (1)
+sig_append (1)
+signed_edge_cmp (1)
+signed_edge_equal (1)
+skip_ws (1)
+best_mask_shift (2)
+    src/rl1/hexagons.c mask_rotation_better
+coord_pos (2)
+    src/core/cycle.c coord_eq
+cycle_eq_exact (2)
+    src/core/cycle.c coord_eq
+cycle_to_str (2)
+    src/rl1/hexagons.c item_to_short_str
+edge_node_find_or_add (2)
+    src/rl1/hexagons.c signed_edge_equal
+edge_union (2)
+    src/rl1/hexagons.c edge_find_root
+expect (2)
+    src/rl1/ring_complete.c skip_ws
+inc_less (2)
+    src/rl1/hexagons.c item_less
+parse_int0 (2)
+    src/rl1/ring_complete.c skip_ws
+print_unique_hexagons (2)
+    src/rl1/hexagons.c hex_same
+sig_item (2)
+    src/rl1/hexagons.c sig_append
+center_tile_index (3)
+    src/rl1/hexagons.c cycle_eq_exact
+first_shared_pos (3)
+    src/rl1/hexagons.c coord_pos
+parse_int_line (3)
+    src/rl1/ring_complete.c parse_int0
+order_inc (4)
+    src/rl1/hexagons.c inc_less
+    src/core/cycle.c coord_eq
+parse_coord0 (5)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/hexagons.c expect
+print_edge_classes (7)
+    src/rl1/hexagons.c print_signed_edge
+    src/rl1/hexagons.c edge_find_root
+    src/rl1/hexagons.c edge_union
+    src/rl1/hexagons.c edge_node_find_or_add
+parse_coord_list0 (9)
+    src/rl1/ring_complete.c parse_coord0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/hexagons.c expect
+parse_cycle0 (9)
+    src/rl1/ring_complete.c parse_coord0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/hexagons.c expect
+parse_cycle_list0 (13)
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/hexagons.c expect
+parse_poly0 (13)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/hexagons.c expect
+collect_inc (22)
+    src/rl0/boundary0.c boundary0_tile_item_at_vertex
+    src/rl1/hexagons.c coord_pos
+build_index_map (30)
+    src/rl1/hexagons.c cycle_to_str
+    src/rl1/hexagons.c shift_central
+    src/rl1/hexagons.c order_inc
+    src/rl1/hexagons.c collect_inc
+figure_sig (31)
+    src/rl1/hexagons.c sig_item
+    src/rl1/hexagons.c sig_append
+    src/rl1/hexagons.c shift_central
+    src/rl1/hexagons.c order_inc
+    src/rl1/hexagons.c collect_inc
+load_recs (49)
+    src/rl1/ring_complete.c parse_cycle_list0
+    src/rl1/ring_complete.c parse_coord_list0
+    src/rl1/ring_complete.c parse_poly0
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/hexagons.c parse_int_line
+    src/rl1/hexagons.c rec_reset
+classify (57)
+    src/rl1/hexagons.c figure_sig
+    src/rl1/hexagons.c first_shared_pos
+    src/rl0/boundary0.c boundary0_tile_item_at_vertex
+    src/rl1/hexagons.c center_tile_index
+main (189)
+    src/rl1/hexagons.c print_edge_classes
+    src/rl1/hexagons.c print_unique_hexagons
+    src/rl1/hexagons.c derive_hex_and_rules
+    src/rl1/hexagons.c parse_pi_figure_cell
+    src/rl1/hexagons.c best_mask_shift
+    src/rl1/hexagons.c build_figure_seq
+    src/rl1/hexagons.c build_index_map
+    src/rl1/hexagons.c print_full_header
+    src/rl1/hexagons.c group_add
+    src/rl1/hexagons.c classify
+    src/rl1/hexagons.c load_recs
+    src/core/tile.c tile_load
+
+--- src/rl1/generate_rl1_naive.c (496) ---
+append_text (1)
+coord_eq_local (1)
+coord_less_local (1)
+ensure_dir (1)
+print_coord_list (1)
+print_cycle (1)
+usage (1)
+append_coord_text (2)
+    src/rl1/generate_rl1_naive.c append_text
+coord_in_list (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+coord_on_boundary (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+cycle_cmp_local (2)
+    src/rl1/generate_rl1_naive.c coord_less_local
+cycles_share_vertex (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+ensure_parent_dirs (2)
+    src/rl1/generate_rl1_naive.c ensure_dir
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+records_add (2)
+    src/rl1/ring_complete.c poly_to_string_local
+record_cmp_local (3)
+    src/rl1/generate_rl1_naive.c cycle_cmp_local
+poly_to_string_local (4)
+    src/rl1/generate_rl1_naive.c append_coord_text
+    src/rl1/generate_rl1_naive.c append_text
+tile_is_completely_surrounded (5)
+    src/rl1/generate_rl1_naive.c coord_in_list
+    src/rl1/generate_rl1_naive.c coord_on_boundary
+write_one_record (5)
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+    src/rl1/ring_complete.c print_cycle
+rewrite_sorted_records (6)
+    src/rl1/generate_rl1_naive.c write_one_record
+select_unique_center_tile (8)
+    src/rl1/generate_rl1_naive.c cycles_share_vertex
+    src/rl1/generate_rl1_naive.c tile_is_completely_surrounded
+on_level (16)
+    src/rl1/generate_rl1_naive.c write_one_record
+    src/rl1/generate_rl1_naive.c records_add
+    src/rl1/generate_rl1_naive.c select_unique_center_tile
+main (426)
+    src/rl1/generate_rl1_naive.c rewrite_sorted_records
+    src/throughput/vcomp_pipeline.c run_vcomp_levels
+    src/rl1/generate_rl1_naive.c ensure_parent_dirs
+    src/core/tile.c tile_load
+    src/rl1/ring_complete.c usage
+
+--- src/rl0/generate_rl0.c (508) ---
+coord_less_local (1)
+cyclic_item_seq_less (1)
+ensure_dir (1)
+poly_to_string_local (1)
+print_coord_list (1)
+print_cycle (1)
+print_indices (1)
+print_parities (1)
+record_cmp_local (1)
+rem_item_cmp (1)
+rem_print_arc (1)
+rem_record_variant (1)
+rem_row_add_val (1)
+rem_split_variant (1)
+rem_table_free (1)
+rem_table_init (1)
+seen_add (1)
+coord_cmp_local (2)
+    src/rl1/generate_rl1_naive.c coord_less_local
+cycle_matches_cyclic (2)
+    src/core/cycle.c coord_eq
+cycle_vertex_index (2)
+    src/core/cycle.c coord_eq
+find_center_pos (2)
+    src/core/cycle.c coord_eq
+poly_equal_local (2)
+    src/core/cycle.c coord_eq
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+records_add (2)
+    src/rl1/ring_complete.c poly_to_string_local
+rem_arc_cmp (2)
+    src/rl0/generate_rl0.c rem_item_cmp
+rotate_order_to_min_item_shift (2)
+    src/rl0/generate_rl0.c cyclic_item_seq_less
+seen_has (2)
+    src/rl0/vcomp0.c poly_equal_local
+rem_arc_equal (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_row_cmp (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_val_cmp (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_find_row (4)
+    src/rl0/generate_rl0.c rem_arc_equal
+rem_add_row (5)
+    src/rl0/generate_rl0.c rem_find_row
+reorder_center_items_ccw (6)
+    src/rl0/generate_rl0.c rotate_order_to_min_item_shift
+    src/core/cycle.c coord_eq
+    src/rl0/generate_rl0.c find_center_pos
+write_records_to_file (6)
+    src/rl0/generate_rl0.c print_indices
+    src/rl0/generate_rl0.c print_parities
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+rem_emit_split (7)
+    src/rl0/generate_rl0.c rem_row_add_val
+    src/rl0/generate_rl0.c rem_add_row
+write_records_to_file (13)
+    src/rl0/generate_rl0.c rem_print_arc
+    src/rl0/generate_rl0.c rem_table_free
+    src/rl0/generate_rl0.c rem_emit_split
+    src/rl0/generate_rl0.c rem_split_variant
+    src/rl0/generate_rl0.c rem_record_variant
+    src/rl0/generate_rl0.c rem_table_init
+write_records (14)
+    src/rl0/generate_rl0.c write_records_to_file
+canonicalize_tile (19)
+    src/rl0/generate_rl0.c cycle_vertex_index
+    src/rl0/generate_rl0.c cycle_matches_cyclic
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+    src/core/cycle.c cycle_signed_area2
+emit_raw_completion (94)
+    src/rl1/generate_rl1_naive.c records_add
+    src/rl0/generate_rl0.c reorder_center_items_ccw
+    src/rl0/generate_rl0.c seen_add
+    src/rl0/generate_rl0.c seen_has
+    src/core/lattice.c lattice_direction_count
+    src/rl0/generate_rl0.c canonicalize_tile
+    src/core/boundary.c poly_has_live_boundary
+main (294)
+    src/rl0/generate_rl0.c write_records
+    src/throughput/vcomp.c vcomp_levels_destroy
+    src/rl0/generate_rl0.c emit_raw_completion
+    src/throughput/vcomp.c vcomp_enumerate_levels
+    src/throughput/vcomp.c vcomp_levels_init
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/generate_rl1_naive.c ensure_dir
+    src/core/tile.c tile_load
+
+--- src/rl1/search1_naive.c (512) ---
+RL1_MAX_COORDS (1)
+coord_cmp (1)
+print_arc (1)
+skip_ws (1)
+sv_free (1)
+sv_init (1)
+sv_push (1)
+coord_in_list (2)
+    src/core/cycle.c coord_eq
+edge_in_tiles (2)
+    src/core/cycle.c coord_eq
+expect_char (2)
+    src/rl1/ring_complete.c skip_ws
+find_dist (2)
+    src/core/cycle.c coord_eq
+map_has_key_exact (2)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+parse_int (2)
+    src/rl1/ring_complete.c skip_ws
+collect_tile_vertices (3)
+    src/rl1/generate_rl1_naive.c coord_in_list
+parse_coord_list (6)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c expect_char
+parse_cycle (6)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c expect_char
+compute_distances (7)
+    src/rl1/search1_naive.c edge_in_tiles
+    src/core/cycle.c coord_eq
+    src/rl1/search1_naive.c collect_tile_vertices
+rebuild_hidden (9)
+    src/rl1/generate_rl1_naive.c coord_in_list
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/search1_naive.c collect_tile_vertices
+parse_poly (10)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c parse_cycle
+    src/rl1/search1_naive.c expect_char
+parse_tile_list (10)
+    src/rl1/search1_naive.c parse_cycle
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c expect_char
+lookup_with_reflection (11)
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+parse_records (27)
+    src/rl1/search1_naive.c parse_tile_list
+    src/rl1/search1_naive.c parse_coord_list
+    src/rl1/search1_naive.c parse_poly
+choose_ports (29)
+    src/rl1/search1_naive.c print_arc
+    src/rl1/search1_naive.c map_has_key_exact
+    src/rl1/search1_naive.c lookup_with_reflection
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/rl1/search1_naive.c find_dist
+    src/rl1/search1_naive.c compute_distances
+run_record (136)
+    src/core/hash.c hash_destroy
+    src/rl1/search1_naive.c sv_free
+    src/rl0/attach0.c attach0_try_attach_arc
+    src/rl1/search1_naive.c choose_ports
+    src/rl1/ring_complete.c sv_push
+    src/core/hash.c hash_insert
+    src/rl1/search1_naive.c rebuild_hidden
+    src/core/hash.c hash_init
+    src/rl1/search1_naive.c sv_init
+main (239)
+    src/rl1/search1_naive.c run_record
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions
+    src/rl0/forget_map.c rl0_fm_init
+    src/rl1/search1_naive.c parse_records
+    src/core/tile.c tile_load
+
+--- src/throughput/vcomp_pipeline.c (540) ---
+coord_cmp (1)
+mix_u64 (1)
+poly_equal_local (1)
+pow2_ge (1)
+stateset_destroy (1)
+stateset_rehash (1)
+sv_destroy (1)
+sv_init (1)
+sv_push (1)
+poly_hash64 (2)
+    src/rl0/vcomp0.c mix_u64
+stateset_init (2)
+    src/rl0/vcomp0.c pow2_ge
+state_equal (3)
+    src/core/cycle.c coord_eq
+    src/rl0/vcomp0.c poly_equal_local
+state_hash64 (4)
+    src/rl0/vcomp0.c mix_u64
+    src/rl0/vcomp0.c poly_hash64
+stateset_insert (5)
+    src/rl0/vcomp0.c state_equal
+    src/rl0/vcomp0.c stateset_rehash
+ingest_raw (135)
+    src/core/hash.c hash_insert
+    src/rl1/ring_complete.c sv_push
+    src/rl0/vcomp0.c stateset_insert
+    src/rl0/vcomp0.c state_hash64
+    src/core/boundary.c poly_has_live_boundary
+    src/core/cycle.c poly_hash_key_lattice
+run_vcomp_levels (380)
+    src/rl0/vcomp0.c sv_destroy
+    src/rl0/vcomp0.c stateset_destroy
+    src/core/hash.c hash_destroy
+    src/throughput/vcomp.c vcomp_levels_destroy
+    src/throughput/vcomp_pipeline.c ingest_raw
+    src/throughput/vcomp.c vcomp_enumerate_levels
+    src/throughput/vcomp.c vcomp_levels_init
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/generate_rl1_naive.c on_level
+    src/core/hash.c hash_insert
+    src/rl0/vcomp0.c state_hash64
+    src/rl0/vcomp0.c stateset_insert
+    src/core/cycle.c poly_hash_key_lattice
+    src/rl1/ring_complete.c sv_push
+    src/core/hash.c hash_init
+    src/rl0/vcomp0.c stateset_init
+    src/rl1/search1_naive.c sv_init
+
+--- src/rl0/vcomp0.c (934) ---
+coord_cmp (1)
+mix_u64 (1)
+poly_equal_local (1)
+pow2_ge (1)
+stateset_destroy (1)
+stateset_rehash (1)
+sv_destroy (1)
+sv_init (1)
+sv_push (1)
+vcomp0_stats_init (1)
+poly_hash64 (2)
+    src/rl0/vcomp0.c mix_u64
+stateset_init (2)
+    src/rl0/vcomp0.c pow2_ge
+state_equal (3)
+    src/core/cycle.c coord_eq
+    src/rl0/vcomp0.c poly_equal_local
+state_hash64 (4)
+    src/rl0/vcomp0.c mix_u64
+    src/rl0/vcomp0.c poly_hash64
+coord_on_boundary0 (5)
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_vertices
+stateset_insert (5)
+    src/rl0/vcomp0.c state_equal
+    src/rl0/vcomp0.c stateset_rehash
+try_prescribed_arc0 (92)
+    src/rl0/vcomp0.c coord_on_boundary0
+    src/rl0/attach0.c attach0_try_attach_arc
+probe_prescribed_growth0 (107)
+    src/rl0/vcomp0.c try_prescribed_arc0
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+ingest_raw0 (176)
+    src/core/hash.c hash_insert
+    src/rl1/ring_complete.c sv_push
+    src/rl0/vcomp0.c stateset_insert
+    src/rl0/vcomp0.c state_hash64
+    src/core/boundary.c poly_has_live_boundary
+    src/rl0/boundary0.c boundary0_poly_has_live_boundary
+    src/core/cycle.c poly_hash_key_lattice
+run_vcomp0_levels (528)
+    src/rl0/vcomp0.c sv_destroy
+    src/rl0/vcomp0.c stateset_destroy
+    src/core/hash.c hash_destroy
+    src/throughput/vcomp.c vcomp_levels_destroy
+    src/rl0/vcomp0.c ingest_raw0
+    src/throughput/vcomp.c vcomp_enumerate_levels
+    src/throughput/vcomp.c vcomp_levels_init
+    src/rl0/vcomp0.c probe_prescribed_growth0
+    src/core/cycle.c coord_eq
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/generate_rl1_naive.c on_level
+    src/core/hash.c hash_insert
+    src/rl0/vcomp0.c state_hash64
+    src/rl0/vcomp0.c stateset_insert
+    src/core/cycle.c poly_hash_key_lattice
+    src/rl1/ring_complete.c sv_push
+    src/core/hash.c hash_init
+    src/rl0/vcomp0.c stateset_init
+    src/rl1/search1_naive.c sv_init
+
+--- src/rl1/ring_complete.c (1241) ---
+RC_MAX_COORDS (1)
+coord_cmp_local (1)
+nonempty_choice_count (1)
+poly_to_string_local (1)
+print_coord_list (1)
+print_cycle (1)
+reset_record0 (1)
+skip_ws (1)
+sv_push (1)
+usage (1)
+coord_in_list_local (2)
+    src/core/cycle.c coord_eq
+coord_on_boundary_local (2)
+    src/core/cycle.c coord_eq
+expect_char0 (2)
+    src/rl1/ring_complete.c skip_ws
+parse_int0 (2)
+    src/rl1/ring_complete.c skip_ws
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+all_schedule_gone (3)
+    src/rl1/ring_complete.c coord_on_boundary_local
+collect_tile_vertices_local (3)
+    src/rl1/ring_complete.c coord_in_list_local
+next_schedule_index (3)
+    src/rl1/ring_complete.c coord_on_boundary_local
+parse_int_line0 (3)
+    src/rl1/ring_complete.c parse_int0
+emit_imgtable (5)
+    src/core/tile.c tile_print_imgtable_shape
+parse_coord0 (5)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c expect_char0
+print_record (6)
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+    src/rl1/ring_complete.c print_cycle
+    src/rl1/ring_complete.c poly_to_string_local
+parse_coord_list0 (9)
+    src/rl1/ring_complete.c parse_coord0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_cycle0 (9)
+    src/rl1/ring_complete.c parse_coord0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+rebuild_hidden_local (9)
+    src/rl1/ring_complete.c coord_in_list_local
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/ring_complete.c collect_tile_vertices_local
+dictionary_choices_at (12)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+completed_hidden_vertices_are_legal (13)
+    src/rl0/forget_map.c rl0_fm_contains_complete
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/rl1/ring_complete.c coord_in_list_local
+parse_cycle_list0 (13)
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_poly0 (13)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c expect_char0
+choose_schedule_start (16)
+    src/rl1/ring_complete.c nonempty_choice_count
+    src/rl1/ring_complete.c dictionary_choices_at
+    src/rl1/ring_complete.c coord_on_boundary_local
+load_record0 (49)
+    src/rl1/ring_complete.c parse_cycle_list0
+    src/rl1/ring_complete.c parse_coord_list0
+    src/rl1/ring_complete.c parse_poly0
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c parse_int_line0
+    src/rl1/ring_complete.c reset_record0
+poly_to_key_local (57)
+    src/core/cycle.c poly_hash_key_lattice
+emit_final (105)
+    src/rl1/ring_complete.c sv_push
+    src/core/hash.c hash_insert
+    src/core/cycle.c poly_hash_key_lattice
+    src/rl0/boundary0.c boundary0_poly_has_live_boundary
+descend_next_ring (122)
+    src/rl1/ring_complete.c choose_schedule_start
+    src/rl1/ring_complete.c emit_final
+state_after_choice (166)
+    src/rl1/ring_complete.c poly_to_key_local
+    src/rl1/ring_complete.c completed_hidden_vertices_are_legal
+    src/rl1/ring_complete.c rebuild_hidden_local
+    src/rl0/attach0.c attach0_try_attach_arc
+descend_next_ring (185)
+    src/rl1/ring_complete.c state_after_choice
+    src/rl1/ring_complete.c dictionary_choices_at
+    src/rl1/ring_complete.c next_schedule_index
+    src/rl1/ring_complete.c all_schedule_gone
+main (415)
+    src/core/hash.c hash_destroy
+    src/rl1/ring_complete.c print_record
+    src/rl1/ring_complete.c emit_imgtable
+    src/rl1/ring_complete.c descend_next_ring
+    src/core/hash.c hash_init
+    src/rl1/ring_complete.c poly_to_key_local
+    src/rl1/ring_complete.c rebuild_hidden_local
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_with_deletions
+    src/rl0/forget_map.c rl0_fm_init
+    src/rl1/ring_complete.c load_record0
+    src/core/tile.c tile_load
+    src/rl1/ring_complete.c usage
+
+--- src/rl1/generate_rl1.c (1560) ---
+RL1_MAX_COORDS (1)
+append_text (1)
+coord_cmp_local (1)
+coord_less_local (1)
+ensure_dir (1)
+nonempty_choice_count (1)
+print_coord_list (1)
+print_cycle (1)
+usage (1)
+append_coord_text (2)
+    src/rl1/generate_rl1_naive.c append_text
+coord_in_list_local (2)
+    src/core/cycle.c coord_eq
+coord_on_boundary_local (2)
+    src/core/cycle.c coord_eq
+cycle_cmp_local (2)
+    src/rl1/generate_rl1_naive.c coord_less_local
+ensure_parent_dirs (2)
+    src/rl1/generate_rl1_naive.c ensure_dir
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+records_add (2)
+    src/rl1/ring_complete.c poly_to_string_local
+collect_tile_vertices_local (3)
+    src/rl1/ring_complete.c coord_in_list_local
+next_center_boundary_index (3)
+    src/rl1/ring_complete.c coord_on_boundary_local
+record_cmp_local (3)
+    src/rl1/generate_rl1_naive.c cycle_cmp_local
+poly_to_string_local (4)
+    src/rl1/generate_rl1_naive.c append_coord_text
+    src/rl1/generate_rl1_naive.c append_text
+all_center_vertices_gone (5)
+    src/rl1/ring_complete.c coord_in_list_local
+    src/rl1/ring_complete.c coord_on_boundary_local
+write_one_record (5)
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+    src/rl1/ring_complete.c print_cycle
+rewrite_sorted_records (6)
+    src/rl1/generate_rl1_naive.c write_one_record
+rebuild_hidden_local (9)
+    src/rl1/ring_complete.c coord_in_list_local
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/ring_complete.c collect_tile_vertices_local
+dictionary_choices_at (12)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+poly_to_key_local (57)
+    src/core/cycle.c poly_hash_key_lattice
+make_seed_state (67)
+    src/rl1/ring_complete.c poly_to_key_local
+    src/rl1/ring_complete.c rebuild_hidden_local
+print_seed_counts (81)
+    src/rl1/ring_complete.c nonempty_choice_count
+    src/rl1/ring_complete.c dictionary_choices_at
+    src/rl1/generate_rl1.c make_seed_state
+seed_branch_count_at (81)
+    src/rl1/ring_complete.c nonempty_choice_count
+    src/rl1/ring_complete.c dictionary_choices_at
+    src/rl1/generate_rl1.c make_seed_state
+choose_heuristic (82)
+    src/rl1/generate_rl1.c seed_branch_count_at
+state_after_choice (194)
+    src/rl1/ring_complete.c poly_to_key_local
+    src/rl0/boundary0.c boundary0_poly_has_live_boundary
+    src/rl1/ring_complete.c rebuild_hidden_local
+    src/rl0/attach0.c attach0_try_attach_arc
+dfs_ring (251)
+    src/rl1/ring_complete.c state_after_choice
+    src/rl1/ring_complete.c dictionary_choices_at
+    src/rl1/generate_rl1.c next_center_boundary_index
+    src/rl1/generate_rl1_naive.c records_add
+    src/core/hash.c hash_insert
+    src/core/cycle.c poly_hash_key_lattice
+    src/rl1/generate_rl1.c all_center_vertices_gone
+main (674)
+    src/rl1/generate_rl1_naive.c rewrite_sorted_records
+    src/core/hash.c hash_destroy
+    src/rl1/generate_rl1.c dfs_ring
+    src/core/hash.c hash_init
+    src/rl1/generate_rl1_naive.c ensure_parent_dirs
+    src/rl1/generate_rl1.c make_seed_state
+    src/rl1/generate_rl1.c seed_branch_count_at
+    src/rl1/generate_rl1.c choose_heuristic
+    src/rl1/generate_rl1.c print_seed_counts
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_with_deletions
+    src/rl0/forget_map.c rl0_fm_init
+    src/core/tile.c tile_load
+    src/rl1/ring_complete.c usage
+
+--- src/rl0/rl0_refine.c (2741) ---
+SEARCH0_MAX_COORDS (1)
+add_state_prov0 (1)
+append_key_text0 (1)
+coord_cmp0 (1)
+coord_less0 (1)
+count_marks0 (1)
+count_prov0 (1)
+count_unknown0 (1)
+deletion_set_max_level0 (1)
+emit_focus0 (1)
+emit_graph_node_update0 (1)
+emit_transition0 (1)
+fprint_arc0 (1)
+fprint_coord_list_line0 (1)
+fprint_fm_cycle0 (1)
+fprint_imgtable_basis0 (1)
+fprint_imgtable_constants0 (1)
+fprint_imgtable_cycle_raw0 (1)
+fprint_mark_list0 (1)
+graph_division_for_state0 (1)
+optimized_record0 (1)
+parse_optimize_records0 (1)
+parse_record_selection_token0 (1)
+print_find_node0 (1)
+printctx_free0 (1)
+progress_out0 (1)
+record_cycle_by_no0 (1)
+record_reset0 (1)
+selection_contains0 (1)
+skip_ws (1)
+statevec_add_merge0 (1)
+statevec_free0 (1)
+statevec_init0 (1)
+union_prov0 (1)
+append_key_vertex0 (2)
+    src/rl0/rl0_refine.c append_key_text0
+coord_in_list0 (2)
+    src/core/cycle.c coord_eq
+edge_in_tiles0 (2)
+    src/core/cycle.c coord_eq
+emit_graph_edge0 (2)
+    src/rl0/rl0_refine.c fprint_arc0
+expect_char0 (2)
+    src/rl1/ring_complete.c skip_ws
+find_dist0 (2)
+    src/core/cycle.c coord_eq
+fprint_tile_list0 (2)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+parse_int0 (2)
+    src/rl1/ring_complete.c skip_ws
+print_header0 (2)
+    src/rl0/rl0_refine.c progress_out0
+print_new_dead0 (2)
+    src/rl0/rl0_refine.c progress_out0
+write_level0_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+write_search_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+collect_tile_vertices0 (3)
+    src/rl0/rl0_refine.c coord_in_list0
+is_port0 (3)
+    src/rl0/rl0_refine.c edge_in_tiles0
+count_prov_with_escaped0 (4)
+    src/rl0/rl0_refine.c count_marks0
+    src/rl0/rl0_refine.c union_prov0
+    src/rl0/rl0_refine.c count_prov0
+cycle_in_list0 (4)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+fprint_imgtable_shape0 (4)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+    src/rl0/rl0_refine.c fprint_imgtable_basis0
+    src/rl0/rl0_refine.c fprint_imgtable_constants0
+poly_display_key0 (4)
+    src/rl0/rl0_refine.c append_key_vertex0
+    src/rl0/rl0_refine.c append_key_text0
+default_focus_coord0 (5)
+    src/rl0/rl0_refine.c coord_less0
+    src/core/boundary.c build_boundary_vertices
+collect_initial_exclusions0 (6)
+    src/rl0/forget_map.c rl0_fm_contains_complete
+parse_coord_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_cycle0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_int_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+print_progress0 (6)
+    src/rl0/rl0_refine.c print_new_dead0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c count_marks0
+    src/rl0/rl0_refine.c progress_out0
+compute_distances0 (7)
+    src/rl0/rl0_refine.c edge_in_tiles0
+    src/core/cycle.c coord_eq
+    src/rl0/rl0_refine.c collect_tile_vertices0
+rebuild_hidden0 (9)
+    src/rl0/rl0_refine.c coord_in_list0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c collect_tile_vertices0
+emit_graph_node0 (13)
+    src/rl0/rl0_refine.c fprint_imgtable_shape0
+    src/rl0/rl0_refine.c fprint_tile_list0
+    src/rl0/rl0_refine.c fprint_coord_list_line0
+    src/rl0/rl0_refine.c fprint_mark_list0
+    src/rl0/rl0_refine.c poly_display_key0
+parse_poly0 (13)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c expect_char0
+parse_tile_list0 (13)
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+strict_record_live0 (15)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+add_new_dead0 (17)
+    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
+    src/rl0/rl0_refine.c record_cycle_by_no0
+ensure_graph_node0 (20)
+    src/rl0/rl0_refine.c emit_graph_node0
+    src/rl0/rl0_refine.c emit_graph_node_update0
+    src/rl0/rl0_refine.c print_find_node0
+    src/rl0/rl0_refine.c poly_display_key0
+choose_port0 (27)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/rl0/rl0_refine.c find_dist0
+    src/rl0/rl0_refine.c is_port0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c compute_distances0
+graph_division_for_state0 (28)
+    src/rl0/rl0_refine.c choose_port0
+min_distance_all0 (28)
+    src/rl0/rl0_refine.c choose_port0
+rebuild_map0 (30)
+    src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
+    src/rl0/forget_map.c rl0_fm_init
+choose_focus_coord0 (33)
+    src/rl0/rl0_refine.c default_focus_coord0
+    src/rl0/rl0_refine.c choose_port0
+emit_state_focus0 (35)
+    src/rl0/rl0_refine.c choose_focus_coord0
+    src/rl0/rl0_refine.c emit_focus0
+parse_records0 (50)
+    src/rl0/rl0_refine.c parse_int_list0
+    src/rl0/rl0_refine.c parse_tile_list0
+    src/rl1/ring_complete.c parse_coord_list0
+    src/rl1/ring_complete.c parse_poly0
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
+    src/rl0/rl0_refine.c record_reset0
+regenerate_level0_deletions0 (52)
+    src/rl0/rl0_refine.c write_level0_deletions0
+    src/rl0/rl0_refine.c cycle_in_list0
+    src/rl0/rl0_refine.c strict_record_live0
+    src/rl0/forget_map.c rl0_fm_load_remembrance
+    src/rl0/forget_map.c rl0_fm_init
+emit_seed_statevec0 (56)
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+poly_to_key0 (57)
+    src/core/cycle.c poly_hash_key_lattice
+emit_relation0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+emit_transition0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+make_seed0 (67)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c rebuild_hidden0
+refilter_states0 (231)
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c emit_relation0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c statevec_init0
+state_after_attach0 (254)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_try_attach_arc
+checkpoint_fixed_point0 (300)
+    src/rl0/rl0_refine.c refilter_states0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c add_new_dead0
+    src/rl0/rl0_refine.c count_prov0
+    src/rl0/rl0_refine.c ensure_graph_node0
+main (1153)
+    src/rl0/rl0_refine.c printctx_free0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c write_search_deletions0
+    src/rl0/rl0_refine.c checkpoint_fixed_point0
+    src/rl0/rl0_refine.c emit_transition0
+    src/rl0/rl0_refine.c state_after_attach0
+    src/rl0/rl0_refine.c emit_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+    src/rl0/rl0_refine.c choose_port0
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c progress_out0
+    src/rl0/rl0_refine.c min_distance_all0
+    src/rl0/rl0_refine.c emit_seed_statevec0
+    src/rl0/rl0_refine.c print_progress0
+    src/rl0/rl0_refine.c print_header0
+    src/rl0/rl0_refine.c count_prov_with_escaped0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c make_seed0
+    src/rl0/forget_map.c rl0_fm_contains_complete
+    src/rl0/rl0_refine.c optimized_record0
+    src/rl0/rl0_refine.c selection_contains0
+    src/rl0/attach0.c attach0_closure_stats_init
+    src/rl0/rl0_refine.c statevec_init0
+    src/rl0/rl0_refine.c collect_initial_exclusions0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c deletion_set_max_level0
+    src/rl0/forget_map.c rl0_fm_load_deletions
+    src/rl0/rl0_refine.c regenerate_level0_deletions0
+    src/rl0/rl0_refine.c parse_records0
+    src/core/tile.c tile_load
+    src/rl0/rl0_refine.c parse_optimize_records0
+    src/rl0/rl0_refine.c parse_record_selection_token0
+
+--- src/rl0/search0.c (2749) ---
+SEARCH0_MAX_COORDS (1)
+add_state_prov0 (1)
+append_key_text0 (1)
+coord_cmp0 (1)
+coord_less0 (1)
+count_marks0 (1)
+count_prov0 (1)
+count_unknown0 (1)
+deletion_set_max_level0 (1)
+emit_focus0 (1)
+emit_graph_node_update0 (1)
+emit_transition0 (1)
+fprint_arc0 (1)
+fprint_coord_list_line0 (1)
+fprint_fm_cycle0 (1)
+fprint_imgtable_basis0 (1)
+fprint_imgtable_constants0 (1)
+fprint_imgtable_cycle_raw0 (1)
+fprint_mark_list0 (1)
+graph_division_for_state0 (1)
+optimized_record0 (1)
+parse_optimize_records0 (1)
+print_find_node0 (1)
+print_header0 (1)
+print_new_dead0 (1)
+printctx_free0 (1)
+record_cycle_by_no0 (1)
+record_reset0 (1)
+skip_ws (1)
+statevec_add_merge0 (1)
+statevec_free0 (1)
+statevec_init0 (1)
+union_prov0 (1)
+append_key_vertex0 (2)
+    src/rl0/rl0_refine.c append_key_text0
+coord_in_list0 (2)
+    src/core/cycle.c coord_eq
+edge_in_tiles0 (2)
+    src/core/cycle.c coord_eq
+emit_graph_edge0 (2)
+    src/rl0/rl0_refine.c fprint_arc0
+expect_char0 (2)
+    src/rl1/ring_complete.c skip_ws
+find_dist0 (2)
+    src/core/cycle.c coord_eq
+fprint_tile_list0 (2)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+parse_int0 (2)
+    src/rl1/ring_complete.c skip_ws
+write_level0_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+write_search_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+collect_tile_vertices0 (3)
+    src/rl0/rl0_refine.c coord_in_list0
+is_port0 (3)
+    src/rl0/rl0_refine.c edge_in_tiles0
+count_prov_with_escaped0 (4)
+    src/rl0/rl0_refine.c count_marks0
+    src/rl0/rl0_refine.c union_prov0
+    src/rl0/rl0_refine.c count_prov0
+cycle_in_list0 (4)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+fprint_imgtable_shape0 (4)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+    src/rl0/rl0_refine.c fprint_imgtable_basis0
+    src/rl0/rl0_refine.c fprint_imgtable_constants0
+poly_display_key0 (4)
+    src/rl0/rl0_refine.c append_key_vertex0
+    src/rl0/rl0_refine.c append_key_text0
+default_focus_coord0 (5)
+    src/rl0/rl0_refine.c coord_less0
+    src/core/boundary.c build_boundary_vertices
+print_progress0 (5)
+    src/rl0/rl0_refine.c print_new_dead0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c count_marks0
+collect_initial_exclusions0 (6)
+    src/rl0/forget_map.c rl0_fm_contains_complete
+parse_coord_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_cycle0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_int_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+compute_distances0 (7)
+    src/rl0/rl0_refine.c edge_in_tiles0
+    src/core/cycle.c coord_eq
+    src/rl0/rl0_refine.c collect_tile_vertices0
+rebuild_hidden0 (9)
+    src/rl0/rl0_refine.c coord_in_list0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c collect_tile_vertices0
+emit_graph_node0 (13)
+    src/rl0/rl0_refine.c fprint_imgtable_shape0
+    src/rl0/rl0_refine.c fprint_tile_list0
+    src/rl0/rl0_refine.c fprint_coord_list_line0
+    src/rl0/rl0_refine.c fprint_mark_list0
+    src/rl0/rl0_refine.c poly_display_key0
+parse_poly0 (13)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c expect_char0
+parse_tile_list0 (13)
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+strict_record_live0 (15)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+add_new_dead0 (17)
+    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
+    src/rl0/rl0_refine.c record_cycle_by_no0
+ensure_graph_node0 (20)
+    src/rl0/rl0_refine.c emit_graph_node0
+    src/rl0/rl0_refine.c emit_graph_node_update0
+    src/rl0/rl0_refine.c print_find_node0
+    src/rl0/rl0_refine.c poly_display_key0
+choose_port0 (27)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/rl0/rl0_refine.c find_dist0
+    src/rl0/rl0_refine.c is_port0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c compute_distances0
+graph_division_for_state0 (28)
+    src/rl0/rl0_refine.c choose_port0
+min_distance_all0 (28)
+    src/rl0/rl0_refine.c choose_port0
+choose_focus_coord0 (33)
+    src/rl0/rl0_refine.c default_focus_coord0
+    src/rl0/rl0_refine.c choose_port0
+emit_state_focus0 (35)
+    src/rl0/rl0_refine.c choose_focus_coord0
+    src/rl0/rl0_refine.c emit_focus0
+rebuild_map0 (39)
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+    src/rl0/forget_map.c rl0_fm_init
+parse_records0 (50)
+    src/rl0/rl0_refine.c parse_int_list0
+    src/rl0/rl0_refine.c parse_tile_list0
+    src/rl1/ring_complete.c parse_coord_list0
+    src/rl1/ring_complete.c parse_poly0
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
+    src/rl0/rl0_refine.c record_reset0
+emit_seed_statevec0 (56)
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+poly_to_key0 (57)
+    src/core/cycle.c poly_hash_key_lattice
+emit_relation0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+emit_transition0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+regenerate_level0_deletions0 (60)
+    src/rl0/rl0_refine.c write_level0_deletions0
+    src/rl0/rl0_refine.c cycle_in_list0
+    src/rl0/rl0_refine.c strict_record_live0
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+    src/rl0/forget_map.c rl0_fm_init
+make_seed0 (67)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c rebuild_hidden0
+refilter_states0 (231)
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c emit_relation0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c statevec_init0
+state_after_attach0 (254)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_try_attach_arc
+checkpoint_fixed_point0 (300)
+    src/rl0/rl0_refine.c refilter_states0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c add_new_dead0
+    src/rl0/rl0_refine.c count_prov0
+    src/rl0/rl0_refine.c ensure_graph_node0
+main (1150)
+    src/rl0/rl0_refine.c printctx_free0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c write_search_deletions0
+    src/rl0/rl0_refine.c checkpoint_fixed_point0
+    src/rl0/rl0_refine.c emit_transition0
+    src/rl0/rl0_refine.c state_after_attach0
+    src/rl0/rl0_refine.c emit_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+    src/rl0/rl0_refine.c choose_port0
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c min_distance_all0
+    src/rl0/rl0_refine.c emit_seed_statevec0
+    src/rl0/rl0_refine.c print_progress0
+    src/rl0/rl0_refine.c print_header0
+    src/rl0/rl0_refine.c count_prov_with_escaped0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c make_seed0
+    src/rl0/forget_map.c rl0_fm_contains_complete
+    src/rl0/rl0_refine.c optimized_record0
+    src/rl0/attach0.c attach0_closure_stats_init
+    src/rl0/rl0_refine.c statevec_init0
+    src/rl0/rl0_refine.c collect_initial_exclusions0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c deletion_set_max_level0
+    src/rl0/forget_map.c rl0_fm_load_deletions
+    src/rl0/rl0_refine.c regenerate_level0_deletions0
+    src/rl0/rl0_refine.c parse_records0
+    src/core/tile.c tile_load
+    src/rl0/rl0_refine.c parse_optimize_records0

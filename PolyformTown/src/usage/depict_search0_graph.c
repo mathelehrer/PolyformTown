@@ -1151,8 +1151,8 @@ static void sort_children_by_metric0(int *children,
     for (int i = start; i < start + count; i++) {
         for (int j = i + 1; j < start + count; j++) {
             int ci = children[i], cj = children[j];
-            if (metric_cache[cj] < metric_cache[ci] ||
-                (metric_cache[cj] == metric_cache[ci] && count_cache[cj] < count_cache[ci]) ||
+            if (metric_cache[cj] > metric_cache[ci] ||
+                (metric_cache[cj] == metric_cache[ci] && count_cache[cj] > count_cache[ci]) ||
                 (metric_cache[cj] == metric_cache[ci] && count_cache[cj] == count_cache[ci] && order_in_row[cj] < order_in_row[ci])) {
                 int tmp = children[i];
                 children[i] = children[j];
@@ -1176,6 +1176,68 @@ static void sort_tree_children_by_metric0(int n,
     }
 }
 
+
+static void filter_leaf_duplicate_boundary_nodes0(NodeVec *nodes, EdgeVec *edges) {
+    int n = nodes->count;
+    int m = edges->count;
+    int *outdeg = (int *)calloc((size_t)n, sizeof(int));
+    int *suppress = (int *)calloc((size_t)n, sizeof(int));
+    if (!outdeg || !suppress) exit(1);
+
+    for (int e = 0; e < m; e++) {
+        int si = find_node_index_by_id(nodes, edges->data[e].src);
+        int di = find_node_index_by_id(nodes, edges->data[e].dst);
+        if (si >= 0 && di >= 0 && si != di) outdeg[si]++;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (outdeg[i] != 0) continue;
+        if (!nodes->data[i].key[0]) continue;
+        for (int j = 0; j < n; j++) {
+            if (i == j) continue;
+            if (strcmp(nodes->data[i].key, nodes->data[j].key) != 0) continue;
+            if (outdeg[j] > 0 || j < i) {
+                suppress[i] = 1;
+                break;
+            }
+        }
+    }
+
+    {
+        GraphNode *new_nodes = (GraphNode *)calloc((size_t)n, sizeof(GraphNode));
+        GraphEdge *new_edges = (GraphEdge *)calloc((size_t)m, sizeof(GraphEdge));
+        int *keep_by_old = (int *)calloc((size_t)n, sizeof(int));
+        int new_n = 0, new_m = 0;
+        if (!new_nodes || !new_edges || !keep_by_old) exit(1);
+
+        for (int i = 0; i < n; i++) {
+            if (!suppress[i]) {
+                keep_by_old[i] = 1;
+                new_nodes[new_n++] = nodes->data[i];
+            }
+        }
+        for (int e = 0; e < m; e++) {
+            int si = find_node_index_by_id(nodes, edges->data[e].src);
+            int di = find_node_index_by_id(nodes, edges->data[e].dst);
+            if (si < 0 || di < 0) continue;
+            if (!keep_by_old[si] || !keep_by_old[di]) continue;
+            new_edges[new_m++] = edges->data[e];
+        }
+
+        free(nodes->data);
+        nodes->data = new_nodes;
+        nodes->count = new_n;
+        nodes->cap = new_n;
+        free(edges->data);
+        edges->data = new_edges;
+        edges->count = new_m;
+        edges->cap = new_m;
+        free(keep_by_old);
+    }
+
+    free(outdeg);
+    free(suppress);
+}
 
 static const char *edge_color0(int sublevel, int use_color) {
     if (!use_color) return "#777777";
@@ -1575,6 +1637,7 @@ int main(int argc, char **argv) {
     }
     if (fp != stdin) fclose(fp);
     qsort(nodes.data, (size_t)nodes.count, sizeof(GraphNode), cmp_node_step_id);
+    filter_leaf_duplicate_boundary_nodes0(&nodes, &edges);
     emit_svg(&nodes, &edges, use_color);
     free_nodes(&nodes);
     free(edges.data);

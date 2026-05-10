@@ -12,6 +12,7 @@ deleted from memory.
 
 ## Operating rules
 
+- L0045 — Keep generated data products in their own namespace
 - L0001 — Work from data
 - L0002 — No fabrication
 - L0003 — No false execution
@@ -20,7 +21,7 @@ deleted from memory.
 
 ## Current vcomp / runlevel model
 
-- L0044 — Rememberance is split/join accounting, not recursive recovery
+- L0044 — Remembrance is split/join accounting, not recursive recovery
 - L0041 — Differential vcomp events are event-local
 - L0042 — Track tiles is not a correctness dependency
 - L0043 — Live-boundary filtering changes the growth regime

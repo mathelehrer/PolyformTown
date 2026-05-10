@@ -50,6 +50,11 @@ int rl0_fm_deletions_contains_cycle(const RL0FMDeletionSet *set,
                                     int delete_through_level);
 int rl0_fm_load_deletions(RL0FMDeletionSet *set, const char *path);
 int rl0_fm_load_completions(RL0ForgetMap *map, const char *path);
+int rl0_fm_load_remembrance(RL0ForgetMap *map, const char *path);
+int rl0_fm_load_remembrance_filtered(RL0ForgetMap *map,
+                                      const char *path,
+                                      const RL0FMDeletionSet *deletions,
+                                      int delete_through_level);
 int rl0_fm_load_completions_with_deletions(RL0ForgetMap *map,
                                            const char *completions_path,
                                            const char *deletions_path,

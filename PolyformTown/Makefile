@@ -14,7 +14,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
 	rl1_depict_naive rl1_hexagons tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_refine depict_search0_graph
+	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map rl0_refine depict_search0_graph meta_graph_data
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -29,7 +29,7 @@ $(SRC)/%.o: $(SRC)/%.c
 
 clean:
 	rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/rl1/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o \
+		$(SRC)/rl1/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
@@ -38,6 +38,7 @@ clean:
 		$(BIN)/rl1_hexagons \
 		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
+		$(BIN)/gen_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check $(BIN)/check_indexed_variants \
 		tests/check_rl0 tests/check_rl0_forget_map
@@ -68,8 +69,8 @@ check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c
 	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
 
-check_rl0_rememberance_counts: rl0_data
-	python3 tests/check_rl0_rememberance_counts.py data/rl0/rememberance.dat data/rl0/rememberance_counts.txt
+check_rl0_remembrance_counts: rl0_data
+	python3 tests/check_rl0_remembrance_counts.py data/rl0/remembrance.dat data/rl0/remembrance_counts.txt
 
 check_rl0_forget_map: tests/check_rl0_forget_map
 tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
@@ -131,12 +132,20 @@ $(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFAC
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl0_refine: $(BIN)/rl0_refine
-$(BIN)/rl0_refine: $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl0/search0.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+$(BIN)/rl0_refine: $(SRC)/rl0/rl0_refine.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl0/rl0_refine.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 depict_search0_graph: $(BIN)/depict_search0_graph
 $(BIN)/depict_search0_graph: $(SRC)/usage/depict_search0_graph.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_search0_graph.o -lm
+
+meta_graph: $(BIN)/gen_graph
+$(BIN)/gen_graph: $(SRC)/meta/gen_graph.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/meta/gen_graph.o
+
+meta_graph_data: meta_graph
+	mkdir -p data/meta
+	$(BIN)/gen_graph src > data/meta/dependencies.txt
 
 test: all
 	./tests/smoke.sh
@@ -147,6 +156,10 @@ rl0_data: rl0_generate
 rl0_svg: rl0_data rl0_depict imgtable
 	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl0_all.svg
+
+rl0_refine_svg: rl0_refine depict_search0_graph
+	mkdir -p img
+	$(BIN)/rl0_refine --print | $(BIN)/depict_search0_graph --colors > img/rl0_refine.svg
 
 rl1_data: rl1_generate
 	mkdir -p data/rl1

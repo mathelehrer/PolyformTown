@@ -6,7 +6,7 @@
 
 <h2>RL0.x Optimized Eliminations</h2>
 
-<img src="./PolyformTown/img/rl0_gOptimized.svg" alt="RL0.x Optimized Eliminations" />
+<img src="./PolyformTown/img/rl0_refine.svg" alt="RL0.x Optimized Eliminations" />
 
 <p><em>Figure: Booting through 0.x efficiency surfaces.</em></p>
 

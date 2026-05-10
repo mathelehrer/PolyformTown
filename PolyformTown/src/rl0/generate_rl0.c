@@ -572,7 +572,9 @@ static int rem_emit_split(RL0RemTable *tab, int level, int valence,
     return rem_row_add_val(row, val);
 }
 
-static int write_rememberance_file(const RL0Ctx *ctx, const char *path) {
+static void write_records_to_file(FILE *fp, RL0Ctx *ctx);
+
+static int write_remembrance_file(const RL0Ctx *ctx, const char *path) {
     RL0RemTable tab;
     int ok = 1;
     rem_table_init(&tab);
@@ -608,7 +610,7 @@ static int write_rememberance_file(const RL0Ctx *ctx, const char *path) {
         rem_table_free(&tab);
         return 0;
     }
-    fprintf(fp, "# RL0 rememberance dictionary.\n");
+    fprintf(fp, "# RL0 remembrance dictionary.\n");
     fprintf(fp, "# Generated with data/rl0/completions.dat by rl0_generate.\n");
     fprintf(fp, "# Format: v=<valence> <key_arc> :\n");
     fprintf(fp, "# Values are listed one per indented line. Each value satisfies canonical(key + value) = valid vertex figure.\n");
@@ -640,7 +642,7 @@ static int write_rememberance_file(const RL0Ctx *ctx, const char *path) {
     return 1;
 }
 
-static void write_records(RL0Ctx *ctx) {
+static void write_records_to_file(FILE *fp, RL0Ctx *ctx) {
     qsort(ctx->records,
           ctx->record_count,
           sizeof(*ctx->records),
@@ -648,30 +650,34 @@ static void write_records(RL0Ctx *ctx) {
 
     for (size_t i = 0; i < ctx->record_count; i++) {
         const RL0Record *rec = &ctx->records[i];
-        fprintf(ctx->fp, "---[%zu]---\n", i + 1);
-        fprintf(ctx->fp, "valence:%d\n", rec->valence);
-        fprintf(ctx->fp, "tile_count:%d\n", rec->tile_count);
-        fprintf(ctx->fp,
+        fprintf(fp, "---[%zu]---\n", i + 1);
+        fprintf(fp, "valence:%d\n", rec->valence);
+        fprintf(fp, "tile_count:%d\n", rec->tile_count);
+        fprintf(fp,
                 "center:(%d,%d,%d)\n",
                 rec->center.v,
                 rec->center.x,
                 rec->center.y);
-        fprintf(ctx->fp, "boundary:");
-        fputs(rec->boundary_str, ctx->fp);
-        fprintf(ctx->fp, "\n");
-        fprintf(ctx->fp, "constellation:");
-        print_coord_list(ctx->fp, rec->hidden, rec->hidden_count);
-        fprintf(ctx->fp, "\n");
-        fprintf(ctx->fp, "tiles:");
-        print_tile_list(ctx->fp, rec->tiles, rec->tile_count);
-        fprintf(ctx->fp, "\n");
-        fprintf(ctx->fp, "parities:");
-        print_parities(ctx->fp, rec->parities, rec->tile_count);
-        fprintf(ctx->fp, "\n");
-        fprintf(ctx->fp, "indices:");
-        print_indices(ctx->fp, rec->indices, rec->tile_count);
-        fprintf(ctx->fp, "\n");
+        fprintf(fp, "boundary:");
+        fputs(rec->boundary_str, fp);
+        fprintf(fp, "\n");
+        fprintf(fp, "constellation:");
+        print_coord_list(fp, rec->hidden, rec->hidden_count);
+        fprintf(fp, "\n");
+        fprintf(fp, "tiles:");
+        print_tile_list(fp, rec->tiles, rec->tile_count);
+        fprintf(fp, "\n");
+        fprintf(fp, "parities:");
+        print_parities(fp, rec->parities, rec->tile_count);
+        fprintf(fp, "\n");
+        fprintf(fp, "indices:");
+        print_indices(fp, rec->indices, rec->tile_count);
+        fprintf(fp, "\n");
     }
+}
+
+static void write_records(RL0Ctx *ctx) {
+    write_records_to_file(ctx->fp, ctx);
 }
 
 static int emit_raw_completion(const VCompRawState *raw, RL0Ctx *ctx) {
@@ -820,8 +826,8 @@ int main(int argc, char **argv) {
     }
 
     write_records(&ctx);
-    if (!write_rememberance_file(&ctx, "data/rl0/rememberance.dat")) {
-        fprintf(stderr, "failed to write data/rl0/rememberance.dat\n");
+    if (!write_remembrance_file(&ctx, "data/rl0/remembrance.dat")) {
+        fprintf(stderr, "failed to write data/rl0/remembrance.dat\n");
         fclose(fp);
         free(ctx.seen);
         for (size_t i = 0; i < ctx.record_count; i++) {

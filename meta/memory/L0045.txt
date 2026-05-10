@@ -1,0 +1,12 @@
+# L0045 — Keep generated data products in their own namespace
+
+Do not store generated binaries or derived analysis output under `src/`.
+Source for meta tools belongs in `PolyformTown/src/meta/`; compiled meta
+binaries belong in `PolyformTown/bin/`; generated dependency reports belong
+under `PolyformTown/data/meta/`.  This keeps source, tools, and data products
+separate enough for both humans and machines to reason about the tree.
+
+Do not mix unrelated schemas into a data file merely to make a consumer easier
+to write.  In particular, `data/rl0/remembrance.dat` is the split/join
+dictionary only.  Seed records should be reconstructed from the dictionary
+when that path is reliable, or read from `data/rl0/completions.dat` until then.
