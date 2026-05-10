@@ -20,6 +20,7 @@ deleted from memory.
 
 ## Current vcomp / runlevel model
 
+- L0044 — Rememberance is split/join accounting, not recursive recovery
 - L0041 — Differential vcomp events are event-local
 - L0042 — Track tiles is not a correctness dependency
 - L0043 — Live-boundary filtering changes the growth regime

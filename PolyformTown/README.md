@@ -124,8 +124,9 @@ Print the canonical vertex-completion representatives at level `N`.
 ### rl0_generate
 
 Generate RL0 completion records and write them to
-`data/rl0/completions.dat`.
-Schema notes are stored in `data/rl0/completions.meta`.
+`data/rl0/completions.dat`.  The same run also writes the derived
+split/join rememberance dictionary to `data/rl0/rememberance.dat`.
+Schema notes are stored in `data/rl0/completions.meta` and `../SCHEMA.md`.
 
 Each record has attributes:
 `valence`, `tile_count`, `canonical_boundary`, `tiles`, `indices`.
@@ -143,6 +144,16 @@ make rl0_data
 ```
 
 Default tile is `preferences/focus.tile`.
+
+Rememberance accounting check:
+
+```bash
+make check_rl0_rememberance_counts
+```
+
+This regenerates RL0 data and writes level-by-level LHS/RHS counts to
+`data/rl0/rememberance_counts.txt`.  The rememberance file groups rows by
+key size and prints each alternative value on its own indented line.
 
 ### rl0_refine (provisional)
 

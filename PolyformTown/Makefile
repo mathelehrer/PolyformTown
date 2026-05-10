@@ -68,6 +68,9 @@ check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c
 	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
 
+check_rl0_rememberance_counts: rl0_data
+	python3 tests/check_rl0_rememberance_counts.py data/rl0/rememberance.dat data/rl0/rememberance_counts.txt
+
 check_rl0_forget_map: tests/check_rl0_forget_map
 tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl0_forget_map.c 		$(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)

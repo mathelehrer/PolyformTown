@@ -1,0 +1,12 @@
+# L0044 — Rememberance is split/join accounting, not recursive recovery
+
+For RL0 indexed vertex figures, the useful rememberance data is a finite
+split/join dictionary.  A row `key : value...` means each value completes the
+arc so that `canonical(key + value)` is a valid full vertex figure.  This is
+more useful than an atomistic recursive append table because consumers receive
+whole complementary arcs that can be geometrically checked as a unit.
+
+The checker should first perform non-recursive accounting by level: count the
+full figures produced by all `key + value` joins and compare those counts to
+the variant counts advertised by the empty-key dictionary.  Do not assume the
+counts pass; print/write discrepancies so collisions can be investigated.

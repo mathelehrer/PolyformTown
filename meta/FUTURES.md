@@ -15,6 +15,7 @@ A leading check mark (`✓`) indicates a completed item, which is moved to
 
 ## ACTIVE
 
+- F0039 — Strengthen rememberance proof beyond count accounting
 - F0025 — RL0 liveness and index validation for RL1 pruning
 - F0028 — Full live-boundary lookahead to tile-surround horizon
 - F0030 — Formalize the tile-surround constellation bound

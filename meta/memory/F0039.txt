@@ -1,0 +1,7 @@
+# F0039 — Strengthen rememberance proof beyond count accounting
+
+Current rememberance count checking verifies that split/join rows account for
+variant multiplicities by level.  After the accounting is stable, add the
+stronger geometric proof checker: for each candidate join, reconstruct the
+indexed vertex figure with actual boundary conditions and validate it against
+geometry rather than only item-list canonicalization.

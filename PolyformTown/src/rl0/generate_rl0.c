@@ -405,6 +405,241 @@ static int record_cmp_local(const void *A, const void *B) {
     return 0;
 }
 
+
+
+typedef struct {
+    int n;
+    int p[RL0_MAX_TRACE];
+    int idx[RL0_MAX_TRACE];
+} RL0RemArc;
+
+typedef struct {
+    int level;
+    int valence;
+    RL0RemArc key;
+    RL0RemArc *vals;
+    size_t val_count;
+    size_t val_cap;
+} RL0RemRow;
+
+typedef struct {
+    RL0RemRow *rows;
+    size_t count;
+    size_t cap;
+} RL0RemTable;
+
+static int rem_item_cmp(int ap, int ai, int bp, int bi) {
+    if (ap != bp) return (ap < bp) ? -1 : 1;
+    if (ai != bi) return (ai < bi) ? -1 : 1;
+    return 0;
+}
+
+static int rem_arc_cmp(const RL0RemArc *a, const RL0RemArc *b) {
+    if (a->n != b->n) return (a->n < b->n) ? -1 : 1;
+    for (int k = 0; k < a->n; k++) {
+        int c = rem_item_cmp(a->p[k], a->idx[k], b->p[k], b->idx[k]);
+        if (c) return c;
+    }
+    return 0;
+}
+
+static int rem_row_cmp(const void *A, const void *B) {
+    const RL0RemRow *a = A;
+    const RL0RemRow *b = B;
+    if (a->level != b->level) return (a->level < b->level) ? -1 : 1;
+    if (a->valence != b->valence) return (a->valence < b->valence) ? -1 : 1;
+    return rem_arc_cmp(&a->key, &b->key);
+}
+
+static int rem_val_cmp(const void *A, const void *B) {
+    const RL0RemArc *a = A;
+    const RL0RemArc *b = B;
+    return rem_arc_cmp(a, b);
+}
+
+static int rem_arc_equal(const RL0RemArc *a, const RL0RemArc *b) {
+    return rem_arc_cmp(a, b) == 0;
+}
+
+static void rem_table_init(RL0RemTable *t) {
+    memset(t, 0, sizeof(*t));
+}
+
+static void rem_table_free(RL0RemTable *t) {
+    if (!t) return;
+    for (size_t r = 0; r < t->count; r++) free(t->rows[r].vals);
+    free(t->rows);
+    memset(t, 0, sizeof(*t));
+}
+
+static RL0RemRow *rem_find_row(RL0RemTable *t, int level, int valence, const RL0RemArc *key) {
+    for (size_t r = 0; r < t->count; r++) {
+        if (t->rows[r].level == level &&
+            t->rows[r].valence == valence &&
+            rem_arc_equal(&t->rows[r].key, key)) {
+            return &t->rows[r];
+        }
+    }
+    return NULL;
+}
+
+static RL0RemRow *rem_add_row(RL0RemTable *t, int level, int valence, const RL0RemArc *key) {
+    RL0RemRow *row = rem_find_row(t, level, valence, key);
+    if (row) return row;
+    if (t->count == t->cap) {
+        size_t nc = t->cap ? t->cap * 2 : 128;
+        RL0RemRow *nr = realloc(t->rows, nc * sizeof(*nr));
+        if (!nr) return NULL;
+        t->rows = nr;
+        t->cap = nc;
+    }
+    row = &t->rows[t->count++];
+    memset(row, 0, sizeof(*row));
+    row->level = level;
+    row->valence = valence;
+    row->key = *key;
+    return row;
+}
+
+static int rem_row_add_val(RL0RemRow *row, const RL0RemArc *val) {
+    if (row->val_count == row->val_cap) {
+        size_t nc = row->val_cap ? row->val_cap * 2 : 8;
+        RL0RemArc *nv = realloc(row->vals, nc * sizeof(*nv));
+        if (!nv) return 0;
+        row->vals = nv;
+        row->val_cap = nc;
+    }
+    row->vals[row->val_count++] = *val;
+    return 1;
+}
+
+static void rem_print_arc(FILE *fp, const RL0RemArc *a) {
+    fprintf(fp, "[");
+    for (int k = 0; k < a->n; k++) {
+        if (k) fprintf(fp, ",");
+        fprintf(fp, "[%d,%d]", a->p[k], a->idx[k]);
+    }
+    fprintf(fp, "]");
+}
+
+static void rem_record_variant(const RL0Record *rec, int reflected, int shift, RL0RemArc *out) {
+    RL0RemArc base;
+    int n = rec->tile_count;
+    memset(&base, 0, sizeof(base));
+    base.n = n;
+    if (!reflected) {
+        for (int k = 0; k < n; k++) {
+            base.p[k] = rec->parities[k];
+            base.idx[k] = rec->indices[k];
+        }
+    } else {
+        for (int k = 0; k < n; k++) {
+            int src = n - 1 - k;
+            base.p[k] = -rec->parities[src];
+            base.idx[k] = rec->indices[src];
+        }
+    }
+    memset(out, 0, sizeof(*out));
+    out->n = n;
+    for (int k = 0; k < n; k++) {
+        int src = (shift + k) % n;
+        out->p[k] = base.p[src];
+        out->idx[k] = base.idx[src];
+    }
+}
+
+static void rem_split_variant(const RL0RemArc *full, int key_len, RL0RemArc *key, RL0RemArc *val) {
+    memset(key, 0, sizeof(*key));
+    memset(val, 0, sizeof(*val));
+    key->n = key_len;
+    val->n = full->n - key_len;
+    for (int k = 0; k < key->n; k++) {
+        key->p[k] = full->p[k];
+        key->idx[k] = full->idx[k];
+    }
+    for (int k = 0; k < val->n; k++) {
+        int src = key_len + k;
+        val->p[k] = full->p[src];
+        val->idx[k] = full->idx[src];
+    }
+}
+
+static int rem_emit_split(RL0RemTable *tab, int level, int valence,
+                          const RL0RemArc *key, const RL0RemArc *val) {
+    RL0RemRow *row = rem_add_row(tab, level, valence, key);
+    if (!row) return 0;
+    if (val->n <= 0) return 1;
+    return rem_row_add_val(row, val);
+}
+
+static int write_rememberance_file(const RL0Ctx *ctx, const char *path) {
+    RL0RemTable tab;
+    int ok = 1;
+    rem_table_init(&tab);
+
+    for (size_t r = 0; r < ctx->record_count && ok; r++) {
+        const RL0Record *rec = &ctx->records[r];
+        int n = rec->tile_count;
+        for (int refl = 0; refl < 2 && ok; refl++) {
+            for (int shift = 0; shift < n && ok; shift++) {
+                RL0RemArc full;
+                rem_record_variant(rec, refl, shift, &full);
+                for (int k = 0; k <= n; k++) {
+                    RL0RemArc key, val;
+                    rem_split_variant(&full, k, &key, &val);
+                    if (!rem_emit_split(&tab, k, rec->valence, &key, &val)) ok = 0;
+                }
+            }
+        }
+    }
+
+    if (!ok) {
+        rem_table_free(&tab);
+        return 0;
+    }
+
+    qsort(tab.rows, tab.count, sizeof(*tab.rows), rem_row_cmp);
+    for (size_t r = 0; r < tab.count; r++) {
+        qsort(tab.rows[r].vals, tab.rows[r].val_count, sizeof(*tab.rows[r].vals), rem_val_cmp);
+    }
+
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        rem_table_free(&tab);
+        return 0;
+    }
+    fprintf(fp, "# RL0 rememberance dictionary.\n");
+    fprintf(fp, "# Generated with data/rl0/completions.dat by rl0_generate.\n");
+    fprintf(fp, "# Format: v=<valence> <key_arc> :\n");
+    fprintf(fp, "# Values are listed one per indented line. Each value satisfies canonical(key + value) = valid vertex figure.\n");
+    fprintf(fp, "# Full/maximal valid figures are present as rows with an empty value list.\n\n");
+
+    int cur_level = -1;
+    for (size_t r = 0; r < tab.count; r++) {
+        const RL0RemRow *row = &tab.rows[r];
+        if (row->level != cur_level) {
+            if (cur_level >= 0) fprintf(fp, "\n");
+            cur_level = row->level;
+            fprintf(fp, "---[%d]---\n", cur_level);
+        }
+        fprintf(fp, "v=%d ", row->valence);
+        rem_print_arc(fp, &row->key);
+        fprintf(fp, " :\n");
+        if (row->val_count == 0) {
+            fprintf(fp, "  - []\n");
+        } else {
+            for (size_t j = 0; j < row->val_count; j++) {
+                fprintf(fp, "  - ");
+                rem_print_arc(fp, &row->vals[j]);
+                fprintf(fp, "\n");
+            }
+        }
+    }
+    fclose(fp);
+    rem_table_free(&tab);
+    return 1;
+}
+
 static void write_records(RL0Ctx *ctx) {
     qsort(ctx->records,
           ctx->record_count,
@@ -585,6 +820,16 @@ int main(int argc, char **argv) {
     }
 
     write_records(&ctx);
+    if (!write_rememberance_file(&ctx, "data/rl0/rememberance.dat")) {
+        fprintf(stderr, "failed to write data/rl0/rememberance.dat\n");
+        fclose(fp);
+        free(ctx.seen);
+        for (size_t i = 0; i < ctx.record_count; i++) {
+            free(ctx.records[i].boundary_str);
+        }
+        free(ctx.records);
+        return 1;
+    }
 
     fclose(fp);
     free(ctx.seen);
