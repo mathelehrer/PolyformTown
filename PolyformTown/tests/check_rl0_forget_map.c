@@ -75,10 +75,18 @@ static int parse_record_header_no(const char *line){
 
 static void test_basic_dictionary(void){
     RL0ForgetMap *map=calloc(1,sizeof(*map)); RL0FMCycle c; const RL0FMArc *values=NULL; int value_count=0; assert_true(map!=NULL,"allocate tiny map");
-    rl0_fm_init(map); c.n=4; c.item[0].p=1;c.item[0].i=1; c.item[1].p=1;c.item[1].i=2; c.item[2].p=-1;c.item[2].i=3; c.item[3].p=1;c.item[3].i=4; map->cycles[map->cycle_count++]=c; assert_true(rl0_fm_build_from_cycles(map),"build tiny dictionary");
+    rl0_fm_init(map);
+    c.n=4; c.item[0].p=1;c.item[0].i=1; c.item[1].p=1;c.item[1].i=2; c.item[2].p=-1;c.item[2].i=3; c.item[3].p=1;c.item[3].i=4;
+    map->cycle_capacity=1;
+    map->cycles=calloc((size_t)map->cycle_capacity,sizeof(map->cycles[0]));
+    assert_true(map->cycles!=NULL,"allocate tiny dictionary cycle storage");
+    map->cycles[map->cycle_count++]=c;
+    assert_true(rl0_fm_build_from_cycles(map),"build tiny dictionary");
     RL0FMArc empty={0}; assert_true(rl0_fm_lookup(map,&empty,&values,&value_count),"empty basement lookup exists"); assert_true(value_count==1&&values[0].n==4,"empty lookup returns full cycle");
     RL0FMCycle canon; rl0_fm_canonicalize_cycle(&c,&canon); assert_true(rl0_fm_contains_complete(map,&canon),"complete ceiling lookup returns true");
-    RL0FMArc kept; kept.n=2; kept.item[0]=c.item[3]; kept.item[1]=c.item[0]; assert_true(rl0_fm_lookup(map,&kept,&values,&value_count),"middle lookup exists"); assert_true(value_count>0,"middle lookup has completions"); free(map);
+    RL0FMArc kept; kept.n=2; kept.item[0]=c.item[3]; kept.item[1]=c.item[0]; assert_true(rl0_fm_lookup(map,&kept,&values,&value_count),"middle lookup exists"); assert_true(value_count>0,"middle lookup has completions");
+    rl0_fm_clear(map);
+    free(map);
 }
 
 
