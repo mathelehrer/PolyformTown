@@ -168,14 +168,22 @@ typedef struct {
     int checked;
     int skipped;
     int failed;
-    int fail_record_no[RL0_FM_MAX_DELETIONS];
+    int fail_capacity;
+    int *fail_record_no;
 } RL0ScanResult;
 
 static void scan_result_init(RL0ScanResult *r){ memset(r,0,sizeof(*r)); }
 
-static void scan_result_add_failure(RL0ScanResult *r,int record_no){
-    if(r->failed<RL0_FM_MAX_DELETIONS) r->fail_record_no[r->failed]=record_no;
-    r->failed++;
+static int scan_result_add_failure(RL0ScanResult *r,int record_no){
+    if(r->failed>=r->fail_capacity){
+        int new_capacity=r->fail_capacity?r->fail_capacity*2:16;
+        int *new_records=realloc(r->fail_record_no,(size_t)new_capacity*sizeof(r->fail_record_no[0]));
+        if(!new_records) return 0;
+        r->fail_record_no=new_records;
+        r->fail_capacity=new_capacity;
+    }
+    r->fail_record_no[r->failed++]=record_no;
+    return 1;
 }
 
 static int scan_rl0_records(const char *path,
@@ -200,7 +208,7 @@ static int scan_rl0_records(const char *path,
                 } else {
                     result->checked++;
                     if(!check_record_live(&rec,tile,map,dump_unexpected)){
-                        scan_result_add_failure(result,rec.file_record_no);
+                        if(!scan_result_add_failure(result,rec.file_record_no)){ fclose(fp); return 0; }
                     }
                 }
             }
@@ -224,7 +232,7 @@ static int scan_rl0_records(const char *path,
         } else {
             result->checked++;
             if(!check_record_live(&rec,tile,map,dump_unexpected)){
-                scan_result_add_failure(result,rec.file_record_no);
+                if(!scan_result_add_failure(result,rec.file_record_no)){ fclose(fp); return 0; }
             }
         }
     }
@@ -338,14 +346,22 @@ typedef struct {
     int forced_vertices;
     int zero_choice_failures;
     int unresolved_vertices;
-    int fail_record_no[RL0_FM_MAX_DELETIONS];
+    int fail_capacity;
+    int *fail_record_no;
 } RL0ClosureScan;
 
 static void closure_scan_init(RL0ClosureScan *s){ memset(s,0,sizeof(*s)); }
 
-static void closure_scan_add_failure(RL0ClosureScan *s,int record_no){
-    if(s->records_failed<RL0_FM_MAX_DELETIONS) s->fail_record_no[s->records_failed]=record_no;
-    s->records_failed++;
+static int closure_scan_add_failure(RL0ClosureScan *s,int record_no){
+    if(s->records_failed>=s->fail_capacity){
+        int new_capacity=s->fail_capacity?s->fail_capacity*2:16;
+        int *new_records=realloc(s->fail_record_no,(size_t)new_capacity*sizeof(s->fail_record_no[0]));
+        if(!new_records) return 0;
+        s->fail_record_no=new_records;
+        s->fail_capacity=new_capacity;
+    }
+    s->fail_record_no[s->records_failed++]=record_no;
+    return 1;
 }
 
 static void scan_closure_record(const RL0TestRecord *rec,
@@ -372,7 +388,7 @@ static void scan_closure_record(const RL0TestRecord *rec,
                                    1024,
                                    &astats,
                                    &cstats)){
-        closure_scan_add_failure(scan,rec->file_record_no);
+        (void)closure_scan_add_failure(scan,rec->file_record_no);
         fprintf(stderr,
                 "forced closure failed: RL0 record %d forced_steps=%d zero=%d forced_fail=%d unresolved=%d\n",
                 rec->file_record_no,
@@ -446,8 +462,9 @@ static int write_level0_deletions_from_scan(const char *completions_path,
     FILE *out=NULL;
     char line[262144];
     RL0TestRecord rec;
-    RL0FMCycle cycles[RL0_FM_MAX_DELETIONS];
+    RL0FMCycle *cycles=NULL;
     int cycle_count=0;
+    int cycle_capacity=0;
     int stream_recno=0;
     if(!in) return 0;
     reset_record(&rec);
@@ -463,7 +480,13 @@ static int write_level0_deletions_from_scan(const char *completions_path,
                 rl0_fm_canonicalize_cycle(&c,&c);
                 for(int i=0;i<cycle_count;i++) if(rl0_fm_cycle_equal(&cycles[i],&c)) dup=1;
                 if(!dup){
-                    if(cycle_count>=RL0_FM_MAX_DELETIONS){ fclose(in); return 0; }
+                    if(cycle_count>=cycle_capacity){
+                        int new_capacity=cycle_capacity?cycle_capacity*2:16;
+                        RL0FMCycle *new_cycles=realloc(cycles,(size_t)new_capacity*sizeof(cycles[0]));
+                        if(!new_cycles){ fclose(in); free(cycles); return 0; }
+                        cycles=new_cycles;
+                        cycle_capacity=new_capacity;
+                    }
                     cycles[cycle_count++]=c;
                 }
             }
@@ -489,13 +512,19 @@ static int write_level0_deletions_from_scan(const char *completions_path,
         rl0_fm_canonicalize_cycle(&c,&c);
         for(int i=0;i<cycle_count;i++) if(rl0_fm_cycle_equal(&cycles[i],&c)) dup=1;
         if(!dup){
-            if(cycle_count>=RL0_FM_MAX_DELETIONS){ fclose(in); return 0; }
+            if(cycle_count>=cycle_capacity){
+                int new_capacity=cycle_capacity?cycle_capacity*2:16;
+                RL0FMCycle *new_cycles=realloc(cycles,(size_t)new_capacity*sizeof(cycles[0]));
+                if(!new_cycles){ fclose(in); free(cycles); return 0; }
+                cycles=new_cycles;
+                cycle_capacity=new_capacity;
+            }
             cycles[cycle_count++]=c;
         }
     }
     fclose(in);
     out=fopen(deletions_path,"w");
-    if(!out) return 0;
+    if(!out){ free(cycles); return 0; }
     fprintf(out,"# RL0 indexed vertex-figure deletions.\n");
     fprintf(out,"# Regenerated by check_rl0_forget_map because deletions.dat was missing.\n");
     fprintf(out,"# Reflections are generated at dictionary load time.\n\n");

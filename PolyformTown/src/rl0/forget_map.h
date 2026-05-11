@@ -4,10 +4,6 @@
 #include <stddef.h>
 
 #define RL0_FM_MAX_ITEMS 16
-#define RL0_FM_MAX_CYCLES 512
-#define RL0_FM_MAX_ROWS 16384
-#define RL0_FM_MAX_VALUES 512
-#define RL0_FM_MAX_DELETIONS 512
 
 /* Indexed vertex figure item.  p is parity/orientation (+1 or -1),
    i is the source/canonical tile vertex index under that parity. */
@@ -25,25 +21,31 @@ typedef RL0FMCycle RL0FMArc;
 
 typedef struct {
     int count;
-    int level[RL0_FM_MAX_DELETIONS];
-    RL0FMCycle cycle[RL0_FM_MAX_DELETIONS];
+    int capacity;
+    int *level;
+    RL0FMCycle *cycle;
 } RL0FMDeletionSet;
 
 typedef struct {
     RL0FMArc key;
-    RL0FMArc values[RL0_FM_MAX_VALUES];
+    RL0FMArc *values;
     int value_count;
+    int value_capacity;
 } RL0FMRow;
 
 typedef struct {
-    RL0FMCycle cycles[RL0_FM_MAX_CYCLES];
+    RL0FMCycle *cycles;
     int cycle_count;
-    RL0FMRow rows[RL0_FM_MAX_ROWS];
+    int cycle_capacity;
+    RL0FMRow *rows;
     int row_count;
+    int row_capacity;
 } RL0ForgetMap;
 
 void rl0_fm_init(RL0ForgetMap *map);
+void rl0_fm_clear(RL0ForgetMap *map);
 void rl0_fm_deletions_init(RL0FMDeletionSet *set);
+void rl0_fm_deletions_clear(RL0FMDeletionSet *set);
 int rl0_fm_deletions_add_cycle(RL0FMDeletionSet *set, int level, const RL0FMCycle *cycle);
 int rl0_fm_deletions_contains_cycle(const RL0FMDeletionSet *set,
                                     const RL0FMCycle *cycle,
@@ -59,6 +61,7 @@ int rl0_fm_load_completions_with_deletions(RL0ForgetMap *map,
                                            const char *completions_path,
                                            const char *deletions_path,
                                            int delete_through_level);
+int rl0_fm_delete_cycle_from_map(RL0ForgetMap *map, const RL0FMCycle *cycle);
 int rl0_fm_load_completions_filtered(RL0ForgetMap *map,
                                       const char *path,
                                       const RL0FMDeletionSet *deletions,

@@ -750,7 +750,7 @@ static int rebuild_map0(RL0ForgetMap *map,
                         const char *remembrance_path,
                         const RL0FMDeletionSet *deletions,
                         int delete_through_level) {
-    rl0_fm_init(map);
+    rl0_fm_clear(map);
     return rl0_fm_load_remembrance_filtered(map,
                                             remembrance_path,
                                             deletions,
@@ -783,6 +783,22 @@ static int add_new_dead0(const unsigned char *initial,
         added++;
     }
     return added;
+}
+
+static int delete_new_dead_from_map0(RL0ForgetMap *map,
+                                      const Search0Record *records,
+                                      int record_count,
+                                      const int *new_dead,
+                                      int start,
+                                      int end) {
+    if (!map || !new_dead) return 0;
+    for (int i = start; i < end; i++) {
+        const RL0FMCycle *cycle = record_cycle_by_no0(records, record_count, new_dead[i]);
+        if (cycle) {
+            rl0_fm_delete_cycle_from_map(map, cycle);
+        }
+    }
+    return 1;
 }
 
 static int refilter_states0(StateVec *cur,
@@ -853,6 +869,7 @@ static int checkpoint_fixed_point0(StateVec *cur,
     for (;;) {
         unsigned char active[SEARCH0_MAX_PROV];
         int added;
+        int new_dead_start = (new_dead_count ? *new_dead_count : 0);
         if (print && print->fp) {
             for (int i = 0; i < cur->count; i++) {
                 ensure_graph_node0(print, tile, &cur->data[i], "carry", step, graph_level, NULL);
@@ -881,13 +898,22 @@ static int checkpoint_fixed_point0(StateVec *cur,
            state, so updating that node's division corrupts the layout.
         */
         if (added == 0) return 1;
-        if (!rebuild_map0(map, remembrance_path, deletions, level)) return 0;
+        if (!new_dead || !new_dead_count ||
+            !delete_new_dead_from_map0(map,
+                                       records,
+                                       record_count,
+                                       new_dead,
+                                       new_dead_start,
+                                       *new_dead_count)) {
+            if (!rebuild_map0(map, remembrance_path, deletions, level)) return 0;
+        }
         if (print && print->fp) print->sublevel++;
         if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats, print, step, graph_level)) return 0;
     }
 }
 
 static FILE *progress_fp0 = NULL;
+static int progress_enabled0 = 1;
 
 static FILE *progress_out0(void) {
     return progress_fp0 ? progress_fp0 : stdout;
@@ -1023,7 +1049,7 @@ static int regenerate_level0_deletions0(const char *remembrance_path,
     if (!write_level0_deletions0(deletions_path, cycles, cycle_count)) {
         return 0;
     }
-    fprintf(stderr, "regenerated Level 0 deletions: %d\n", cycle_count);
+    if (progress_enabled0) fprintf(stderr, "regenerated Level 0 deletions: %d\n", cycle_count);
     return 1;
 }
 
@@ -1053,6 +1079,7 @@ static int deletion_set_max_level0(const RL0FMDeletionSet *set) {
 }
 
 static void print_header0(void) {
+    if (!progress_enabled0) return;
     fprintf(progress_out0(), "%8s %8s | %8s %8s %8s  %s\n",
            "distance", "living", "escaped", "unknown", "dead", "new");
 }
@@ -1064,6 +1091,7 @@ static void print_progress0(int distance,
                             const unsigned char *dead,
                             const int *new_dead,
                             int new_dead_count) {
+    if (!progress_enabled0) return;
     fprintf(progress_out0(), "%8d %8d | %8d %8d %8d  ",
            distance,
            living,
@@ -1605,6 +1633,9 @@ int main(int argc, char **argv) {
         focus_record = 0;
     }
 
+    if (print_to_stdout || print_path) progress_enabled0 = 0;
+    else progress_enabled0 = 1;
+
     if (use_optimized_records) {
         if (!parse_optimize_records0(optimize_path,
                                      optimized_ids,
@@ -1667,7 +1698,7 @@ int main(int argc, char **argv) {
     if (keep_deletions) {
         delete_level = deletion_set_max_level0(&deletions);
         if (delete_level < 0) delete_level = 0;
-        fprintf(stderr, "loaded deletions through level %d: %s\n", delete_level, deletions_path);
+        if (progress_enabled0) fprintf(stderr, "loaded deletions through level %d: %s\n", delete_level, deletions_path);
     }
     if (!rebuild_map0(map, remembrance_path, &deletions, delete_level)) {
         fprintf(stderr, "failed to build dictionary\n");
@@ -1697,14 +1728,16 @@ int main(int argc, char **argv) {
 
     if (print_to_stdout) {
         print.fp = stdout;
-        progress_fp0 = stderr;
+        progress_enabled0 = 0;
     } else if (print_path) {
         print.fp = fopen(print_path, "w");
         if (!print.fp) {
             fprintf(stderr, "failed to open print output: %s\n", print_path);
             return 1;
         }
+        progress_enabled0 = 0;
     } else {
+        progress_enabled0 = 1;
         progress_fp0 = stdout;
     }
 
@@ -1763,7 +1796,7 @@ int main(int argc, char **argv) {
         int no_ports = 0;
         int old_count = cur.count;
         if (global_min == SEARCH0_INF) {
-            fprintf(progress_out0(), "checkpoint complete: no remaining ports states=%d\n", cur.count);
+            if (progress_enabled0) fprintf(progress_out0(), "checkpoint complete: no remaining ports states=%d\n", cur.count);
             break;
         }
         statevec_free0(&next);

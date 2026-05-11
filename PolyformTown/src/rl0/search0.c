@@ -709,7 +709,7 @@ static int rebuild_map0(RL0ForgetMap *map,
                         const char *completions_path,
                         const RL0FMDeletionSet *deletions,
                         int delete_through_level) {
-    rl0_fm_init(map);
+    rl0_fm_clear(map);
     if (!rl0_fm_load_completions_filtered(map,
                                           completions_path,
                                           deletions,

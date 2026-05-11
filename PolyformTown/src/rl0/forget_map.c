@@ -66,14 +66,45 @@ void rl0_fm_reflect_cycle(const RL0FMCycle *in, RL0FMCycle *out) {
     rl0_fm_canonicalize_cycle(&tmp, out);
 }
 
+void rl0_fm_clear(RL0ForgetMap *map) {
+    if (!map) return;
+    for (int r = 0; r < map->row_count; r++) {
+        free(map->rows[r].values);
+        map->rows[r].values = NULL;
+        map->rows[r].value_count = 0;
+        map->rows[r].value_capacity = 0;
+    }
+    free(map->rows);
+    free(map->cycles);
+    map->rows = NULL;
+    map->cycles = NULL;
+    map->row_count = 0;
+    map->row_capacity = 0;
+    map->cycle_count = 0;
+    map->cycle_capacity = 0;
+}
+
 void rl0_fm_init(RL0ForgetMap *map) {
     memset(map, 0, sizeof(*map));
+}
+
+void rl0_fm_deletions_clear(RL0FMDeletionSet *set) {
+    if (!set) return;
+    free(set->level);
+    free(set->cycle);
+    set->level = NULL;
+    set->cycle = NULL;
+    set->count = 0;
+    set->capacity = 0;
 }
 
 static void skip_ws(const char **p);
 static int parse_int(const char **p, int *out);
 static RL0FMRow *find_or_add_row(RL0ForgetMap *map, const RL0FMArc *key);
 static int row_add_value(RL0FMRow *row, const RL0FMArc *value);
+static void concatenate_arc_cycle(const RL0FMArc *key,
+                                  const RL0FMArc *value,
+                                  RL0FMCycle *out);
 
 void rl0_fm_deletions_init(RL0FMDeletionSet *set) {
     memset(set, 0, sizeof(*set));
@@ -100,7 +131,19 @@ int rl0_fm_deletions_add_cycle(RL0FMDeletionSet *set,
     if (!set || !cycle || cycle->n <= 0) return 1;
     rl0_fm_canonicalize_cycle(cycle, &canon);
     if (!rl0_fm_deletions_contains_cycle(set, &canon, level)) {
-        if (set->count >= RL0_FM_MAX_DELETIONS) return 0;
+        if (set->count >= set->capacity) {
+            int new_capacity = set->capacity ? set->capacity * 2 : 16;
+            int *new_level = realloc(set->level, (size_t)new_capacity * sizeof(set->level[0]));
+            RL0FMCycle *new_cycle = realloc(set->cycle, (size_t)new_capacity * sizeof(set->cycle[0]));
+            if (!new_level || !new_cycle) {
+                free(new_level);
+                free(new_cycle);
+                return 0;
+            }
+            set->level = new_level;
+            set->cycle = new_cycle;
+            set->capacity = new_capacity;
+        }
         set->level[set->count] = level;
         set->cycle[set->count++] = canon;
     }
@@ -109,7 +152,19 @@ int rl0_fm_deletions_add_cycle(RL0FMDeletionSet *set,
        source loading inserts both normal and reflected orientations. */
     rl0_fm_reflect_cycle(&canon, &reflected);
     if (!rl0_fm_deletions_contains_cycle(set, &reflected, level)) {
-        if (set->count >= RL0_FM_MAX_DELETIONS) return 0;
+        if (set->count >= set->capacity) {
+            int new_capacity = set->capacity ? set->capacity * 2 : 16;
+            int *new_level = realloc(set->level, (size_t)new_capacity * sizeof(set->level[0]));
+            RL0FMCycle *new_cycle = realloc(set->cycle, (size_t)new_capacity * sizeof(set->cycle[0]));
+            if (!new_level || !new_cycle) {
+                free(new_level);
+                free(new_cycle);
+                return 0;
+            }
+            set->level = new_level;
+            set->cycle = new_cycle;
+            set->capacity = new_capacity;
+        }
         set->level[set->count] = level;
         set->cycle[set->count++] = reflected;
     }
@@ -211,7 +266,13 @@ static int add_cycle(RL0ForgetMap *map, const RL0FMCycle *cycle) {
     for (int k = 0; k < map->cycle_count; k++) {
         if (rl0_fm_cycle_equal(&map->cycles[k], &c)) return 1;
     }
-    if (map->cycle_count >= RL0_FM_MAX_CYCLES) return 0;
+    if (map->cycle_count >= map->cycle_capacity) {
+        int new_capacity = map->cycle_capacity ? map->cycle_capacity * 2 : 64;
+        RL0FMCycle *new_cycles = realloc(map->cycles, (size_t)new_capacity * sizeof(map->cycles[0]));
+        if (!new_cycles) return 0;
+        map->cycles = new_cycles;
+        map->cycle_capacity = new_capacity;
+    }
     map->cycles[map->cycle_count++] = c;
     return 1;
 }
@@ -468,7 +529,13 @@ static RL0FMRow *find_or_add_row(RL0ForgetMap *map, const RL0FMArc *key) {
     for (int r = 0; r < map->row_count; r++) {
         if (rl0_fm_arc_equal(&map->rows[r].key, key)) return &map->rows[r];
     }
-    if (map->row_count >= RL0_FM_MAX_ROWS) return NULL;
+    if (map->row_count >= map->row_capacity) {
+        int new_capacity = map->row_capacity ? map->row_capacity * 2 : 64;
+        RL0FMRow *new_rows = realloc(map->rows, (size_t)new_capacity * sizeof(map->rows[0]));
+        if (!new_rows) return NULL;
+        map->rows = new_rows;
+        map->row_capacity = new_capacity;
+    }
     RL0FMRow *row = &map->rows[map->row_count++];
     memset(row, 0, sizeof(*row));
     row->key = *key;
@@ -479,9 +546,68 @@ static int row_add_value(RL0FMRow *row, const RL0FMArc *value) {
     for (int k = 0; k < row->value_count; k++) {
         if (rl0_fm_arc_equal(&row->values[k], value)) return 1;
     }
-    if (row->value_count >= RL0_FM_MAX_VALUES) return 0;
+    if (row->value_count >= row->value_capacity) {
+        int new_capacity = row->value_capacity ? row->value_capacity * 2 : 4;
+        RL0FMArc *new_values = realloc(row->values, (size_t)new_capacity * sizeof(row->values[0]));
+        if (!new_values) return 0;
+        row->values = new_values;
+        row->value_capacity = new_capacity;
+    }
     row->values[row->value_count++] = *value;
     return 1;
+}
+
+static int delete_canonical_cycle_from_map(RL0ForgetMap *map,
+                                           const RL0FMCycle *target) {
+    int removed = 0;
+    for (int r = 0; r < map->row_count; ) {
+        RL0FMRow *row = &map->rows[r];
+        for (int v = 0; v < row->value_count; ) {
+            RL0FMCycle full;
+            RL0FMCycle canon;
+            concatenate_arc_cycle(&row->key, &row->values[v], &full);
+            rl0_fm_canonicalize_cycle(&full, &canon);
+            if (rl0_fm_cycle_equal(&canon, target)) {
+                if (v + 1 < row->value_count) {
+                    memmove(&row->values[v],
+                            &row->values[v + 1],
+                            (size_t)(row->value_count - v - 1) * sizeof(row->values[0]));
+                }
+                row->value_count--;
+                removed++;
+                continue;
+            }
+            v++;
+        }
+        if (row->value_count == 0) {
+            free(row->values);
+            row->values = NULL;
+            row->value_capacity = 0;
+            if (r + 1 < map->row_count) {
+                memmove(&map->rows[r],
+                        &map->rows[r + 1],
+                        (size_t)(map->row_count - r - 1) * sizeof(map->rows[0]));
+            }
+            map->row_count--;
+            continue;
+        }
+        r++;
+    }
+    return removed;
+}
+
+int rl0_fm_delete_cycle_from_map(RL0ForgetMap *map, const RL0FMCycle *cycle) {
+    RL0FMCycle canon;
+    RL0FMCycle reflected;
+    int removed = 0;
+    if (!map || !cycle || cycle->n <= 0) return 0;
+    rl0_fm_canonicalize_cycle(cycle, &canon);
+    removed += delete_canonical_cycle_from_map(map, &canon);
+    rl0_fm_reflect_cycle(&canon, &reflected);
+    if (!rl0_fm_cycle_equal(&reflected, &canon)) {
+        removed += delete_canonical_cycle_from_map(map, &reflected);
+    }
+    return removed;
 }
 
 static void make_arc_raw(const RL0FMCycle *full, int start, int len, RL0FMArc *out) {
@@ -490,7 +616,16 @@ static void make_arc_raw(const RL0FMCycle *full, int start, int len, RL0FMArc *o
 }
 
 int rl0_fm_build_from_cycles(RL0ForgetMap *map) {
+    for (int r = 0; r < map->row_count; r++) {
+        free(map->rows[r].values);
+        map->rows[r].values = NULL;
+        map->rows[r].value_count = 0;
+        map->rows[r].value_capacity = 0;
+    }
+    free(map->rows);
+    map->rows = NULL;
     map->row_count = 0;
+    map->row_capacity = 0;
     for (int c = 0; c < map->cycle_count; c++) {
         RL0FMCycle canon_full;
         rl0_fm_canonicalize_cycle(&map->cycles[c], &canon_full);

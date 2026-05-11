@@ -1,0 +1,12 @@
+# F0041 — Improve RL0 sublevels graph test
+
+Improve the RL0 sublevels graph validator once the current brute-force
+closure check has stabilized.  The present test is acceptable for validating
+closure: it tries available deletion-level dictionaries until each printed
+focus growth either dies or lands on an expected reduced-graph boundary.
+
+A stricter test should also verify the actual graph edges without scanning
+levels.  For each edge/focus event, choose the prior-known dictionary level
+that should apply at that graph division or sublevel, then require the growth
+image to match the expected canonical boundary directly.  This would test the
+sublevel construction itself rather than only the weaker closure property.

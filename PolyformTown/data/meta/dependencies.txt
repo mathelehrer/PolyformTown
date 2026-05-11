@@ -1,4 +1,4 @@
-Found 589 functions
+Found 594 functions
 
 --- src/core/vec.c (4) ---
 vec_clear (1)
@@ -226,101 +226,6 @@ try_attach_tile_poly_ex (52)
 try_attach_tile_poly (53)
     src/core/attach.c try_attach_tile_poly_ex
 
---- src/rl0/forget_map.c (318) ---
-concatenate_arc_cycle (1)
-item_cmp (1)
-make_arc_raw (1)
-rl0_fm_arc_equal (1)
-rl0_fm_init (1)
-skip_ws (1)
-skip_ws (1)
-cycle_cmp (2)
-    src/rl0/forget_map.c item_cmp
-find_or_add_row (2)
-    src/rl0/forget_map.c rl0_fm_arc_equal
-parse_int (2)
-    src/rl1/ring_complete.c skip_ws
-row_add_value (2)
-    src/rl0/forget_map.c rl0_fm_arc_equal
-rl0_fm_canonicalize_cycle (3)
-    src/rl0/forget_map.c cycle_cmp
-rl0_fm_cycle_equal (3)
-    src/rl0/forget_map.c cycle_cmp
-parse_arc_text (4)
-    src/rl1/search1_naive.c parse_int
-    src/rl1/ring_complete.c skip_ws
-parse_index_cycle_line (4)
-    src/rl1/search1_naive.c parse_int
-    src/rl1/ring_complete.c skip_ws
-parse_int_list (4)
-    src/rl1/search1_naive.c parse_int
-    src/rl1/ring_complete.c skip_ws
-parse_level_header (4)
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/search1_naive.c parse_int
-rl0_fm_cycle_from_parity_indices (4)
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-rl0_fm_reflect_cycle (4)
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-rl0_fm_contains_complete (5)
-    src/rl0/forget_map.c rl0_fm_arc_equal
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-rl0_fm_lookup (5)
-    src/rl0/forget_map.c rl0_fm_arc_equal
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-parse_remembrance_value (6)
-    src/rl0/forget_map.c parse_arc_text
-    src/rl1/ring_complete.c skip_ws
-rl0_fm_lookup_any_rotation (6)
-    src/rl0/forget_map.c rl0_fm_lookup
-add_cycle (7)
-    src/rl0/forget_map.c rl0_fm_cycle_equal
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-rl0_fm_deletions_contains_cycle (7)
-    src/rl0/forget_map.c rl0_fm_cycle_equal
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-parse_remembrance_row (8)
-    src/rl0/forget_map.c parse_arc_text
-    src/rl1/search1_naive.c parse_int
-    src/rl1/ring_complete.c skip_ws
-rl0_fm_build_from_cycles (9)
-    src/rl0/forget_map.c row_add_value
-    src/rl0/forget_map.c find_or_add_row
-    src/rl0/forget_map.c make_arc_raw
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-maybe_add_current_record (12)
-    src/rl0/forget_map.c rl0_fm_reflect_cycle
-    src/rl0/forget_map.c add_cycle
-rl0_fm_deletions_add_cycle (15)
-    src/rl0/forget_map.c rl0_fm_reflect_cycle
-    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-rl0_fm_load_deletions (25)
-    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
-    src/rl0/forget_map.c parse_index_cycle_line
-    src/rl0/forget_map.c parse_level_header
-    src/rl1/ring_complete.c skip_ws
-rl0_fm_load_completions_filtered (28)
-    src/rl0/forget_map.c parse_int_list
-    src/rl0/forget_map.c maybe_add_current_record
-    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
-    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
-rl0_fm_load_remembrance_filtered (28)
-    src/rl0/forget_map.c row_add_value
-    src/rl0/forget_map.c find_or_add_row
-    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
-    src/rl0/forget_map.c concatenate_arc_cycle
-    src/rl0/forget_map.c parse_remembrance_value
-    src/rl0/forget_map.c parse_remembrance_row
-    src/rl1/ring_complete.c skip_ws
-rl0_fm_load_completions (29)
-    src/rl0/forget_map.c rl0_fm_load_completions_filtered
-rl0_fm_load_remembrance (29)
-    src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
-rl0_fm_load_completions_with_deletions (54)
-    src/rl0/forget_map.c rl0_fm_load_deletions
-    src/rl0/forget_map.c rl0_fm_load_completions_filtered
-
 --- src/core/cycle.c (335) ---
 coord_eq (1)
 coord_less (1)
@@ -407,6 +312,113 @@ poly_canonicalize (56)
     src/core/cycle.c poly_canonicalize_lattice
 poly_hash_key_lattice (56)
     src/core/cycle.c poly_canonicalize_lattice
+
+--- src/rl0/forget_map.c (356) ---
+concatenate_arc_cycle (1)
+item_cmp (1)
+make_arc_raw (1)
+rl0_fm_arc_equal (1)
+rl0_fm_clear (1)
+rl0_fm_deletions_clear (1)
+rl0_fm_init (1)
+skip_ws (1)
+skip_ws (1)
+cycle_cmp (2)
+    src/rl0/forget_map.c item_cmp
+find_or_add_row (2)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+parse_int (2)
+    src/rl1/ring_complete.c skip_ws
+row_add_value (2)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+rl0_fm_canonicalize_cycle (3)
+    src/rl0/forget_map.c cycle_cmp
+rl0_fm_cycle_equal (3)
+    src/rl0/forget_map.c cycle_cmp
+parse_arc_text (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_index_cycle_line (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_int_list (4)
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+parse_level_header (4)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/search1_naive.c parse_int
+rl0_fm_cycle_from_parity_indices (4)
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_reflect_cycle (4)
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_contains_complete (5)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_lookup (5)
+    src/rl0/forget_map.c rl0_fm_arc_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+parse_remembrance_value (6)
+    src/rl0/forget_map.c parse_arc_text
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_lookup_any_rotation (6)
+    src/rl0/forget_map.c rl0_fm_lookup
+add_cycle (7)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_deletions_contains_cycle (7)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+delete_canonical_cycle_from_map (8)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+    src/rl0/forget_map.c concatenate_arc_cycle
+parse_remembrance_row (8)
+    src/rl0/forget_map.c parse_arc_text
+    src/rl1/search1_naive.c parse_int
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_build_from_cycles (9)
+    src/rl0/forget_map.c row_add_value
+    src/rl0/forget_map.c find_or_add_row
+    src/rl0/forget_map.c make_arc_raw
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+maybe_add_current_record (12)
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/rl0/forget_map.c add_cycle
+rl0_fm_deletions_add_cycle (18)
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/core/numerics.c cycle
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_delete_cycle_from_map (19)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+    src/rl0/forget_map.c rl0_fm_reflect_cycle
+    src/rl0/forget_map.c delete_canonical_cycle_from_map
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+rl0_fm_load_completions_filtered (28)
+    src/rl0/forget_map.c parse_int_list
+    src/rl0/forget_map.c maybe_add_current_record
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
+rl0_fm_load_deletions (28)
+    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
+    src/rl0/forget_map.c parse_index_cycle_line
+    src/rl0/forget_map.c parse_level_header
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_load_remembrance_filtered (28)
+    src/rl0/forget_map.c row_add_value
+    src/rl0/forget_map.c find_or_add_row
+    src/rl0/forget_map.c rl0_fm_deletions_contains_cycle
+    src/rl0/forget_map.c concatenate_arc_cycle
+    src/rl0/forget_map.c parse_remembrance_value
+    src/rl0/forget_map.c parse_remembrance_row
+    src/rl1/ring_complete.c skip_ws
+rl0_fm_load_completions (29)
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+rl0_fm_load_remembrance (29)
+    src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
+rl0_fm_load_completions_with_deletions (57)
+    src/rl0/forget_map.c rl0_fm_load_deletions
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
 
 --- src/throughput/vcomp.c (405) ---
 MAX_BOUNDARY_VERTS (1)
@@ -988,7 +1000,7 @@ run_vcomp0_levels (528)
     src/rl0/vcomp0.c stateset_init
     src/rl1/search1_naive.c sv_init
 
---- src/rl1/ring_complete.c (1241) ---
+--- src/rl1/ring_complete.c (1244) ---
 RC_MAX_COORDS (1)
 coord_cmp_local (1)
 nonempty_choice_count (1)
@@ -1085,7 +1097,7 @@ descend_next_ring (185)
     src/rl1/ring_complete.c dictionary_choices_at
     src/rl1/ring_complete.c next_schedule_index
     src/rl1/ring_complete.c all_schedule_gone
-main (415)
+main (418)
     src/core/hash.c hash_destroy
     src/rl1/ring_complete.c print_record
     src/rl1/ring_complete.c emit_imgtable
@@ -1100,7 +1112,7 @@ main (415)
     src/core/tile.c tile_load
     src/rl1/ring_complete.c usage
 
---- src/rl1/generate_rl1.c (1560) ---
+--- src/rl1/generate_rl1.c (1563) ---
 RL1_MAX_COORDS (1)
 append_text (1)
 coord_cmp_local (1)
@@ -1177,7 +1189,7 @@ dfs_ring (251)
     src/core/hash.c hash_insert
     src/core/cycle.c poly_hash_key_lattice
     src/rl1/generate_rl1.c all_center_vertices_gone
-main (674)
+main (677)
     src/rl1/generate_rl1_naive.c rewrite_sorted_records
     src/core/hash.c hash_destroy
     src/rl1/generate_rl1.c dfs_ring
@@ -1193,7 +1205,242 @@ main (674)
     src/core/tile.c tile_load
     src/rl1/ring_complete.c usage
 
---- src/rl0/rl0_refine.c (2741) ---
+--- src/rl0/search0.c (2782) ---
+SEARCH0_MAX_COORDS (1)
+add_state_prov0 (1)
+append_key_text0 (1)
+coord_cmp0 (1)
+coord_less0 (1)
+count_marks0 (1)
+count_prov0 (1)
+count_unknown0 (1)
+deletion_set_max_level0 (1)
+emit_focus0 (1)
+emit_graph_node_update0 (1)
+emit_transition0 (1)
+fprint_arc0 (1)
+fprint_coord_list_line0 (1)
+fprint_fm_cycle0 (1)
+fprint_imgtable_basis0 (1)
+fprint_imgtable_constants0 (1)
+fprint_imgtable_cycle_raw0 (1)
+fprint_mark_list0 (1)
+graph_division_for_state0 (1)
+optimized_record0 (1)
+parse_optimize_records0 (1)
+print_find_node0 (1)
+print_header0 (1)
+print_new_dead0 (1)
+printctx_free0 (1)
+record_cycle_by_no0 (1)
+record_reset0 (1)
+skip_ws (1)
+statevec_add_merge0 (1)
+statevec_free0 (1)
+statevec_init0 (1)
+union_prov0 (1)
+append_key_vertex0 (2)
+    src/rl0/rl0_refine.c append_key_text0
+coord_in_list0 (2)
+    src/core/cycle.c coord_eq
+edge_in_tiles0 (2)
+    src/core/cycle.c coord_eq
+emit_graph_edge0 (2)
+    src/rl0/rl0_refine.c fprint_arc0
+expect_char0 (2)
+    src/rl1/ring_complete.c skip_ws
+find_dist0 (2)
+    src/core/cycle.c coord_eq
+fprint_tile_list0 (2)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+parse_int0 (2)
+    src/rl1/ring_complete.c skip_ws
+write_level0_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+write_search_deletions0 (2)
+    src/rl0/rl0_refine.c fprint_fm_cycle0
+collect_tile_vertices0 (3)
+    src/rl0/rl0_refine.c coord_in_list0
+is_port0 (3)
+    src/rl0/rl0_refine.c edge_in_tiles0
+count_prov_with_escaped0 (4)
+    src/rl0/rl0_refine.c count_marks0
+    src/rl0/rl0_refine.c union_prov0
+    src/rl0/rl0_refine.c count_prov0
+cycle_in_list0 (4)
+    src/rl0/forget_map.c rl0_fm_cycle_equal
+fprint_imgtable_shape0 (4)
+    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
+    src/rl0/rl0_refine.c fprint_imgtable_basis0
+    src/rl0/rl0_refine.c fprint_imgtable_constants0
+poly_display_key0 (4)
+    src/rl0/rl0_refine.c append_key_vertex0
+    src/rl0/rl0_refine.c append_key_text0
+default_focus_coord0 (5)
+    src/rl0/rl0_refine.c coord_less0
+    src/core/boundary.c build_boundary_vertices
+print_progress0 (5)
+    src/rl0/rl0_refine.c print_new_dead0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c count_marks0
+collect_initial_exclusions0 (6)
+    src/rl0/forget_map.c rl0_fm_contains_complete
+parse_coord_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_cycle0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+parse_int_list0 (6)
+    src/rl1/ring_complete.c parse_int0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+compute_distances0 (7)
+    src/rl0/rl0_refine.c edge_in_tiles0
+    src/core/cycle.c coord_eq
+    src/rl0/rl0_refine.c collect_tile_vertices0
+rebuild_hidden0 (9)
+    src/rl0/rl0_refine.c coord_in_list0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c collect_tile_vertices0
+emit_graph_node0 (13)
+    src/rl0/rl0_refine.c fprint_imgtable_shape0
+    src/rl0/rl0_refine.c fprint_tile_list0
+    src/rl0/rl0_refine.c fprint_coord_list_line0
+    src/rl0/rl0_refine.c fprint_mark_list0
+    src/rl0/rl0_refine.c poly_display_key0
+parse_poly0 (13)
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c expect_char0
+parse_tile_list0 (13)
+    src/rl1/ring_complete.c parse_cycle0
+    src/rl1/ring_complete.c skip_ws
+    src/rl1/ring_complete.c expect_char0
+strict_record_live0 (15)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+add_new_dead0 (20)
+    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
+    src/rl0/rl0_refine.c record_cycle_by_no0
+ensure_graph_node0 (20)
+    src/rl0/rl0_refine.c emit_graph_node0
+    src/rl0/rl0_refine.c emit_graph_node_update0
+    src/rl0/rl0_refine.c print_find_node0
+    src/rl0/rl0_refine.c poly_display_key0
+choose_port0 (27)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/rl0/rl0_refine.c find_dist0
+    src/rl0/rl0_refine.c is_port0
+    src/core/boundary.c build_boundary_vertices
+    src/rl0/rl0_refine.c compute_distances0
+graph_division_for_state0 (28)
+    src/rl0/rl0_refine.c choose_port0
+min_distance_all0 (28)
+    src/rl0/rl0_refine.c choose_port0
+choose_focus_coord0 (33)
+    src/rl0/rl0_refine.c default_focus_coord0
+    src/rl0/rl0_refine.c choose_port0
+emit_state_focus0 (35)
+    src/rl0/rl0_refine.c choose_focus_coord0
+    src/rl0/rl0_refine.c emit_focus0
+rebuild_map0 (39)
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+    src/rl0/forget_map.c rl0_fm_clear
+parse_records0 (50)
+    src/rl0/rl0_refine.c parse_int_list0
+    src/rl0/rl0_refine.c parse_tile_list0
+    src/rl1/ring_complete.c parse_coord_list0
+    src/rl1/ring_complete.c parse_poly0
+    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
+    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
+    src/rl0/rl0_refine.c record_reset0
+emit_seed_statevec0 (56)
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+poly_to_key0 (57)
+    src/core/cycle.c poly_hash_key_lattice
+emit_relation0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+emit_transition0 (59)
+    src/rl0/rl0_refine.c emit_graph_edge0
+    src/rl0/rl0_refine.c emit_state_focus0
+    src/rl0/rl0_refine.c graph_division_for_state0
+    src/rl0/rl0_refine.c ensure_graph_node0
+regenerate_level0_deletions0 (60)
+    src/rl0/rl0_refine.c write_level0_deletions0
+    src/rl0/rl0_refine.c cycle_in_list0
+    src/rl0/rl0_refine.c strict_record_live0
+    src/rl0/forget_map.c rl0_fm_build_from_cycles
+    src/rl0/forget_map.c rl0_fm_load_completions_filtered
+    src/rl0/forget_map.c rl0_fm_init
+make_seed0 (67)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c rebuild_hidden0
+refilter_states0 (231)
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c emit_relation0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c statevec_init0
+state_after_attach0 (254)
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_try_attach_arc
+checkpoint_fixed_point0 (303)
+    src/rl0/rl0_refine.c refilter_states0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c add_new_dead0
+    src/rl0/rl0_refine.c count_prov0
+    src/rl0/rl0_refine.c ensure_graph_node0
+main (1177)
+    src/rl0/rl0_refine.c printctx_free0
+    src/rl0/rl0_refine.c count_unknown0
+    src/rl0/rl0_refine.c write_search_deletions0
+    src/rl0/rl0_refine.c checkpoint_fixed_point0
+    src/rl0/rl0_refine.c emit_transition0
+    src/rl0/rl0_refine.c state_after_attach0
+    src/rl0/rl0_refine.c emit_focus0
+    src/rl0/rl0_refine.c ensure_graph_node0
+    src/rl0/rl0_refine.c choose_port0
+    src/rl0/rl0_refine.c statevec_free0
+    src/rl0/rl0_refine.c min_distance_all0
+    src/rl0/rl0_refine.c emit_seed_statevec0
+    src/rl0/rl0_refine.c print_progress0
+    src/rl0/rl0_refine.c print_header0
+    src/rl0/rl0_refine.c count_prov_with_escaped0
+    src/rl0/rl0_refine.c statevec_add_merge0
+    src/rl0/rl0_refine.c poly_to_key0
+    src/rl0/rl0_refine.c add_state_prov0
+    src/rl0/rl0_refine.c rebuild_hidden0
+    src/rl0/attach0.c attach0_force_live_closure
+    src/rl0/rl0_refine.c make_seed0
+    src/rl0/forget_map.c rl0_fm_contains_complete
+    src/rl0/rl0_refine.c optimized_record0
+    src/rl0/attach0.c attach0_closure_stats_init
+    src/rl0/rl0_refine.c statevec_init0
+    src/rl0/rl0_refine.c collect_initial_exclusions0
+    src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c deletion_set_max_level0
+    src/rl0/forget_map.c rl0_fm_load_deletions
+    src/rl0/rl0_refine.c regenerate_level0_deletions0
+    src/rl0/rl0_refine.c parse_records0
+    src/core/tile.c tile_load
+    src/rl0/rl0_refine.c parse_optimize_records0
+
+--- src/rl0/rl0_refine.c (2816) ---
 SEARCH0_MAX_COORDS (1)
 add_state_prov0 (1)
 append_key_text0 (1)
@@ -1317,7 +1564,7 @@ strict_record_live0 (15)
     src/rl0/forget_map.c rl0_fm_lookup_any_rotation
     src/rl0/boundary0.c boundary0_build_vertex_arc
     src/core/boundary.c build_boundary_vertices
-add_new_dead0 (17)
+add_new_dead0 (20)
     src/rl0/forget_map.c rl0_fm_deletions_add_cycle
     src/rl0/rl0_refine.c record_cycle_by_no0
 ensure_graph_node0 (20)
@@ -1325,6 +1572,9 @@ ensure_graph_node0 (20)
     src/rl0/rl0_refine.c emit_graph_node_update0
     src/rl0/rl0_refine.c print_find_node0
     src/rl0/rl0_refine.c poly_display_key0
+delete_new_dead_from_map0 (21)
+    src/rl0/forget_map.c rl0_fm_delete_cycle_from_map
+    src/rl0/rl0_refine.c record_cycle_by_no0
 choose_port0 (27)
     src/rl0/forget_map.c rl0_fm_lookup_any_rotation
     src/rl0/boundary0.c boundary0_build_vertex_arc
@@ -1338,7 +1588,7 @@ min_distance_all0 (28)
     src/rl0/rl0_refine.c choose_port0
 rebuild_map0 (30)
     src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
-    src/rl0/forget_map.c rl0_fm_init
+    src/rl0/forget_map.c rl0_fm_clear
 choose_focus_coord0 (33)
     src/rl0/rl0_refine.c default_focus_coord0
     src/rl0/rl0_refine.c choose_port0
@@ -1391,13 +1641,14 @@ state_after_attach0 (254)
     src/rl0/attach0.c attach0_force_live_closure
     src/rl0/rl0_refine.c rebuild_hidden0
     src/rl0/attach0.c attach0_try_attach_arc
-checkpoint_fixed_point0 (300)
+checkpoint_fixed_point0 (324)
     src/rl0/rl0_refine.c refilter_states0
     src/rl0/rl0_refine.c rebuild_map0
+    src/rl0/rl0_refine.c delete_new_dead_from_map0
     src/rl0/rl0_refine.c add_new_dead0
     src/rl0/rl0_refine.c count_prov0
     src/rl0/rl0_refine.c ensure_graph_node0
-main (1153)
+main (1180)
     src/rl0/rl0_refine.c printctx_free0
     src/rl0/rl0_refine.c count_unknown0
     src/rl0/rl0_refine.c write_search_deletions0
@@ -1434,238 +1685,3 @@ main (1153)
     src/core/tile.c tile_load
     src/rl0/rl0_refine.c parse_optimize_records0
     src/rl0/rl0_refine.c parse_record_selection_token0
-
---- src/rl0/search0.c (2749) ---
-SEARCH0_MAX_COORDS (1)
-add_state_prov0 (1)
-append_key_text0 (1)
-coord_cmp0 (1)
-coord_less0 (1)
-count_marks0 (1)
-count_prov0 (1)
-count_unknown0 (1)
-deletion_set_max_level0 (1)
-emit_focus0 (1)
-emit_graph_node_update0 (1)
-emit_transition0 (1)
-fprint_arc0 (1)
-fprint_coord_list_line0 (1)
-fprint_fm_cycle0 (1)
-fprint_imgtable_basis0 (1)
-fprint_imgtable_constants0 (1)
-fprint_imgtable_cycle_raw0 (1)
-fprint_mark_list0 (1)
-graph_division_for_state0 (1)
-optimized_record0 (1)
-parse_optimize_records0 (1)
-print_find_node0 (1)
-print_header0 (1)
-print_new_dead0 (1)
-printctx_free0 (1)
-record_cycle_by_no0 (1)
-record_reset0 (1)
-skip_ws (1)
-statevec_add_merge0 (1)
-statevec_free0 (1)
-statevec_init0 (1)
-union_prov0 (1)
-append_key_vertex0 (2)
-    src/rl0/rl0_refine.c append_key_text0
-coord_in_list0 (2)
-    src/core/cycle.c coord_eq
-edge_in_tiles0 (2)
-    src/core/cycle.c coord_eq
-emit_graph_edge0 (2)
-    src/rl0/rl0_refine.c fprint_arc0
-expect_char0 (2)
-    src/rl1/ring_complete.c skip_ws
-find_dist0 (2)
-    src/core/cycle.c coord_eq
-fprint_tile_list0 (2)
-    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
-parse_int0 (2)
-    src/rl1/ring_complete.c skip_ws
-write_level0_deletions0 (2)
-    src/rl0/rl0_refine.c fprint_fm_cycle0
-write_search_deletions0 (2)
-    src/rl0/rl0_refine.c fprint_fm_cycle0
-collect_tile_vertices0 (3)
-    src/rl0/rl0_refine.c coord_in_list0
-is_port0 (3)
-    src/rl0/rl0_refine.c edge_in_tiles0
-count_prov_with_escaped0 (4)
-    src/rl0/rl0_refine.c count_marks0
-    src/rl0/rl0_refine.c union_prov0
-    src/rl0/rl0_refine.c count_prov0
-cycle_in_list0 (4)
-    src/rl0/forget_map.c rl0_fm_cycle_equal
-fprint_imgtable_shape0 (4)
-    src/rl0/rl0_refine.c fprint_imgtable_cycle_raw0
-    src/rl0/rl0_refine.c fprint_imgtable_basis0
-    src/rl0/rl0_refine.c fprint_imgtable_constants0
-poly_display_key0 (4)
-    src/rl0/rl0_refine.c append_key_vertex0
-    src/rl0/rl0_refine.c append_key_text0
-default_focus_coord0 (5)
-    src/rl0/rl0_refine.c coord_less0
-    src/core/boundary.c build_boundary_vertices
-print_progress0 (5)
-    src/rl0/rl0_refine.c print_new_dead0
-    src/rl0/rl0_refine.c count_unknown0
-    src/rl0/rl0_refine.c count_marks0
-collect_initial_exclusions0 (6)
-    src/rl0/forget_map.c rl0_fm_contains_complete
-parse_coord_list0 (6)
-    src/rl1/ring_complete.c parse_int0
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/ring_complete.c expect_char0
-parse_cycle0 (6)
-    src/rl1/ring_complete.c parse_int0
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/ring_complete.c expect_char0
-parse_int_list0 (6)
-    src/rl1/ring_complete.c parse_int0
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/ring_complete.c expect_char0
-compute_distances0 (7)
-    src/rl0/rl0_refine.c edge_in_tiles0
-    src/core/cycle.c coord_eq
-    src/rl0/rl0_refine.c collect_tile_vertices0
-rebuild_hidden0 (9)
-    src/rl0/rl0_refine.c coord_in_list0
-    src/core/boundary.c build_boundary_vertices
-    src/rl0/rl0_refine.c collect_tile_vertices0
-emit_graph_node0 (13)
-    src/rl0/rl0_refine.c fprint_imgtable_shape0
-    src/rl0/rl0_refine.c fprint_tile_list0
-    src/rl0/rl0_refine.c fprint_coord_list_line0
-    src/rl0/rl0_refine.c fprint_mark_list0
-    src/rl0/rl0_refine.c poly_display_key0
-parse_poly0 (13)
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/ring_complete.c parse_cycle0
-    src/rl1/ring_complete.c expect_char0
-parse_tile_list0 (13)
-    src/rl1/ring_complete.c parse_cycle0
-    src/rl1/ring_complete.c skip_ws
-    src/rl1/ring_complete.c expect_char0
-strict_record_live0 (15)
-    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
-    src/rl0/boundary0.c boundary0_build_vertex_arc
-    src/core/boundary.c build_boundary_vertices
-add_new_dead0 (17)
-    src/rl0/forget_map.c rl0_fm_deletions_add_cycle
-    src/rl0/rl0_refine.c record_cycle_by_no0
-ensure_graph_node0 (20)
-    src/rl0/rl0_refine.c emit_graph_node0
-    src/rl0/rl0_refine.c emit_graph_node_update0
-    src/rl0/rl0_refine.c print_find_node0
-    src/rl0/rl0_refine.c poly_display_key0
-choose_port0 (27)
-    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
-    src/rl0/boundary0.c boundary0_build_vertex_arc
-    src/rl0/rl0_refine.c find_dist0
-    src/rl0/rl0_refine.c is_port0
-    src/core/boundary.c build_boundary_vertices
-    src/rl0/rl0_refine.c compute_distances0
-graph_division_for_state0 (28)
-    src/rl0/rl0_refine.c choose_port0
-min_distance_all0 (28)
-    src/rl0/rl0_refine.c choose_port0
-choose_focus_coord0 (33)
-    src/rl0/rl0_refine.c default_focus_coord0
-    src/rl0/rl0_refine.c choose_port0
-emit_state_focus0 (35)
-    src/rl0/rl0_refine.c choose_focus_coord0
-    src/rl0/rl0_refine.c emit_focus0
-rebuild_map0 (39)
-    src/rl0/forget_map.c rl0_fm_build_from_cycles
-    src/rl0/forget_map.c rl0_fm_load_completions_filtered
-    src/rl0/forget_map.c rl0_fm_init
-parse_records0 (50)
-    src/rl0/rl0_refine.c parse_int_list0
-    src/rl0/rl0_refine.c parse_tile_list0
-    src/rl1/ring_complete.c parse_coord_list0
-    src/rl1/ring_complete.c parse_poly0
-    src/rl0/forget_map.c rl0_fm_canonicalize_cycle
-    src/rl0/forget_map.c rl0_fm_cycle_from_parity_indices
-    src/rl0/rl0_refine.c record_reset0
-emit_seed_statevec0 (56)
-    src/rl0/rl0_refine.c emit_state_focus0
-    src/rl0/rl0_refine.c ensure_graph_node0
-poly_to_key0 (57)
-    src/core/cycle.c poly_hash_key_lattice
-emit_relation0 (59)
-    src/rl0/rl0_refine.c emit_graph_edge0
-    src/rl0/rl0_refine.c emit_state_focus0
-    src/rl0/rl0_refine.c graph_division_for_state0
-    src/rl0/rl0_refine.c ensure_graph_node0
-emit_transition0 (59)
-    src/rl0/rl0_refine.c emit_graph_edge0
-    src/rl0/rl0_refine.c emit_state_focus0
-    src/rl0/rl0_refine.c graph_division_for_state0
-    src/rl0/rl0_refine.c ensure_graph_node0
-regenerate_level0_deletions0 (60)
-    src/rl0/rl0_refine.c write_level0_deletions0
-    src/rl0/rl0_refine.c cycle_in_list0
-    src/rl0/rl0_refine.c strict_record_live0
-    src/rl0/forget_map.c rl0_fm_build_from_cycles
-    src/rl0/forget_map.c rl0_fm_load_completions_filtered
-    src/rl0/forget_map.c rl0_fm_init
-make_seed0 (67)
-    src/rl0/rl0_refine.c poly_to_key0
-    src/rl0/rl0_refine.c rebuild_hidden0
-refilter_states0 (231)
-    src/rl0/rl0_refine.c statevec_free0
-    src/rl0/rl0_refine.c statevec_add_merge0
-    src/rl0/rl0_refine.c emit_relation0
-    src/rl0/rl0_refine.c poly_to_key0
-    src/rl0/rl0_refine.c add_state_prov0
-    src/rl0/rl0_refine.c rebuild_hidden0
-    src/rl0/attach0.c attach0_force_live_closure
-    src/rl0/rl0_refine.c statevec_init0
-state_after_attach0 (254)
-    src/rl0/rl0_refine.c poly_to_key0
-    src/rl0/attach0.c attach0_force_live_closure
-    src/rl0/rl0_refine.c rebuild_hidden0
-    src/rl0/attach0.c attach0_try_attach_arc
-checkpoint_fixed_point0 (300)
-    src/rl0/rl0_refine.c refilter_states0
-    src/rl0/rl0_refine.c rebuild_map0
-    src/rl0/rl0_refine.c add_new_dead0
-    src/rl0/rl0_refine.c count_prov0
-    src/rl0/rl0_refine.c ensure_graph_node0
-main (1150)
-    src/rl0/rl0_refine.c printctx_free0
-    src/rl0/rl0_refine.c count_unknown0
-    src/rl0/rl0_refine.c write_search_deletions0
-    src/rl0/rl0_refine.c checkpoint_fixed_point0
-    src/rl0/rl0_refine.c emit_transition0
-    src/rl0/rl0_refine.c state_after_attach0
-    src/rl0/rl0_refine.c emit_focus0
-    src/rl0/rl0_refine.c ensure_graph_node0
-    src/rl0/rl0_refine.c choose_port0
-    src/rl0/rl0_refine.c statevec_free0
-    src/rl0/rl0_refine.c min_distance_all0
-    src/rl0/rl0_refine.c emit_seed_statevec0
-    src/rl0/rl0_refine.c print_progress0
-    src/rl0/rl0_refine.c print_header0
-    src/rl0/rl0_refine.c count_prov_with_escaped0
-    src/rl0/rl0_refine.c statevec_add_merge0
-    src/rl0/rl0_refine.c poly_to_key0
-    src/rl0/rl0_refine.c add_state_prov0
-    src/rl0/rl0_refine.c rebuild_hidden0
-    src/rl0/attach0.c attach0_force_live_closure
-    src/rl0/rl0_refine.c make_seed0
-    src/rl0/forget_map.c rl0_fm_contains_complete
-    src/rl0/rl0_refine.c optimized_record0
-    src/rl0/attach0.c attach0_closure_stats_init
-    src/rl0/rl0_refine.c statevec_init0
-    src/rl0/rl0_refine.c collect_initial_exclusions0
-    src/rl0/rl0_refine.c rebuild_map0
-    src/rl0/rl0_refine.c deletion_set_max_level0
-    src/rl0/forget_map.c rl0_fm_load_deletions
-    src/rl0/rl0_refine.c regenerate_level0_deletions0
-    src/rl0/rl0_refine.c parse_records0
-    src/core/tile.c tile_load
-    src/rl0/rl0_refine.c parse_optimize_records0

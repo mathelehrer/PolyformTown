@@ -16,6 +16,7 @@ A leading check mark (`✓`) indicates a completed item, which is moved to
 ## ACTIVE
 
 - F0040 — Reconcile agent and metadata documentation
+- F0041 — Improve RL0 sublevels graph test
 - F0039 — Strengthen remembrance proof beyond count accounting
 - F0025 — RL0 liveness and index validation for RL1 pruning
 - F0028 — Full live-boundary lookahead to tile-surround horizon

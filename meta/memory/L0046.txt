@@ -1,0 +1,11 @@
+# L0046 — No big rectangular arrays for sparse dictionaries
+
+Do not represent sparse proof-flow dictionaries as giant rectangular
+`MAX_ROWS × MAX_VALUES` arrays.  That pattern bakes in arbitrary cutoffs,
+wastes large amounts of memory, slows review, and makes later scaling
+failures look accidental instead of structural.
+
+If a dictionary is naturally sparse, store only the rows and values that
+actually exist.  Use dynamic arrays or another proportional representation.
+Treat fixed giant capacities in core data structures as suspect unless they
+are mathematically justified and genuinely required by the problem.

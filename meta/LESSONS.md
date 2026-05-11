@@ -13,6 +13,7 @@ deleted from memory.
 ## Operating rules
 
 - L0045 — Keep generated data products in their own namespace
+- L0046 — No big rectangular arrays for sparse dictionaries
 - L0001 — Work from data
 - L0002 — No fabrication
 - L0003 — No false execution
