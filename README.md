@@ -13,6 +13,6 @@
  
 <h2>RL1.0 Valid surrounds of one central tile</h2>
 
-<img src="./PolyformTown/img/rl1_one_completions.svg" alt="RL1.0 One Completions" />
+<img src="./PolyformTown/img/rl1_completions.svg" alt="RL1.0 One Completions" />
 
 <p><em>Figure: Run Level 1.0 attained, (the?) 26 hexagonal pre-images.</em></p>
