@@ -6,6 +6,8 @@
 
 #include "core/cycle.h"
 #include "core/tile.h"
+#include "core/lattice.h"
+#include "core/tetrille.h"
 #include "throughput/vcomp_pipeline.h"
 
 #define RL1_MAX_RECORD_TEXT 262144
@@ -66,6 +68,102 @@ static int coord_on_boundary(Coord q, const Poly *p) {
         }
     }
     return 0;
+}
+
+
+static int cycle_matches_cyclic_or_reversed(const Cycle *a, const Cycle *b) {
+    if (a->n != b->n) return 0;
+    int n = a->n;
+    for (int shift = 0; shift < n; shift++) {
+        int ok = 1;
+        for (int i = 0; i < n; i++) {
+            if (!coord_eq_local(a->v[i], b->v[(shift + i) % n])) {
+                ok = 0;
+                break;
+            }
+        }
+        if (ok) return 1;
+        ok = 1;
+        for (int i = 0; i < n; i++) {
+            int j = shift - i;
+            while (j < 0) j += n;
+            j %= n;
+            if (!coord_eq_local(a->v[i], b->v[j])) {
+                ok = 0;
+                break;
+            }
+        }
+        if (ok) return 1;
+    }
+    return 0;
+}
+
+static int canonicalize_placed_tile(const Tile *tile, const Cycle *placed, Cycle *out) {
+    int n = tile->base.n;
+    int tcount = lattice_transform_count(tile->lattice);
+    long long src_area = cycle_signed_area2(&tile->base, tile->lattice);
+
+    if (placed->n != n) return 0;
+
+    for (int t = 0; t < tcount; t++) {
+        Cycle tr = {0};
+        cycle_transform_lattice(&tile->base, &tr, tile->lattice, t);
+        long long tr_area = cycle_signed_area2(&tr, tile->lattice);
+        int parity = (tr_area * src_area >= 0) ? 1 : -1;
+
+        for (int j = 0; j < n; j++) {
+            int dx = placed->v[j].x - tr.v[0].x;
+            int dy = placed->v[j].y - tr.v[0].y;
+            Cycle candidate = tr;
+
+            if (placed->v[j].v != tr.v[0].v) continue;
+            if (tile->lattice == TILE_LATTICE_TETRILLE) {
+                int m6 = 0, n6 = 0;
+                if (!tetrille_delta_to_6(tr.v[0].v, dx, dy, &m6, &n6)) continue;
+                tetrille_translate_cycle(&candidate, m6, n6);
+            } else {
+                cycle_translate(&candidate, dx, dy);
+            }
+
+            if (!cycle_matches_cyclic_or_reversed(&candidate, placed)) continue;
+
+            out->n = n;
+            if (parity == 1) {
+                for (int k = 0; k < n; k++) out->v[k] = candidate.v[k];
+            } else {
+                for (int k = 0; k < n; k++) out->v[k] = candidate.v[n - 1 - k];
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int normalize_record_tiles(RL1Ctx *ctx, RL1Record *rec) {
+    Cycle normalized[VCOMP_MAX_TILES];
+    int found_center = 0;
+
+    for (int i = 0; i < rec->tile_count; i++) {
+        if (!canonicalize_placed_tile(ctx->tile, &rec->tiles[i], &normalized[i])) {
+            fprintf(stderr, "failed to canonicalize naive tile %d in pending record\n", i);
+            return 0;
+        }
+    }
+
+    for (int i = 0; i < rec->tile_count; i++) {
+        if (cycle_matches_cyclic_or_reversed(&rec->tiles[i], &rec->center_tile)) {
+            rec->center_tile = normalized[i];
+            found_center = 1;
+            break;
+        }
+    }
+    if (!found_center) {
+        fprintf(stderr, "failed to match naive center tile during canonicalization\n");
+        return 0;
+    }
+
+    for (int i = 0; i < rec->tile_count; i++) rec->tiles[i] = normalized[i];
+    return 1;
 }
 
 static int cycles_share_vertex(const Cycle *a, const Cycle *b) {
@@ -229,6 +327,12 @@ static int records_add(RL1Ctx *ctx,
     for (int i = 0; i < state->tile_count; i++) rec->tiles[i] = state->tiles[i];
     for (int i = 0; i < state->hidden_count; i++) rec->hidden[i] = state->hidden[i];
 
+    if (!normalize_record_tiles(ctx, rec)) {
+        free(rec->boundary_str);
+        rec->boundary_str = NULL;
+        return 0;
+    }
+
     ctx->record_count++;
     return 1;
 }
@@ -303,14 +407,14 @@ static void usage(const char *prog) {
     fprintf(stderr,
             "usage: %s [tile_path] [output_path] [max_n] [--live-only]\n"
             "default tile_path: tiles/hat.tile\n"
-            "default output_path: data/rl1/naive_hat.dat\n"
+            "default output_path: data/rl1/naive_completions.dat\n"
             "default max_n: 20\n",
             prog);
 }
 
 int main(int argc, char **argv) {
     const char *tile_path = "tiles/hat.tile";
-    const char *output_path = "data/rl1/naive_hat.dat";
+    const char *output_path = "data/rl1/naive_completions.dat";
     int max_n = 20;
     int live_only = 0;
     int positional = 0;

@@ -14,7 +14,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
 	rl1_depict_naive rl1_hexagons tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map check_rl0_incremental_graph rl0_refine depict_search0_graph meta_graph_data
+	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map check_rl0_incremental_graph check_rl1_naive_filtration rl0_refine depict_search0_graph meta_graph_data
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -41,7 +41,7 @@ clean:
 		$(BIN)/gen_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check $(BIN)/check_indexed_variants \
-		tests/check_rl0 tests/check_rl0_forget_map tests/check_rl0_incremental_graph
+		tests/check_rl0 tests/check_rl0_forget_map tests/check_rl0_incremental_graph tests/check_rl1_naive_filtration
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
 $(BIN)/tiling_3x3_demo: $(SRC)/usage/tiling_3x3_demo.o $(SRC)/core/dfs.o | $(BIN)
@@ -79,6 +79,12 @@ tests/check_rl0_forget_map: tests/check_rl0_forget_map.c $(RL0_SURFACE) $(CORE) 
 check_rl0_incremental_graph: tests/check_rl0_incremental_graph
 tests/check_rl0_incremental_graph: tests/check_rl0_incremental_graph.c $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl0_incremental_graph.c \
+		$(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+check_rl1_naive_filtration: tests/check_rl1_naive_filtration
+
+tests/check_rl1_naive_filtration: tests/check_rl1_naive_filtration.c $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+	$(CC) $(CFLAGS) -I$(SRC) -o $@ tests/check_rl1_naive_filtration.c \
 		$(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 vcomp_count: $(BIN)/vcomp_count
@@ -172,12 +178,12 @@ rl1_data: rl1_generate
 
 rl1_data_naive: rl1_generate_naive
 	mkdir -p data/rl1
-	$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_hat_n20.dat 20 --live-only
+	$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_completions.dat 20 --live-only
 
 rl1_svg_naive: rl1_data_naive rl1_depict_naive imgtable
 	mkdir -p img
-	$(BIN)/rl1_depict_naive preferences/focus.tile data/rl1/naive_hat_n20.dat --grouped | \
-		$(BIN)/imgtable > img/rl1_naive_hat_n20.svg
+	$(BIN)/rl1_depict_naive preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
+		$(BIN)/imgtable > img/rl1_naive_completions.svg
 
 $(BIN):
 	mkdir -p $(BIN)

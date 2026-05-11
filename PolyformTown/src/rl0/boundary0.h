@@ -22,6 +22,11 @@ int boundary0_build_vertex_arc(const Tile *tile,
                                int tile_count,
                                Coord q,
                                RL0FMArc *arc);
+int boundary0_vertex_has_dictionary_completion(const Tile *tile,
+                                               const Cycle *tiles,
+                                               int tile_count,
+                                               Coord q,
+                                               const RL0ForgetMap *map);
 int boundary0_poly_has_live_boundary(const Poly *p,
                                      const Tile *tile,
                                      const Cycle *tiles,

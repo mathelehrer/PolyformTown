@@ -1,4 +1,4 @@
-Found 594 functions
+Found 598 functions
 
 --- src/core/vec.c (4) ---
 vec_clear (1)
@@ -114,67 +114,6 @@ poly_has_live_boundary (62)
     src/core/boundary.c dfs_has_completion
     src/core/boundary.c build_boundary_vertices
 
---- src/rl0/boundary0.c (175) ---
-B0_MAX_BOUNDARY_VERTS (1)
-item_less0 (1)
-coord_in_cycle (2)
-    src/core/cycle.c coord_eq
-cycle_matches_cyclic_local (2)
-    src/core/cycle.c coord_eq
-cycle_vertex_index_local (2)
-    src/core/cycle.c coord_eq
-incident_less0 (2)
-    src/rl0/boundary0.c item_less0
-incidents_adjacent0 (2)
-    src/core/cycle.c coord_eq
-tile_vertex_pos0 (2)
-    src/core/cycle.c coord_eq
-edge_walk_order_incidents0 (4)
-    src/rl0/boundary0.c incident_less0
-    src/core/cycle.c coord_eq
-boundary0_build_vertex_arc (5)
-    src/rl0/boundary0.c edge_walk_order_incidents0
-lookup_maximal_arc0 (7)
-    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
-boundary0_tile_item_at_vertex (19)
-    src/rl0/boundary0.c cycle_vertex_index_local
-    src/rl0/boundary0.c cycle_matches_cyclic_local
-    src/core/cycle.c cycle_translate
-    src/core/tetrille.c tetrille_translate_cycle
-    src/core/tetrille.c tetrille_delta_to_6
-    src/core/cycle.c cycle_transform_lattice
-    src/core/lattice.c lattice_transform_count
-    src/core/cycle.c cycle_signed_area2
-lookup_maximal_arc0 (24)
-    src/rl0/boundary0.c tile_vertex_pos0
-    src/rl0/boundary0.c boundary0_tile_item_at_vertex
-    src/rl0/boundary0.c coord_in_cycle
-lookup_component_arc0 (29)
-    src/rl0/boundary0.c lookup_maximal_arc0
-    src/rl0/boundary0.c edge_walk_order_incidents0
-boundary0_vertex_has_dictionary_completion0 (32)
-    src/rl0/boundary0.c lookup_component_arc0
-    src/rl0/boundary0.c incidents_adjacent0
-boundary0_poly_has_live_boundary (41)
-    src/rl0/boundary0.c boundary0_vertex_has_dictionary_completion0
-    src/rl0/boundary0.c boundary0_build_vertex_arc
-    src/core/boundary.c build_boundary_vertices
-
---- src/throughput/poly_pipeline.c (202) ---
-run_poly_levels (202)
-    src/core/vec.c vec_destroy
-    src/core/hash.c hash_destroy
-    src/core/hash.c hash_insert
-    src/core/boundary.c poly_has_live_boundary
-    src/core/attach.c try_attach_tile_poly
-    src/core/boundary.c build_boundary_edges
-    src/core/vec.c vec_clear
-    src/core/hash.c hash_init
-    src/rl1/generate_rl1_naive.c on_level
-    src/core/vec.c vec_push
-    src/core/vec.c vec_init
-    src/core/cycle.c poly_hash_key_lattice
-
 --- src/core/attach.c (206) ---
 MAX_EDGES (1)
 coord_seen_before (2)
@@ -225,6 +164,69 @@ try_attach_tile_poly_ex (52)
     src/core/boundary.c build_boundary_edges
 try_attach_tile_poly (53)
     src/core/attach.c try_attach_tile_poly_ex
+
+--- src/rl0/boundary0.c (208) ---
+B0_MAX_BOUNDARY_VERTS (1)
+item_less0 (1)
+coord_in_cycle (2)
+    src/core/cycle.c coord_eq
+cycle_matches_cyclic_local (2)
+    src/core/cycle.c coord_eq
+cycle_vertex_index_local (2)
+    src/core/cycle.c coord_eq
+incident_less0 (2)
+    src/rl0/boundary0.c item_less0
+incidents_adjacent0 (2)
+    src/core/cycle.c coord_eq
+tile_vertex_pos0 (2)
+    src/core/cycle.c coord_eq
+edge_walk_order_incidents0 (4)
+    src/rl0/boundary0.c incident_less0
+    src/core/cycle.c coord_eq
+boundary0_build_vertex_arc (5)
+    src/rl0/boundary0.c edge_walk_order_incidents0
+lookup_maximal_arc0 (7)
+    src/rl0/forget_map.c rl0_fm_lookup_any_rotation
+boundary0_tile_item_at_vertex (19)
+    src/rl0/boundary0.c cycle_vertex_index_local
+    src/rl0/boundary0.c cycle_matches_cyclic_local
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+    src/core/cycle.c cycle_signed_area2
+lookup_maximal_arc0 (24)
+    src/rl0/boundary0.c tile_vertex_pos0
+    src/rl0/boundary0.c boundary0_tile_item_at_vertex
+    src/rl0/boundary0.c coord_in_cycle
+lookup_component_arc0 (29)
+    src/rl0/boundary0.c lookup_maximal_arc0
+    src/rl0/boundary0.c edge_walk_order_incidents0
+boundary0_vertex_has_dictionary_completion0 (32)
+    src/rl0/boundary0.c lookup_component_arc0
+    src/rl0/boundary0.c incidents_adjacent0
+boundary0_vertex_has_dictionary_completion (33)
+    src/rl0/boundary0.c boundary0_vertex_has_dictionary_completion0
+boundary0_poly_has_live_boundary (41)
+    src/rl0/boundary0.c boundary0_vertex_has_dictionary_completion0
+    src/rl0/boundary0.c boundary0_build_vertex_arc
+    src/core/boundary.c build_boundary_vertices
+
+--- src/throughput/poly_pipeline.c (222) ---
+run_poly_levels (222)
+    src/core/vec.c vec_destroy
+    src/core/hash.c hash_destroy
+    src/core/hash.c hash_insert
+    src/core/boundary.c poly_has_live_boundary
+    src/core/attach.c try_attach_tile_poly
+    src/core/boundary.c build_boundary_edges
+    src/core/vec.c vec_clear
+    src/core/hash.c hash_init
+    src/rl1/generate_rl1_naive.c on_level
+    src/core/vec.c vec_push
+    src/core/vec.c vec_init
+    src/core/cycle.c poly_hash_key_lattice
 
 --- src/core/cycle.c (335) ---
 coord_eq (1)
@@ -660,154 +662,6 @@ main (189)
     src/rl1/hexagons.c load_recs
     src/core/tile.c tile_load
 
---- src/rl1/generate_rl1_naive.c (496) ---
-append_text (1)
-coord_eq_local (1)
-coord_less_local (1)
-ensure_dir (1)
-print_coord_list (1)
-print_cycle (1)
-usage (1)
-append_coord_text (2)
-    src/rl1/generate_rl1_naive.c append_text
-coord_in_list (2)
-    src/rl1/generate_rl1_naive.c coord_eq_local
-coord_on_boundary (2)
-    src/rl1/generate_rl1_naive.c coord_eq_local
-cycle_cmp_local (2)
-    src/rl1/generate_rl1_naive.c coord_less_local
-cycles_share_vertex (2)
-    src/rl1/generate_rl1_naive.c coord_eq_local
-ensure_parent_dirs (2)
-    src/rl1/generate_rl1_naive.c ensure_dir
-print_tile_list (2)
-    src/rl1/ring_complete.c print_cycle
-records_add (2)
-    src/rl1/ring_complete.c poly_to_string_local
-record_cmp_local (3)
-    src/rl1/generate_rl1_naive.c cycle_cmp_local
-poly_to_string_local (4)
-    src/rl1/generate_rl1_naive.c append_coord_text
-    src/rl1/generate_rl1_naive.c append_text
-tile_is_completely_surrounded (5)
-    src/rl1/generate_rl1_naive.c coord_in_list
-    src/rl1/generate_rl1_naive.c coord_on_boundary
-write_one_record (5)
-    src/rl1/ring_complete.c print_tile_list
-    src/rl1/ring_complete.c print_coord_list
-    src/rl1/ring_complete.c print_cycle
-rewrite_sorted_records (6)
-    src/rl1/generate_rl1_naive.c write_one_record
-select_unique_center_tile (8)
-    src/rl1/generate_rl1_naive.c cycles_share_vertex
-    src/rl1/generate_rl1_naive.c tile_is_completely_surrounded
-on_level (16)
-    src/rl1/generate_rl1_naive.c write_one_record
-    src/rl1/generate_rl1_naive.c records_add
-    src/rl1/generate_rl1_naive.c select_unique_center_tile
-main (426)
-    src/rl1/generate_rl1_naive.c rewrite_sorted_records
-    src/throughput/vcomp_pipeline.c run_vcomp_levels
-    src/rl1/generate_rl1_naive.c ensure_parent_dirs
-    src/core/tile.c tile_load
-    src/rl1/ring_complete.c usage
-
---- src/rl0/generate_rl0.c (508) ---
-coord_less_local (1)
-cyclic_item_seq_less (1)
-ensure_dir (1)
-poly_to_string_local (1)
-print_coord_list (1)
-print_cycle (1)
-print_indices (1)
-print_parities (1)
-record_cmp_local (1)
-rem_item_cmp (1)
-rem_print_arc (1)
-rem_record_variant (1)
-rem_row_add_val (1)
-rem_split_variant (1)
-rem_table_free (1)
-rem_table_init (1)
-seen_add (1)
-coord_cmp_local (2)
-    src/rl1/generate_rl1_naive.c coord_less_local
-cycle_matches_cyclic (2)
-    src/core/cycle.c coord_eq
-cycle_vertex_index (2)
-    src/core/cycle.c coord_eq
-find_center_pos (2)
-    src/core/cycle.c coord_eq
-poly_equal_local (2)
-    src/core/cycle.c coord_eq
-print_tile_list (2)
-    src/rl1/ring_complete.c print_cycle
-records_add (2)
-    src/rl1/ring_complete.c poly_to_string_local
-rem_arc_cmp (2)
-    src/rl0/generate_rl0.c rem_item_cmp
-rotate_order_to_min_item_shift (2)
-    src/rl0/generate_rl0.c cyclic_item_seq_less
-seen_has (2)
-    src/rl0/vcomp0.c poly_equal_local
-rem_arc_equal (3)
-    src/rl0/generate_rl0.c rem_arc_cmp
-rem_row_cmp (3)
-    src/rl0/generate_rl0.c rem_arc_cmp
-rem_val_cmp (3)
-    src/rl0/generate_rl0.c rem_arc_cmp
-rem_find_row (4)
-    src/rl0/generate_rl0.c rem_arc_equal
-rem_add_row (5)
-    src/rl0/generate_rl0.c rem_find_row
-reorder_center_items_ccw (6)
-    src/rl0/generate_rl0.c rotate_order_to_min_item_shift
-    src/core/cycle.c coord_eq
-    src/rl0/generate_rl0.c find_center_pos
-write_records_to_file (6)
-    src/rl0/generate_rl0.c print_indices
-    src/rl0/generate_rl0.c print_parities
-    src/rl1/ring_complete.c print_tile_list
-    src/rl1/ring_complete.c print_coord_list
-rem_emit_split (7)
-    src/rl0/generate_rl0.c rem_row_add_val
-    src/rl0/generate_rl0.c rem_add_row
-write_records_to_file (13)
-    src/rl0/generate_rl0.c rem_print_arc
-    src/rl0/generate_rl0.c rem_table_free
-    src/rl0/generate_rl0.c rem_emit_split
-    src/rl0/generate_rl0.c rem_split_variant
-    src/rl0/generate_rl0.c rem_record_variant
-    src/rl0/generate_rl0.c rem_table_init
-write_records (14)
-    src/rl0/generate_rl0.c write_records_to_file
-canonicalize_tile (19)
-    src/rl0/generate_rl0.c cycle_vertex_index
-    src/rl0/generate_rl0.c cycle_matches_cyclic
-    src/core/cycle.c cycle_translate
-    src/core/tetrille.c tetrille_translate_cycle
-    src/core/tetrille.c tetrille_delta_to_6
-    src/core/cycle.c cycle_transform_lattice
-    src/core/lattice.c lattice_transform_count
-    src/core/cycle.c cycle_signed_area2
-emit_raw_completion (94)
-    src/rl1/generate_rl1_naive.c records_add
-    src/rl0/generate_rl0.c reorder_center_items_ccw
-    src/rl0/generate_rl0.c seen_add
-    src/rl0/generate_rl0.c seen_has
-    src/core/lattice.c lattice_direction_count
-    src/rl0/generate_rl0.c canonicalize_tile
-    src/core/boundary.c poly_has_live_boundary
-main (294)
-    src/rl0/generate_rl0.c write_records
-    src/throughput/vcomp.c vcomp_levels_destroy
-    src/rl0/generate_rl0.c emit_raw_completion
-    src/throughput/vcomp.c vcomp_enumerate_levels
-    src/throughput/vcomp.c vcomp_levels_init
-    src/core/boundary.c build_boundary_vertices
-    src/rl1/generate_rl1_naive.c ensure_dir
-    src/core/tile.c tile_load
-
 --- src/rl1/search1_naive.c (512) ---
 RL1_MAX_COORDS (1)
 coord_cmp (1)
@@ -886,7 +740,103 @@ main (239)
     src/rl1/search1_naive.c parse_records
     src/core/tile.c tile_load
 
---- src/throughput/vcomp_pipeline.c (540) ---
+--- src/rl0/generate_rl0.c (548) ---
+coord_less_local (1)
+cyclic_item_seq_less (1)
+ensure_dir (1)
+poly_to_string_local (1)
+print_coord_list (1)
+print_cycle (1)
+print_indices (1)
+print_parities (1)
+record_cmp_local (1)
+rem_item_cmp (1)
+rem_print_arc (1)
+rem_record_variant (1)
+rem_row_add_val (1)
+rem_split_variant (1)
+rem_table_free (1)
+rem_table_init (1)
+seen_add (1)
+coord_cmp_local (2)
+    src/rl1/generate_rl1_naive.c coord_less_local
+cycle_matches_cyclic (2)
+    src/core/cycle.c coord_eq
+cycle_vertex_index (2)
+    src/core/cycle.c coord_eq
+find_center_pos (2)
+    src/core/cycle.c coord_eq
+poly_equal_local (2)
+    src/core/cycle.c coord_eq
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+records_add (2)
+    src/rl1/ring_complete.c poly_to_string_local
+rem_arc_cmp (2)
+    src/rl0/generate_rl0.c rem_item_cmp
+rotate_order_to_min_item_shift (2)
+    src/rl0/generate_rl0.c cyclic_item_seq_less
+seen_has (2)
+    src/rl0/vcomp0.c poly_equal_local
+rem_arc_equal (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_row_cmp (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_val_cmp (3)
+    src/rl0/generate_rl0.c rem_arc_cmp
+rem_find_row (4)
+    src/rl0/generate_rl0.c rem_arc_equal
+rem_add_row (5)
+    src/rl0/generate_rl0.c rem_find_row
+reorder_center_items_ccw (6)
+    src/rl0/generate_rl0.c rotate_order_to_min_item_shift
+    src/core/cycle.c coord_eq
+    src/rl0/generate_rl0.c find_center_pos
+write_records_to_file (6)
+    src/rl0/generate_rl0.c print_indices
+    src/rl0/generate_rl0.c print_parities
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+rem_emit_split (7)
+    src/rl0/generate_rl0.c rem_row_add_val
+    src/rl0/generate_rl0.c rem_add_row
+write_records_to_file (13)
+    src/rl0/generate_rl0.c rem_print_arc
+    src/rl0/generate_rl0.c rem_table_free
+    src/rl0/generate_rl0.c rem_emit_split
+    src/rl0/generate_rl0.c rem_split_variant
+    src/rl0/generate_rl0.c rem_record_variant
+    src/rl0/generate_rl0.c rem_table_init
+write_records (14)
+    src/rl0/generate_rl0.c write_records_to_file
+canonicalize_tile (19)
+    src/rl0/generate_rl0.c cycle_vertex_index
+    src/rl0/generate_rl0.c cycle_matches_cyclic
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/cycle.c cycle_transform_lattice
+    src/core/lattice.c lattice_transform_count
+    src/core/cycle.c cycle_signed_area2
+emit_raw_completion (114)
+    src/rl1/generate_rl1_naive.c records_add
+    src/rl0/generate_rl0.c reorder_center_items_ccw
+    src/rl0/generate_rl0.c seen_add
+    src/rl0/generate_rl0.c seen_has
+    src/core/lattice.c lattice_direction_count
+    src/rl0/generate_rl0.c canonicalize_tile
+    src/core/boundary.c poly_has_live_boundary
+main (314)
+    src/rl0/generate_rl0.c write_records
+    src/throughput/vcomp.c vcomp_levels_destroy
+    src/rl0/generate_rl0.c emit_raw_completion
+    src/throughput/vcomp.c vcomp_enumerate_levels
+    src/throughput/vcomp.c vcomp_levels_init
+    src/core/boundary.c build_boundary_vertices
+    src/rl1/generate_rl1_naive.c ensure_dir
+    src/core/tile.c tile_load
+
+--- src/throughput/vcomp_pipeline.c (560) ---
 coord_cmp (1)
 mix_u64 (1)
 poly_equal_local (1)
@@ -916,7 +866,7 @@ ingest_raw (135)
     src/rl0/vcomp0.c state_hash64
     src/core/boundary.c poly_has_live_boundary
     src/core/cycle.c poly_hash_key_lattice
-run_vcomp_levels (380)
+run_vcomp_levels (400)
     src/rl0/vcomp0.c sv_destroy
     src/rl0/vcomp0.c stateset_destroy
     src/core/hash.c hash_destroy
@@ -936,7 +886,73 @@ run_vcomp_levels (380)
     src/rl0/vcomp0.c stateset_init
     src/rl1/search1_naive.c sv_init
 
---- src/rl0/vcomp0.c (934) ---
+--- src/rl1/generate_rl1_naive.c (595) ---
+append_text (1)
+coord_eq_local (1)
+coord_less_local (1)
+ensure_dir (1)
+print_coord_list (1)
+print_cycle (1)
+usage (1)
+append_coord_text (2)
+    src/rl1/generate_rl1_naive.c append_text
+coord_in_list (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+coord_on_boundary (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+cycle_cmp_local (2)
+    src/rl1/generate_rl1_naive.c coord_less_local
+cycle_matches_cyclic_or_reversed (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+cycles_share_vertex (2)
+    src/rl1/generate_rl1_naive.c coord_eq_local
+ensure_parent_dirs (2)
+    src/rl1/generate_rl1_naive.c ensure_dir
+print_tile_list (2)
+    src/rl1/ring_complete.c print_cycle
+record_cmp_local (3)
+    src/rl1/generate_rl1_naive.c cycle_cmp_local
+poly_to_string_local (4)
+    src/rl1/generate_rl1_naive.c append_coord_text
+    src/rl1/generate_rl1_naive.c append_text
+tile_is_completely_surrounded (5)
+    src/rl1/generate_rl1_naive.c coord_in_list
+    src/rl1/generate_rl1_naive.c coord_on_boundary
+write_one_record (5)
+    src/rl1/ring_complete.c print_tile_list
+    src/rl1/ring_complete.c print_coord_list
+    src/rl1/ring_complete.c print_cycle
+rewrite_sorted_records (6)
+    src/rl1/generate_rl1_naive.c write_one_record
+select_unique_center_tile (8)
+    src/rl1/generate_rl1_naive.c cycles_share_vertex
+    src/rl1/generate_rl1_naive.c tile_is_completely_surrounded
+canonicalize_placed_tile (17)
+    src/rl1/generate_rl1_naive.c cycle_matches_cyclic_or_reversed
+    src/core/cycle.c cycle_translate
+    src/core/tetrille.c tetrille_translate_cycle
+    src/core/tetrille.c tetrille_delta_to_6
+    src/core/cycle.c cycle_transform_lattice
+    src/core/cycle.c cycle_signed_area2
+    src/core/lattice.c lattice_transform_count
+normalize_record_tiles (20)
+    src/rl1/generate_rl1_naive.c cycle_matches_cyclic_or_reversed
+    src/rl1/generate_rl1_naive.c canonicalize_placed_tile
+records_add (22)
+    src/rl1/generate_rl1_naive.c normalize_record_tiles
+    src/rl1/ring_complete.c poly_to_string_local
+on_level (36)
+    src/rl1/generate_rl1_naive.c write_one_record
+    src/rl1/generate_rl1_naive.c records_add
+    src/rl1/generate_rl1_naive.c select_unique_center_tile
+main (446)
+    src/rl1/generate_rl1_naive.c rewrite_sorted_records
+    src/throughput/vcomp_pipeline.c run_vcomp_levels
+    src/rl1/generate_rl1_naive.c ensure_parent_dirs
+    src/core/tile.c tile_load
+    src/rl1/ring_complete.c usage
+
+--- src/rl0/vcomp0.c (954) ---
 coord_cmp (1)
 mix_u64 (1)
 poly_equal_local (1)
@@ -979,7 +995,7 @@ ingest_raw0 (176)
     src/core/boundary.c poly_has_live_boundary
     src/rl0/boundary0.c boundary0_poly_has_live_boundary
     src/core/cycle.c poly_hash_key_lattice
-run_vcomp0_levels (528)
+run_vcomp0_levels (548)
     src/rl0/vcomp0.c sv_destroy
     src/rl0/vcomp0.c stateset_destroy
     src/core/hash.c hash_destroy
@@ -1112,7 +1128,7 @@ main (418)
     src/core/tile.c tile_load
     src/rl1/ring_complete.c usage
 
---- src/rl1/generate_rl1.c (1563) ---
+--- src/rl1/generate_rl1.c (1594) ---
 RL1_MAX_COORDS (1)
 append_text (1)
 coord_cmp_local (1)
@@ -1181,7 +1197,7 @@ state_after_choice (194)
     src/rl0/boundary0.c boundary0_poly_has_live_boundary
     src/rl1/ring_complete.c rebuild_hidden_local
     src/rl0/attach0.c attach0_try_attach_arc
-dfs_ring (251)
+dfs_ring (271)
     src/rl1/ring_complete.c state_after_choice
     src/rl1/ring_complete.c dictionary_choices_at
     src/rl1/generate_rl1.c next_center_boundary_index
@@ -1189,7 +1205,7 @@ dfs_ring (251)
     src/core/hash.c hash_insert
     src/core/cycle.c poly_hash_key_lattice
     src/rl1/generate_rl1.c all_center_vertices_gone
-main (677)
+main (688)
     src/rl1/generate_rl1_naive.c rewrite_sorted_records
     src/core/hash.c hash_destroy
     src/rl1/generate_rl1.c dfs_ring
@@ -1199,8 +1215,9 @@ main (677)
     src/rl1/generate_rl1.c seed_branch_count_at
     src/rl1/generate_rl1.c choose_heuristic
     src/rl1/generate_rl1.c print_seed_counts
-    src/rl0/forget_map.c rl0_fm_build_from_cycles
-    src/rl0/forget_map.c rl0_fm_load_completions_with_deletions
+    src/rl0/forget_map.c rl0_fm_load_remembrance_filtered
+    src/rl0/forget_map.c rl0_fm_deletions_clear
+    src/rl0/forget_map.c rl0_fm_load_deletions
     src/rl0/forget_map.c rl0_fm_init
     src/core/tile.c tile_load
     src/rl1/ring_complete.c usage

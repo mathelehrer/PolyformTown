@@ -599,7 +599,7 @@ static void usage(const char *prog) {
             "default output_path: data/rl1/completions.dat\n"
             "default max_tiles: 20\n"
             "options:\n"
-            "  --completions PATH  RL0 completions dictionary (default data/rl0/completions.dat)\n"
+            "  --remembrance PATH  RL0 remembrance dictionary (default data/rl0/remembrance.dat)\n"
             "  --deletions PATH    RL0 deletions file (default data/rl0/deletions.dat)\n"
             "  --delete-level N    use deletions through N (default: all)\n"
             "  --live-only         prune states with dead outer boundary vertices\n"
@@ -612,7 +612,7 @@ static void usage(const char *prog) {
 int main(int argc, char **argv) {
     const char *tile_path = "tiles/hat.tile";
     const char *output_path = "data/rl1/completions.dat";
-    const char *completions_path = "data/rl0/completions.dat";
+    const char *remembrance_path = "data/rl0/remembrance.dat";
     const char *deletions_path = "data/rl0/deletions.dat";
     int delete_level = 1000000000;
     int max_tiles = 20;
@@ -633,8 +633,8 @@ int main(int argc, char **argv) {
             counts_only = 1;
         } else if (strcmp(argv[i], "--start") == 0 && i + 1 < argc) {
             requested_start = atoi(argv[++i]);
-        } else if (strcmp(argv[i], "--completions") == 0 && i + 1 < argc) {
-            completions_path = argv[++i];
+        } else if (strcmp(argv[i], "--remembrance") == 0 && i + 1 < argc) {
+            remembrance_path = argv[++i];
         } else if (strcmp(argv[i], "--deletions") == 0 && i + 1 < argc) {
             deletions_path = argv[++i];
         } else if (strcmp(argv[i], "--delete-level") == 0 && i + 1 < argc) {
@@ -679,23 +679,28 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    RL0FMDeletionSet deletions;
     rl0_fm_init(map);
-    if (!rl0_fm_load_completions_with_deletions(map,
-                                                completions_path,
-                                                deletions_path,
-                                                delete_level)) {
+    rl0_fm_deletions_init(&deletions);
+    if (!rl0_fm_load_deletions(&deletions, deletions_path)) {
+        fprintf(stderr, "failed to load deletions: %s\n", deletions_path);
+        rl0_fm_deletions_clear(&deletions);
+        free(map);
+        return 1;
+    }
+    if (!rl0_fm_load_remembrance_filtered(map,
+                                          remembrance_path,
+                                          &deletions,
+                                          delete_level)) {
         fprintf(stderr,
-                "failed to load RL0 dictionary: completions=%s deletions=%s\n",
-                completions_path,
+                "failed to load RL0 dictionary: remembrance=%s deletions=%s\n",
+                remembrance_path,
                 deletions_path);
+        rl0_fm_deletions_clear(&deletions);
         free(map);
         return 1;
     }
-    if (!rl0_fm_build_from_cycles(map)) {
-        fprintf(stderr, "failed to build RL0 forget map\n");
-        free(map);
-        return 1;
-    }
+    rl0_fm_deletions_clear(&deletions);
 
     print_seed_counts(&tile, map);
     if (counts_only) return 0;

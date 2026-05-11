@@ -305,6 +305,14 @@ static int lookup_maximal_arc0(const RL0ForgetMap *map,
            *value_count > 0;
 }
 
+int boundary0_vertex_has_dictionary_completion(const Tile *tile,
+                                               const Cycle *tiles,
+                                               int tile_count,
+                                               Coord q,
+                                               const RL0ForgetMap *map) {
+    return boundary0_vertex_has_dictionary_completion0(tile, tiles, tile_count, q, map);
+}
+
 int boundary0_poly_has_live_boundary(const Poly *p,
                                      const Tile *tile,
                                      const Cycle *tiles,
