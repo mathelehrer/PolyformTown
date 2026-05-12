@@ -41,7 +41,8 @@ static void usage(const char *prog) {
             "  --live-only         prune dead boundary after every attach, default\n"
             "  --all-final         disable live-boundary pruning\n"
             "  --remembrance PATH  default data/rl0/remembrance.dat\n"
-            "  --deletions PATH    default data/rl0/deletions.dat\n",
+            "  --deletions PATH    default data/rl0/deletions.dat\n"
+            "  --output PATH       default data/rl1/deletions.dat\n",
             prog);
 }
 
@@ -130,6 +131,7 @@ int main(int argc, char **argv) {
     const char *input_path = "data/rl1/completions.dat";
     const char *remembrance_path = "data/rl0/remembrance.dat";
     const char *deletions_path = "data/rl0/deletions.dat";
+    const char *output_path = "data/rl1/deletions.dat";
     int print_table = 1;
     Selection sel;
     BComp1Options opts;
@@ -137,6 +139,8 @@ int main(int argc, char **argv) {
     BComp1RecordVec records = {0};
     size_t living = 0, escaped = 0, dead = 0, unknown = 0;
     size_t total = 0;
+    int dead_records[REFINE1_MAX_SELECT];
+    int dead_count = 0;
 
     memset(&sel, 0, sizeof(sel));
     bcomp1_options_default(&opts);
@@ -158,6 +162,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--all-final") == 0) opts.live_only = 0;
         else if (strcmp(argv[i], "--remembrance") == 0 && i + 1 < argc) remembrance_path = argv[++i];
         else if (strcmp(argv[i], "--deletions") == 0 && i + 1 < argc) deletions_path = argv[++i];
+        else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) output_path = argv[++i];
         else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) { usage(argv[0]); return 0; }
         else if (!parse_selection_token(&sel, argv[i])) { usage(argv[0]); return 1; }
     }
@@ -208,7 +213,10 @@ int main(int argc, char **argv) {
         st = classify_stats(&result.stats);
         if (st == R1_LIVING) living++;
         else if (st == R1_ESCAPED) escaped++;
-        else if (st == R1_DEAD) dead++;
+        else if (st == R1_DEAD) {
+            dead++;
+            if (dead_count < REFINE1_MAX_SELECT) dead_records[dead_count++] = (int)idx;
+        }
         else unknown++;
         total++;
         if (print_table) print_row(idx, st, &result.stats);
@@ -220,6 +228,29 @@ int main(int argc, char **argv) {
 
     printf("summary depth=%d total=%zu living=%zu escaped=%zu dead=%zu unknown=%zu\n",
            opts.depth, total, living, escaped, dead, unknown);
+    printf("dead:");
+    for (int i = 0; i < dead_count; i++) printf(" %d", dead_records[i]);
+    printf("\n");
+
+    {
+        FILE *out = fopen(output_path, "w");
+        if (!out) {
+            fprintf(stderr, "failed to write deletion output: %s\n", output_path);
+            bcomp1_context_clear(&ctx);
+            bcomp1_free_records(&records);
+            return 1;
+        }
+        fprintf(out, "dead:");
+        for (int i = 0; i < dead_count; i++) fprintf(out, " %d", dead_records[i]);
+        fprintf(out, "\n");
+        if (fclose(out) != 0) {
+            fprintf(stderr, "failed while closing deletion output: %s\n", output_path);
+            bcomp1_context_clear(&ctx);
+            bcomp1_free_records(&records);
+            return 1;
+        }
+        fprintf(stderr, "wrote %d RL1 deletions to %s\n", dead_count, output_path);
+    }
 
     bcomp1_context_clear(&ctx);
     bcomp1_free_records(&records);
