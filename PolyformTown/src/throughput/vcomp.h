@@ -6,7 +6,7 @@
 
 #define VCOMP_MAX_HIDDEN (MAX_VERTS * MAX_CYCLES)
 #define VCOMP_MAX_TRACE MAX_VERTS
-#define VCOMP_MAX_LEVELS 32
+#define VCOMP_MAX_LEVELS 256
 
 typedef struct {
     Poly poly;

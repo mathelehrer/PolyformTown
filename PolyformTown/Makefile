@@ -11,10 +11,20 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-all: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
-	tile_to_imgtable rl0_generate rl0_depict rl0_data rl1_generate rl1_generate_naive \
-	rl1_depict_naive rl1_hexagons tiling_3x3_demo tiling_4x4_demo \
-	hat_boundary_dfs_check check_indexed_variants check_rl0 check_rl0_forget_map check_rl0_incremental_graph check_rl1_naive_filtration rl0_refine depict_search0_graph meta_graph_data
+# Default build: compile normal tools only.  Expensive/generated data, tests,
+# and one-off audit checkers live behind explicit targets below.
+all: tools
+
+tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
+	tile_to_imgtable rl0_generate rl0_depict rl1_generate rl1_generate_naive \
+	rl1_depict_naive rl1_hexagons rl1_search rl1_refine rl0_refine \
+	depict_search0_graph meta_graph tiling_3x3_demo tiling_4x4_demo \
+	hat_boundary_dfs_check check_indexed_variants
+
+checks: check_rl0 check_rl0_forget_map check_rl0_incremental_graph \
+	check_rl1_naive_filtration check_rl1_tile_order
+
+data: rl0_data rl1_data rl1_data_naive meta_graph_data
 
 poly_count: $(BIN)/poly_count
 $(BIN)/poly_count: $(SRC)/usage/count_poly.o $(CORE) $(POLY_SURFACE) | $(BIN)
@@ -29,18 +39,20 @@ $(SRC)/%.o: $(SRC)/%.c
 
 clean:
 	rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/rl1/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
+		$(SRC)/rl1/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
-		$(BIN)/rl1_hexagons \
+		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
+		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
 		$(BIN)/gen_graph \
 		$(BIN)/tiling_3x3_demo $(BIN)/tiling_4x4_demo \
 		$(BIN)/hat_boundary_dfs_check $(BIN)/check_indexed_variants \
+		$(BIN)/check_rl1_tile_order \
 		tests/check_rl0 tests/check_rl0_forget_map tests/check_rl0_incremental_graph tests/check_rl1_naive_filtration
 
 tiling_3x3_demo: $(BIN)/tiling_3x3_demo
@@ -65,9 +77,15 @@ $(BIN)/check_indexed_variants: $(SRC)/usage/check_indexed_variants.o $(SRC)/core
 		$(SRC)/core/tile.o $(SRC)/core/cycle.o \
 		$(SRC)/core/tetrille.o $(SRC)/core/lattice.o
 
+check_rl1_tile_order: $(BIN)/check_rl1_tile_order
+$(BIN)/check_rl1_tile_order: $(SRC)/usage/check_rl1_tile_order.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/check_rl1_tile_order.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+
 check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c
 	$(CC) -O2 -Wall -Wextra -std=c11 tests/check_rl0.c -o $@
+
 
 check_rl0_remembrance_counts: rl0_data
 	python3 tests/check_rl0_remembrance_counts.py data/rl0/remembrance.dat data/rl0/remembrance_counts.txt
@@ -130,6 +148,10 @@ rl1_generate: $(BIN)/rl1_generate
 $(BIN)/rl1_generate: $(SRC)/rl1/generate_rl1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
+search1_debug: $(BIN)/search1_debug
+$(BIN)/search1_debug: $(SRC)/rl1/debug/search1_debug.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/debug/search1_debug.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
 rl1_generate_naive: $(BIN)/rl1_generate_naive
 $(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE)
@@ -141,6 +163,18 @@ $(BIN)/rl1_depict_naive: $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughp
 rl1_hexagons: $(BIN)/rl1_hexagons
 $(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+rl1_search: $(BIN)/rl1_search
+$(BIN)/rl1_search: $(SRC)/rl1/search1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/search1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+rl1_refine: $(BIN)/rl1_refine
+$(BIN)/rl1_refine: $(SRC)/rl1/refine1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/refine1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+# Backward-compatible build aliases; binaries use contextual rl1_* names.
+search1: rl1_search
+refine1: rl1_refine
 
 rl0_refine: $(BIN)/rl0_refine
 $(BIN)/rl0_refine: $(SRC)/rl0/rl0_refine.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -158,7 +192,7 @@ meta_graph_data: meta_graph
 	mkdir -p data/meta
 	$(BIN)/gen_graph src > data/meta/dependencies.txt
 
-test: all
+test: tools checks
 	./tests/smoke.sh
 
 rl0_data: rl0_generate

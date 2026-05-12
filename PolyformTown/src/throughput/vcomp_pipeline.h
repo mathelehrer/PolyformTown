@@ -3,7 +3,7 @@
 
 #include "core/tile.h"
 
-#define VCOMP_MAX_LEVELS 32
+#define VCOMP_MAX_LEVELS 256
 #define VCOMP_MAX_HIDDEN (MAX_VERTS * MAX_CYCLES)
 #define VCOMP_MAX_TILES 128
 

@@ -2,3 +2,13 @@
 *.orig
 mono_count
 mono_dump
+
+*.patch
+*.zip
+*.txt
+
+PolyformTown/references
+PolyformTown/img/gpt-debug
+PolyformTown/*.dat
+PolyformTown/*.svg
+PolyformTown/src/rl1/debug
