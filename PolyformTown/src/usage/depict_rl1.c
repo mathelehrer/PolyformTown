@@ -5,6 +5,7 @@
 
 #include "core/cycle.h"
 #include "core/tile.h"
+#include "rl0/boundary0.h"
 
 #define VCOMP_MAX_TILES_FALLBACK 128
 #define MAX_COORDS_PER_RECORD (MAX_VERTS * MAX_CYCLES)
@@ -176,6 +177,40 @@ static int parse_coord_list(const char *text, Coord *out, int *out_count) {
     return 0;
 }
 
+
+static int append_value_text(char *dst, size_t cap, size_t *off, const char *text) {
+    size_t n = strlen(text);
+    if (*off + n + 1 > cap) return 0;
+    memcpy(dst + *off, text, n);
+    *off += n;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int bracket_delta(const char *text, int *seen_bracket) {
+    int d = 0;
+    for (const char *p = text; *p; p++) {
+        if (*p == '[') { d++; *seen_bracket = 1; }
+        else if (*p == ']') d--;
+    }
+    return d;
+}
+
+static int read_section_value(FILE *fp, const char *initial, char *dst, size_t cap) {
+    char line[262144];
+    size_t off = 0;
+    int seen = 0;
+    int balance = 0;
+    dst[0] = '\0';
+    if (!append_value_text(dst, cap, &off, initial)) return 0;
+    balance += bracket_delta(initial, &seen);
+    while ((!seen || balance > 0) && fgets(line, sizeof(line), fp)) {
+        if (!append_value_text(dst, cap, &off, line)) return 0;
+        balance += bracket_delta(line, &seen);
+    }
+    return seen && balance == 0;
+}
+
 static int parse_int_line(const char *line, const char *prefix, int *out) {
     size_t n = strlen(prefix);
     const char *p;
@@ -209,12 +244,37 @@ static void emit_record(const RL1Record *r, const Tile *tile, int grouped, int i
     }
 
     if (r->have_tiles) {
-        printf("Tiles\n");
-        for (int i = 0; i < r->tile_list_count; i++) {
-            Poly p;
-            p.cycle_count = 1;
-            p.cycles[0] = r->tiles[i];
-            tile_print_imgtable_shape(tile, &p);
+        int printed_light = 0;
+        int printed_dark = 0;
+        for (int pass = 0; pass < 2; pass++) {
+            int want_p = pass == 0 ? 1 : -1;
+            int printed_header = 0;
+            for (int i = 0; i < r->tile_list_count; i++) {
+                RL0FMItem item;
+                Poly p;
+                if (!boundary0_tile_item_at_vertex(tile, &r->tiles[i], r->tiles[i].v[0], &item)) {
+                    item.p = 1;
+                }
+                if (item.p != want_p) continue;
+                if (!printed_header) {
+                    printf("%s\n", want_p > 0 ? "TilesLight" : "TilesDark");
+                    printed_header = 1;
+                }
+                p.cycle_count = 1;
+                p.cycles[0] = r->tiles[i];
+                tile_print_imgtable_shape(tile, &p);
+                if (want_p > 0) printed_light++;
+                else printed_dark++;
+            }
+        }
+        if (!printed_light && !printed_dark) {
+            printf("Tiles\n");
+            for (int i = 0; i < r->tile_list_count; i++) {
+                Poly p;
+                p.cycle_count = 1;
+                p.cycles[0] = r->tiles[i];
+                tile_print_imgtable_shape(tile, &p);
+            }
         }
     }
 
@@ -230,14 +290,14 @@ static void usage(const char *prog) {
     fprintf(stderr,
             "usage: %s [tile_path] [data_path] [--grouped] [--limit N]\n"
             "default tile_path: tiles/hat.tile\n"
-            "default data_path: data/rl1/naive_hat.dat\n",
+            "default data_path: data/rl1/completions.dat\n",
             prog);
 }
 
 static int parse_args(int argc, char **argv, Options *opt) {
     int positional = 0;
     opt->tile_path = "tiles/hat.tile";
-    opt->data_path = "data/rl1/naive_hat.dat";
+    opt->data_path = "data/rl1/completions.dat";
     opt->grouped = 0;
     opt->limit = 0;
 
@@ -305,22 +365,47 @@ int main(int argc, char **argv) {
             continue;
         }
         if (strncmp(line, "center_tile:", 12) == 0) {
-            const char *p = line + 12;
+            char value[1048576];
+            const char *p;
+            if (!read_section_value(fp, line + 12, value, sizeof(value))) {
+                fprintf(stderr, "failed to read center_tile section\n");
+                fclose(fp);
+                return 1;
+            }
+            p = value;
             rec.have_center_tile = parse_cycle(&p, &rec.center_tile);
             continue;
         }
         if (strncmp(line, "boundary:", 9) == 0) {
-            rec.have_boundary = parse_poly(line + 9, &rec.boundary);
+            char value[1048576];
+            if (!read_section_value(fp, line + 9, value, sizeof(value))) {
+                fprintf(stderr, "failed to read boundary section\n");
+                fclose(fp);
+                return 1;
+            }
+            rec.have_boundary = parse_poly(value, &rec.boundary);
             continue;
         }
         if (strncmp(line, "constellation:", 14) == 0) {
-            rec.have_hidden = parse_coord_list(line + 14,
+            char value[1048576];
+            if (!read_section_value(fp, line + 14, value, sizeof(value))) {
+                fprintf(stderr, "failed to read constellation section\n");
+                fclose(fp);
+                return 1;
+            }
+            rec.have_hidden = parse_coord_list(value,
                                                rec.hidden,
                                                &rec.hidden_count);
             continue;
         }
         if (strncmp(line, "tiles:", 6) == 0) {
-            rec.have_tiles = parse_tile_list(line + 6,
+            char value[1048576];
+            if (!read_section_value(fp, line + 6, value, sizeof(value))) {
+                fprintf(stderr, "failed to read tiles section\n");
+                fclose(fp);
+                return 1;
+            }
+            rec.have_tiles = parse_tile_list(value,
                                              rec.tiles,
                                              &rec.tile_list_count);
             continue;

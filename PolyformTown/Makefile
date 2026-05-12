@@ -17,7 +17,7 @@ all: tools
 
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity imgtable \
 	tile_to_imgtable rl0_generate rl0_depict rl1_generate rl1_generate_naive \
-	rl1_depict_naive rl1_hexagons rl1_search rl1_refine rl0_refine \
+	rl1_depict rl1_supertiles rl1_hexagons rl1_search rl1_refine rl1_refine_all rl0_refine \
 	depict_search0_graph meta_graph tiling_3x3_demo tiling_4x4_demo \
 	hat_boundary_dfs_check check_indexed_variants
 
@@ -44,8 +44,9 @@ clean:
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
-		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict_naive \
-		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
+		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict $(BIN)/rl1_depict_naive \
+		$(BIN)/rl1_supertiles \
+		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine $(BIN)/rl1_refine_all \
 		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
@@ -156,9 +157,16 @@ rl1_generate_naive: $(BIN)/rl1_generate_naive
 $(BIN)/rl1_generate_naive: $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/generate_rl1_naive.o $(CORE) $(VCOMP_SURFACE)
 
-rl1_depict_naive: $(BIN)/rl1_depict_naive
-$(BIN)/rl1_depict_naive: $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_rl1_naive.o $(CORE) $(SRC)/throughput/vcomp.o
+rl1_depict: $(BIN)/rl1_depict
+$(BIN)/rl1_depict: $(SRC)/usage/depict_rl1.o $(RL0_SURFACE) $(CORE) $(SRC)/throughput/vcomp.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/depict_rl1.o $(RL0_SURFACE) $(CORE) $(SRC)/throughput/vcomp.o
+
+# Backward-compatible alias; rl1_depict is the standard tool now.
+rl1_depict_naive: rl1_depict
+
+rl1_supertiles: $(BIN)/rl1_supertiles
+$(BIN)/rl1_supertiles: $(SRC)/rl1/supertiles.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/supertiles.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl1_hexagons: $(BIN)/rl1_hexagons
 $(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -171,6 +179,10 @@ $(BIN)/rl1_search: $(SRC)/rl1/search1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(COR
 rl1_refine: $(BIN)/rl1_refine
 $(BIN)/rl1_refine: $(SRC)/rl1/refine1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/refine1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+rl1_refine_all: $(BIN)/rl1_refine_all
+$(BIN)/rl1_refine_all: $(SRC)/rl1/refine_all.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/refine_all.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 # Backward-compatible build aliases; binaries use contextual rl1_* names.
 search1: rl1_search
@@ -214,9 +226,9 @@ rl1_data_naive: rl1_generate_naive
 	mkdir -p data/rl1
 	$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_completions.dat 20 --live-only
 
-rl1_svg_naive: rl1_data_naive rl1_depict_naive imgtable
+rl1_svg_naive: rl1_data_naive rl1_depict imgtable
 	mkdir -p img
-	$(BIN)/rl1_depict_naive preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
+	$(BIN)/rl1_depict preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl1_naive_completions.svg
 
 $(BIN):

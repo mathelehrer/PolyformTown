@@ -26,9 +26,7 @@ static void usage(const char *prog) {
             "  --live-only        prune dead boundary after every attach, default\n"
             "  --all-final        disable live-boundary pruning\n"
             "  --remembrance PATH default data/rl0/remembrance.dat\n"
-            "  --deletions PATH   default data/rl0/deletions.dat\n"
-            "  --no-deletions     load remembrance without deletion filtering\n"
-            "  --delete-level N   default all\n",
+            "  --deletions PATH   default data/rl0/deletions.dat\n",
             prog);
 }
 
@@ -76,7 +74,6 @@ int main(int argc, char **argv) {
     const char *output_path = "data/rl1/search.dat";
     const char *remembrance_path = "data/rl0/remembrance.dat";
     const char *deletions_path = "data/rl0/deletions.dat";
-    int delete_level = 1000000000;
     int seed_tile = 0;
     int record_index = 0;
     int to_stdout = 0;
@@ -104,8 +101,6 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--max-dfs") == 0 && i + 1 < argc) opts.max_dfs = (size_t)atoll(argv[++i]);
         else if (strcmp(argv[i], "--remembrance") == 0 && i + 1 < argc) remembrance_path = argv[++i];
         else if (strcmp(argv[i], "--deletions") == 0 && i + 1 < argc) deletions_path = argv[++i];
-        else if (strcmp(argv[i], "--no-deletions") == 0) { deletions_path = NULL; delete_level = -1; }
-        else if (strcmp(argv[i], "--delete-level") == 0 && i + 1 < argc) delete_level = atoi(argv[++i]);
         else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) { usage(argv[0]); return 0; }
         else { usage(argv[0]); return 1; }
     }
@@ -113,7 +108,7 @@ int main(int argc, char **argv) {
     if (!seed_tile && record_index <= 0) { usage(argv[0]); return 1; }
     if (seed_tile && record_index > 0) { usage(argv[0]); return 1; }
 
-    if (!bcomp1_context_init(&ctx, tile_path, remembrance_path, deletions_path, delete_level)) {
+    if (!bcomp1_context_init(&ctx, tile_path, remembrance_path, deletions_path)) {
         fprintf(stderr, "ERROR: failed to initialize bcomp1 context\n");
         return 1;
     }

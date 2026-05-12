@@ -129,20 +129,38 @@ static int collect_tile_vertices_local(const Cycle *tiles, int tile_count, Coord
 }
 
 static int rebuild_hidden_local(const Poly *p, const Cycle *tiles, int tile_count, Coord *hidden) {
-    Coord all[RL1_MAX_COORDS];
-    Coord boundary[RL1_MAX_COORDS];
-    int ac = collect_tile_vertices_local(tiles, tile_count, all);
-    int bc = build_boundary_vertices(p, boundary);
+    Coord *all = malloc(sizeof(*all) * (size_t)RL1_MAX_COORDS);
+    Coord *boundary = malloc(sizeof(*boundary) * (size_t)RL1_MAX_COORDS);
+    int ac;
+    int bc;
     int hc = 0;
 
-    if (ac < 0 || bc < 0) return -1;
+    if (!all || !boundary) {
+        free(all);
+        free(boundary);
+        return -1;
+    }
+
+    ac = collect_tile_vertices_local(tiles, tile_count, all);
+    bc = build_boundary_vertices(p, boundary);
+    if (ac < 0 || bc < 0) {
+        free(all);
+        free(boundary);
+        return -1;
+    }
     for (int i = 0; i < ac; i++) {
         if (!coord_in_list_local(boundary, bc, all[i])) {
-            if (hc >= RL1_MAX_COORDS) return -1;
+            if (hc >= RL1_MAX_COORDS) {
+                free(all);
+                free(boundary);
+                return -1;
+            }
             hidden[hc++] = all[i];
         }
     }
     qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
+    free(all);
+    free(boundary);
     return hc;
 }
 
@@ -366,15 +384,20 @@ static int nonempty_choice_count(const RL0FMArc *values, int value_count) {
 static int seed_branch_count_at(const Tile *tile,
                                 const RL0ForgetMap *map,
                                 int index) {
-    RL1State seed;
+    RL1State *seed = calloc(1, sizeof(*seed));
     RL0FMArc key;
     const RL0FMArc *values = NULL;
     int value_count = 0;
-    if (!make_seed_state(tile, &seed)) return 1000000;
-    if (!dictionary_choices_at(tile, map, &seed, tile->base.v[index], &key, &values, &value_count)) {
-        return 1000000;
-    }
-    return nonempty_choice_count(values, value_count);
+    int count = 1000000;
+
+    if (!seed) return 1000000;
+    if (!make_seed_state(tile, seed)) goto done;
+    if (!dictionary_choices_at(tile, map, seed, tile->base.v[index], &key, &values, &value_count)) goto done;
+    count = nonempty_choice_count(values, value_count);
+
+done:
+    free(seed);
+    return count;
 }
 
 static void choose_heuristic(const Tile *tile,
@@ -433,11 +456,12 @@ static int state_after_choice(const RL1State *s,
                               int live_only,
                               RL1State *out,
                               Attach0Stats *astats) {
-    Cycle grown_tiles[ATTACH0_MAX_TILES];
+    Cycle *grown_tiles = calloc((size_t)ATTACH0_MAX_TILES, sizeof(*grown_tiles));
     int grown_tile_count = 0;
     Boundary0Stats bstats;
+    int ok = 0;
 
-    (void)map;
+    if (!grown_tiles) return 0;
     *out = *s;
 
     if (!attach0_try_attach_arc(&s->poly,
@@ -450,16 +474,19 @@ static int state_after_choice(const RL1State *s,
                                 grown_tiles,
                                 &grown_tile_count,
                                 astats)) {
-        return 0;
+        goto done;
     }
-    if (grown_tile_count < 0 || grown_tile_count > ATTACH0_MAX_TILES) return 0;
-    if (grown_tile_count > max_tiles) return -1;
+    if (grown_tile_count < 0 || grown_tile_count > ATTACH0_MAX_TILES) goto done;
+    if (grown_tile_count > max_tiles) {
+        ok = -1;
+        goto done;
+    }
 
     out->tile_count = grown_tile_count;
     for (int i = 0; i < grown_tile_count; i++) out->tiles[i] = grown_tiles[i];
 
     out->hidden_count = rebuild_hidden_local(&out->poly, out->tiles, out->tile_count, out->hidden);
-    if (out->hidden_count < 0) return 0;
+    if (out->hidden_count < 0) goto done;
 
     if (live_only) {
         boundary0_stats_init(&bstats);
@@ -469,12 +496,16 @@ static int state_after_choice(const RL1State *s,
                                               out->tile_count,
                                               map,
                                               &bstats)) {
-            return 0;
+            goto done;
         }
     }
 
     poly_to_key_local(&out->poly, out->key, sizeof(out->key));
-    return 1;
+    ok = 1;
+
+done:
+    free(grown_tiles);
+    return ok;
 }
 
 static int dfs_ring(RL1Ctx *ctx,
@@ -494,12 +525,15 @@ static int dfs_ring(RL1Ctx *ctx,
     search->dfs_calls++;
 
     if (all_center_vertices_gone(s, center)) {
-        Poly canonical;
-        poly_hash_key_lattice(&s->poly, TILE_LATTICE_TETRILLE, &canonical);
-        if (!hash_insert(&search->seen_outputs, &canonical)) {
+        Poly *canonical = malloc(sizeof(*canonical));
+        if (!canonical) return 0;
+        poly_hash_key_lattice(&s->poly, TILE_LATTICE_TETRILLE, canonical);
+        if (!hash_insert(&search->seen_outputs, canonical)) {
+            free(canonical);
             search->duplicate_count++;
             return 1;
         }
+        free(canonical);
         if (!records_add(ctx, s, center, search->start_index, search->dir)) return 0;
         search->complete_count++;
         return 1;
@@ -571,15 +605,19 @@ static void rewrite_sorted_records(RL1Ctx *ctx) {
 }
 
 static void print_seed_counts(const Tile *tile, const RL0ForgetMap *map) {
-    RL1State seed;
-    if (!make_seed_state(tile, &seed)) return;
+    RL1State *seed = calloc(1, sizeof(*seed));
+    if (!seed) return;
+    if (!make_seed_state(tile, seed)) {
+        free(seed);
+        return;
+    }
     fprintf(stderr, "first-step indexed arc counts:\n");
     for (int i = 0; i < tile->base.n; i++) {
         RL0FMArc key;
         const RL0FMArc *values = NULL;
         int value_count = 0;
         int count = 0;
-        if (dictionary_choices_at(tile, map, &seed, tile->base.v[i], &key, &values, &value_count)) {
+        if (dictionary_choices_at(tile, map, seed, tile->base.v[i], &key, &values, &value_count)) {
             count = nonempty_choice_count(values, value_count);
         }
         fprintf(stderr,
@@ -590,6 +628,16 @@ static void print_seed_counts(const Tile *tile, const RL0ForgetMap *map) {
                 tile->base.v[i].y,
                 count);
     }
+    free(seed);
+}
+
+static int deletion_file_level(const RL0FMDeletionSet *deletions) {
+    int level = -1;
+    if (!deletions) return -1;
+    for (int i = 0; i < deletions->count; i++) {
+        if (deletions->level[i] > level) level = deletions->level[i];
+    }
+    return level;
 }
 
 static void usage(const char *prog) {
@@ -601,7 +649,6 @@ static void usage(const char *prog) {
             "options:\n"
             "  --remembrance PATH  RL0 remembrance dictionary (default data/rl0/remembrance.dat)\n"
             "  --deletions PATH    RL0 deletions file (default data/rl0/deletions.dat)\n"
-            "  --delete-level N    use deletions through N (default: all)\n"
             "  --live-only         prune states with dead outer boundary vertices\n"
             "  --start N           force central-hat starting vertex index\n"
             "  --cw | --ccw        force traversal direction\n"
@@ -614,7 +661,6 @@ int main(int argc, char **argv) {
     const char *output_path = "data/rl1/completions.dat";
     const char *remembrance_path = "data/rl0/remembrance.dat";
     const char *deletions_path = "data/rl0/deletions.dat";
-    int delete_level = 1000000000;
     int max_tiles = 20;
     int live_only = 0;
     int requested_start = -1;
@@ -637,8 +683,6 @@ int main(int argc, char **argv) {
             remembrance_path = argv[++i];
         } else if (strcmp(argv[i], "--deletions") == 0 && i + 1 < argc) {
             deletions_path = argv[++i];
-        } else if (strcmp(argv[i], "--delete-level") == 0 && i + 1 < argc) {
-            delete_level = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             usage(argv[0]);
             return 0;
@@ -662,7 +706,7 @@ int main(int argc, char **argv) {
 
     Tile tile;
     RL0ForgetMap *map = NULL;
-    RL1State seed;
+    RL1State *seed = NULL;
     RL1Ctx ctx;
     RL1Search search;
     int start_index = 0;
@@ -691,7 +735,7 @@ int main(int argc, char **argv) {
     if (!rl0_fm_load_remembrance_filtered(map,
                                           remembrance_path,
                                           &deletions,
-                                          delete_level)) {
+                                          deletion_file_level(&deletions))) {
         fprintf(stderr,
                 "failed to load RL0 dictionary: remembrance=%s deletions=%s\n",
                 remembrance_path,
@@ -714,8 +758,10 @@ int main(int argc, char **argv) {
             max_tiles,
             live_only);
 
-    if (!make_seed_state(&tile, &seed)) {
+    seed = calloc(1, sizeof(*seed));
+    if (!seed || !make_seed_state(&tile, seed)) {
         fprintf(stderr, "failed to build central-hat seed\n");
+        free(seed);
         free(map);
         return 1;
     }
@@ -733,9 +779,10 @@ int main(int argc, char **argv) {
     search.live_only = live_only;
     hash_init(&search.seen_outputs, 65536);
 
-    if (!dfs_ring(&ctx, &search, &tile, map, &seed, &tile.base, start_index)) {
+    if (!dfs_ring(&ctx, &search, &tile, map, seed, &tile.base, start_index)) {
         fprintf(stderr, "DFS failed\n");
         hash_destroy(&search.seen_outputs);
+        free(seed);
         free(map);
         return 1;
     }
@@ -756,6 +803,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < ctx.record_count; i++) free(ctx.records[i].boundary_str);
     free(ctx.records);
     hash_destroy(&search.seen_outputs);
+    free(seed);
     free(map);
     return 0;
 }

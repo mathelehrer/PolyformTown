@@ -100,8 +100,7 @@ void bcomp1_options_default(BComp1Options *opts);
 int bcomp1_context_init(BComp1Context *ctx,
                         const char *tile_path,
                         const char *remembrance_path,
-                        const char *deletions_path,
-                        int delete_level);
+                        const char *deletions_path);
 void bcomp1_context_clear(BComp1Context *ctx);
 
 int bcomp1_load_records(const char *path, BComp1RecordVec *out);

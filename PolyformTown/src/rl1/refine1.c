@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,8 +41,7 @@ static void usage(const char *prog) {
             "  --live-only         prune dead boundary after every attach, default\n"
             "  --all-final         disable live-boundary pruning\n"
             "  --remembrance PATH  default data/rl0/remembrance.dat\n"
-            "  --deletions PATH    default data/rl0/deletions.dat\n"
-            "  --no-deletions      load remembrance without deletion filtering\n",
+            "  --deletions PATH    default data/rl0/deletions.dat\n",
             prog);
 }
 
@@ -89,7 +89,7 @@ static int parse_selection_token(Selection *sel, const char *arg) {
         while (*p == ',' || isspace((unsigned char)*p)) p++;
         if (!*p) break;
         v = strtol(p, &end, 10);
-        if (end == p || v <= 0 || v > 1000000000L) return 0;
+        if (end == p || v <= 0 || v > INT_MAX) return 0;
         if (!add_selected(sel, (int)v)) return 0;
         p = end;
         while (*p == ',' || isspace((unsigned char)*p)) p++;
@@ -130,7 +130,6 @@ int main(int argc, char **argv) {
     const char *input_path = "data/rl1/completions.dat";
     const char *remembrance_path = "data/rl0/remembrance.dat";
     const char *deletions_path = "data/rl0/deletions.dat";
-    int delete_level = 1000000000;
     int print_table = 1;
     Selection sel;
     BComp1Options opts;
@@ -159,7 +158,6 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--all-final") == 0) opts.live_only = 0;
         else if (strcmp(argv[i], "--remembrance") == 0 && i + 1 < argc) remembrance_path = argv[++i];
         else if (strcmp(argv[i], "--deletions") == 0 && i + 1 < argc) deletions_path = argv[++i];
-        else if (strcmp(argv[i], "--no-deletions") == 0) { deletions_path = NULL; delete_level = -1; }
         else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) { usage(argv[0]); return 0; }
         else if (!parse_selection_token(&sel, argv[i])) { usage(argv[0]); return 1; }
     }
@@ -171,7 +169,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "failed to load records: %s\n", input_path);
         return 1;
     }
-    if (!bcomp1_context_init(&ctx, tile_path, remembrance_path, deletions_path, delete_level)) {
+    if (!bcomp1_context_init(&ctx, tile_path, remembrance_path, deletions_path)) {
         fprintf(stderr, "failed to initialize bcomp1 context\n");
         bcomp1_free_records(&records);
         return 1;

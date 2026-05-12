@@ -428,63 +428,73 @@ static int coord_cmp(const void *A, const void *B) {
     return a->y - b->y;
 }
 
-static void canonicalize_result(VCompRawState *s, int lattice) {
+static int canonicalize_result(VCompRawState *s, int lattice) {
     int tcount = lattice_transform_count(lattice);
-    VCompRawState best = {0};
+    VCompRawState *best = calloc(1, sizeof(*best));
+    VCompRawState *cur = calloc(1, sizeof(*cur));
     int first = 1;
 
+    if (!best || !cur) {
+        free(best);
+        free(cur);
+        return 0;
+    }
+
     for (int t = 0; t < tcount; t++) {
-        VCompRawState cur = {0};
         int unique_hidden = 0;
         int unique_ports = 0;
+        memset(cur, 0, sizeof(*cur));
 
-        poly_transform_lattice(&s->poly, &cur.poly, lattice, t);
-        cur.target = coord_transform_lattice(s->target, lattice, t);
-        cur.hidden_count = s->hidden_count;
+        poly_transform_lattice(&s->poly, &cur->poly, lattice, t);
+        cur->target = coord_transform_lattice(s->target, lattice, t);
+        cur->hidden_count = s->hidden_count;
         for (int i = 0; i < s->hidden_count; i++) {
-            cur.hidden[i] = coord_transform_lattice(s->hidden[i], lattice, t);
+            cur->hidden[i] = coord_transform_lattice(s->hidden[i], lattice, t);
         }
-        cur.port_count = s->port_count;
+        cur->port_count = s->port_count;
         for (int i = 0; i < s->port_count; i++) {
-            cur.ports[i] = coord_transform_lattice(s->ports[i], lattice, t);
+            cur->ports[i] = coord_transform_lattice(s->ports[i], lattice, t);
         }
-        cur.tile_count = s->tile_count;
+        cur->tile_count = s->tile_count;
         for (int i = 0; i < s->tile_count; i++) {
-            cycle_transform_lattice(&s->tiles[i], &cur.tiles[i], lattice, t);
+            cycle_transform_lattice(&s->tiles[i], &cur->tiles[i], lattice, t);
         }
 
-        normalize_payload(&cur.poly,
-                          &cur.target,
-                          cur.hidden,
-                          cur.hidden_count,
-                          cur.ports,
-                          cur.port_count,
-                          cur.tiles,
-                          cur.tile_count,
+        normalize_payload(&cur->poly,
+                          &cur->target,
+                          cur->hidden,
+                          cur->hidden_count,
+                          cur->ports,
+                          cur->port_count,
+                          cur->tiles,
+                          cur->tile_count,
                           lattice);
-        prepare_poly_cycles_local(&cur.poly, lattice);
+        prepare_poly_cycles_local(&cur->poly, lattice);
 
-        qsort(cur.hidden, (size_t)cur.hidden_count, sizeof(Coord), coord_cmp);
-        for (int i = 0; i < cur.hidden_count; i++) {
-            if (i == 0 || !coord_eq(cur.hidden[i], cur.hidden[i - 1])) {
-                cur.hidden[unique_hidden++] = cur.hidden[i];
+        qsort(cur->hidden, (size_t)cur->hidden_count, sizeof(Coord), coord_cmp);
+        for (int i = 0; i < cur->hidden_count; i++) {
+            if (i == 0 || !coord_eq(cur->hidden[i], cur->hidden[i - 1])) {
+                cur->hidden[unique_hidden++] = cur->hidden[i];
             }
         }
-        cur.hidden_count = unique_hidden;
-        qsort(cur.ports, (size_t)cur.port_count, sizeof(Coord), coord_cmp);
-        for (int i = 0; i < cur.port_count; i++) {
-            if (i == 0 || !coord_eq(cur.ports[i], cur.ports[i - 1])) {
-                cur.ports[unique_ports++] = cur.ports[i];
+        cur->hidden_count = unique_hidden;
+        qsort(cur->ports, (size_t)cur->port_count, sizeof(Coord), coord_cmp);
+        for (int i = 0; i < cur->port_count; i++) {
+            if (i == 0 || !coord_eq(cur->ports[i], cur->ports[i - 1])) {
+                cur->ports[unique_ports++] = cur->ports[i];
             }
         }
-        cur.port_count = unique_ports;
+        cur->port_count = unique_ports;
 
-        if (first || poly_less(&cur.poly, &best.poly)) {
-            best = cur;
+        if (first || poly_less(&cur->poly, &best->poly)) {
+            *best = *cur;
             first = 0;
         }
     }
-    *s = best;
+    *s = *best;
+    free(best);
+    free(cur);
+    return 1;
 }
 
 static void dfs_levels(const Poly *p,
@@ -604,26 +614,26 @@ static void dfs_levels(const Poly *p,
                                                         ctx->tile->lattice);
                 if (!target_present) {
                     if (next_hidden_count > ctx->base_hidden_count) {
-                        VCompRawState state;
-                        memset(&state, 0, sizeof(state));
-                        state.poly = grown;
-                        state.target = ctx->target;
-                        state.hidden_count = next_hidden_count;
+                        VCompRawState *state = calloc(1, sizeof(*state));
+                        if (!state) continue;
+                        state->poly = grown;
+                        state->target = ctx->target;
+                        state->hidden_count = next_hidden_count;
                         for (int i = 0; i < next_hidden_count; i++) {
-                            state.hidden[i] = tmp->next_hidden[i];
+                            state->hidden[i] = tmp->next_hidden[i];
                         }
-                        state.port_count = next_port_count;
+                        state->port_count = next_port_count;
                         for (int i = 0; i < next_port_count; i++) {
-                            state.ports[i] = tmp->next_ports[i];
+                            state->ports[i] = tmp->next_ports[i];
                         }
 
                         if (ctx->emit_tiles) {
                             for (int i = 0; i < next_trace_tile_count; i++) {
-                                state.tiles[i] = trace_tiles[i];
+                                state->tiles[i] = trace_tiles[i];
                             }
-                            state.tile_count = next_trace_tile_count;
+                            state->tile_count = next_trace_tile_count;
                         } else {
-                            state.tile_count = 0;
+                            state->tile_count = 0;
                         }
                         /* completion-time connectivity check */
                         if (!hidden_port_connected(tmp->new_hidden,
@@ -633,14 +643,22 @@ static void dfs_levels(const Poly *p,
                                                    event_tiles,
                                                    next_event_tile_count,
                                                    (hidden_count > 0))) {
+                            free(state);
                             continue;
                         }
 
-                        canonicalize_result(&state, ctx->tile->lattice);
-                        if (state.hidden_count > ctx->out->max_level) continue;
-                        if (hash_insert(ctx->seen, &state.poly)) {
-                            raw_vec_push(&ctx->out->levels[state.hidden_count], &state);
+                        if (!canonicalize_result(state, ctx->tile->lattice)) {
+                            free(state);
+                            continue;
                         }
+                        if (state->hidden_count > ctx->out->max_level) {
+                            free(state);
+                            continue;
+                        }
+                        if (hash_insert(ctx->seen, &state->poly)) {
+                            raw_vec_push(&ctx->out->levels[state->hidden_count], state);
+                        }
+                        free(state);
                     }
                     continue;
                 }

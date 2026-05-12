@@ -221,6 +221,40 @@ static int parse_coord_list0(const char *text, Coord *out, int *out_count) {
     return 0;
 }
 
+
+static int append_value_text(char *dst, size_t cap, size_t *off, const char *text) {
+    size_t n = strlen(text);
+    if (*off + n + 1 > cap) return 0;
+    memcpy(dst + *off, text, n);
+    *off += n;
+    dst[*off] = '\0';
+    return 1;
+}
+
+static int bracket_delta(const char *text, int *seen_bracket) {
+    int d = 0;
+    for (const char *p = text; *p; p++) {
+        if (*p == '[') { d++; *seen_bracket = 1; }
+        else if (*p == ']') d--;
+    }
+    return d;
+}
+
+static int read_section_value(FILE *fp, const char *initial, char *dst, size_t cap) {
+    char line[262144];
+    size_t off = 0;
+    int seen = 0;
+    int balance = 0;
+    dst[0] = '\0';
+    if (!append_value_text(dst, cap, &off, initial)) return 0;
+    balance += bracket_delta(initial, &seen);
+    while ((!seen || balance > 0) && fgets(line, sizeof(line), fp)) {
+        if (!append_value_text(dst, cap, &off, line)) return 0;
+        balance += bracket_delta(line, &seen);
+    }
+    return seen && balance == 0;
+}
+
 static int parse_int_line0(const char *line, const char *prefix, int *out) {
     size_t n = strlen(prefix);
     const char *p;
@@ -269,20 +303,29 @@ static int load_records(const char *path, BComp1RecordVec *out) {
             continue;
         }
         if (strncmp(line, "center_tile:", 12) == 0) {
-            const char *p = line + 12;
+            char value[1048576];
+            const char *p;
+            if (!read_section_value(fp, line + 12, value, sizeof(value))) { fclose(fp); return 0; }
+            p = value;
             r.have_center = parse_cycle0(&p, &r.center);
             continue;
         }
         if (strncmp(line, "boundary:", 9) == 0) {
-            r.have_boundary = parse_poly0(line + 9, &r.boundary);
+            char value[1048576];
+            if (!read_section_value(fp, line + 9, value, sizeof(value))) { fclose(fp); return 0; }
+            r.have_boundary = parse_poly0(value, &r.boundary);
             continue;
         }
         if (strncmp(line, "constellation:", 14) == 0) {
-            r.have_hidden = parse_coord_list0(line + 14, r.hidden, &r.hidden_count);
+            char value[1048576];
+            if (!read_section_value(fp, line + 14, value, sizeof(value))) { fclose(fp); return 0; }
+            r.have_hidden = parse_coord_list0(value, r.hidden, &r.hidden_count);
             continue;
         }
         if (strncmp(line, "tiles:", 6) == 0) {
-            r.have_tiles = parse_cycle_list0(line + 6, r.tiles, &r.tiles_count);
+            char value[1048576];
+            if (!read_section_value(fp, line + 6, value, sizeof(value))) { fclose(fp); return 0; }
+            r.have_tiles = parse_cycle_list0(value, r.tiles, &r.tiles_count);
             continue;
         }
     }
@@ -1008,13 +1051,22 @@ static int record_boundary_cmp(const void *A, const void *B) {
     return a->level - b->level;
 }
 
+static int loaded_deletion_level(const RL0FMDeletionSet *deletions) {
+    int level = -1;
+    if (!deletions) return -1;
+    for (int i = 0; i < deletions->count; i++) {
+        if (deletions->level[i] > level) level = deletions->level[i];
+    }
+    return level;
+}
+
 static int load_rl0_map(RL0ForgetMap *map,
                         const char *remembrance_path,
-                        const char *deletions_path,
-                        int delete_level) {
+                        const char *deletions_path) {
     RL0FMDeletionSet deletions;
+    int level;
     rl0_fm_init(map);
-    if (!deletions_path || delete_level < 0) {
+    if (!deletions_path) {
         return rl0_fm_load_remembrance_filtered(map, remembrance_path, NULL, -1);
     }
     rl0_fm_deletions_init(&deletions);
@@ -1022,7 +1074,8 @@ static int load_rl0_map(RL0ForgetMap *map,
         rl0_fm_deletions_clear(&deletions);
         return 0;
     }
-    if (!rl0_fm_load_remembrance_filtered(map, remembrance_path, &deletions, delete_level)) {
+    level = loaded_deletion_level(&deletions);
+    if (!rl0_fm_load_remembrance_filtered(map, remembrance_path, &deletions, level)) {
         rl0_fm_deletions_clear(&deletions);
         return 0;
     }
@@ -1049,11 +1102,10 @@ void bcomp1_options_default(BComp1Options *opts) {
 int bcomp1_context_init(BComp1Context *ctx,
                         const char *tile_path,
                         const char *remembrance_path,
-                        const char *deletions_path,
-                        int delete_level) {
+                        const char *deletions_path) {
     memset(ctx, 0, sizeof(*ctx));
     if (!tile_load(tile_path, &ctx->tile)) return 0;
-    return load_rl0_map(&ctx->map, remembrance_path, deletions_path, delete_level);
+    return load_rl0_map(&ctx->map, remembrance_path, deletions_path);
 }
 
 void bcomp1_context_clear(BComp1Context *ctx) {
