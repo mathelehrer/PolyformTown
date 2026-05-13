@@ -4,15 +4,42 @@
 
 <p><em>Figure: Welcome to Run Level 0.0, Hat vertex figures and their constellations.</em></p>
 
+
+
 <h2>RL0.x Optimized Eliminations</h2>
 
 <img src="./PolyformTown/img/rl0_refine.svg" alt="RL0.x Optimized Eliminations" />
 
 <p><em>Figure: Booting through 0.x efficiency surfaces.</em></p>
 
+
  
-<h2>RL1.0 Valid surrounds of one central tile</h2>
+<h2>RL1 validated surrounds of one central tile</h2>
 
-<img src="./PolyformTown/img/rl1_completions.svg" alt="RL1.0 One Completions" />
+<img src="./PolyformTown/img/rl1_survivors.svg" alt="RL1 Completions" />
 
-<p><em>Figure: Run Level 1.0 attained, (the?) 26 hexagonal pre-images.</em></p>
+<p><em>Figure: Run Level 1 attained, (how many?) hexagonal pre-images.</em></p>
+
+
+
+<h2>Odd one out becomes a supertile</h2>
+
+<img src="./PolyformTown/img/supertile.svg" alt="supertile" />
+
+<p><em>Figure: Supertile after forced completion tiles added.</em></p>
+
+
+
+<h2>RL2 validated surrounds of one supertile</h2>
+
+<img src="./PolyformTown/img/rl2_survivors.svg" alt="RL2 surrounds" />
+
+<p><em>Figure: structure emerging?.</em></p>
+
+
+
+<h2>RL3 validated 2-surrounds of one supertile</h2>
+
+<img src="./PolyformTown/img/rl3_survivors.svg" alt="RL3 surrounds" />
+
+<p><em>Figure: almost good enough for hexagaon extraction?</em></p>
