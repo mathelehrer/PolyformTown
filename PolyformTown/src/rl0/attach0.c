@@ -18,6 +18,10 @@ void attach0_closure_stats_init(Attach0ClosureStats *stats) {
     if (stats) memset(stats, 0, sizeof(*stats));
 }
 
+static void attach0_status_set(AttachStatus *status, AttachStatus value) {
+    if (status) *status = value;
+}
+
 static int cycle_equal0(const Cycle *a, const Cycle *b) {
     return !cycle_less(a, b) && !cycle_less(b, a);
 }
@@ -87,16 +91,18 @@ static Edge previous_edge_at_vertex0(const Cycle *c, Coord target) {
     return e;
 }
 
-static int attach0_try_attach_one_on_edge(const Poly *base,
-                                          const Tile *tile,
-                                          Coord target,
-                                          Edge current_edge,
-                                          RL0FMItem item,
-                                          Poly *out,
-                                          Cycle *aligned_out,
-                                          Edge *next_edge,
-                                          Attach0Stats *stats) {
+static int attach0_try_attach_one_on_edge_status(const Poly *base,
+                                                 const Tile *tile,
+                                                 Coord target,
+                                                 Edge current_edge,
+                                                 RL0FMItem item,
+                                                 Poly *out,
+                                                 Cycle *aligned_out,
+                                                 Edge *next_edge,
+                                                 Attach0Stats *stats,
+                                                 AttachStatus *status_out) {
     int be = find_boundary_edge0(base, current_edge);
+    attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
     if (be < 0) return 0;
 
     for (int v = 0; v < tile->variant_count; v++) {
@@ -108,19 +114,30 @@ static int attach0_try_attach_one_on_edge(const Poly *base,
         te = source_index_to_variant_slot0(tv->n, item.p, item.i);
         if (te < 0 || te >= tv->n) continue;
         if (stats) stats->attach_one_attempts++;
-        if (!try_attach_tile_poly_ex(base,
-                                     tv,
-                                     tile->lattice,
-                                     be,
-                                     te,
-                                     &grown,
-                                     &aligned)) {
-            continue;
+        {
+            AttachStatus one_status = ATTACH_STATUS_GEOMETRY;
+            if (!try_attach_tile_poly_ex_status(base,
+                                                tv,
+                                                tile->lattice,
+                                                be,
+                                                te,
+                                                &grown,
+                                                &aligned,
+                                                &one_status)) {
+                if (one_status == ATTACH_STATUS_BOUNDARY_BOUND ||
+                    one_status == ATTACH_STATUS_CYCLE_BOUND ||
+                    one_status == ATTACH_STATUS_INTERNAL_BOUND) {
+                    attach0_status_set(status_out, one_status);
+                    return 0;
+                }
+                continue;
+            }
         }
         *out = grown;
         if (aligned_out) *aligned_out = aligned;
         if (next_edge) *next_edge = previous_edge_at_vertex0(&aligned, target);
         if (stats) stats->attach_one_successes++;
+        attach0_status_set(status_out, ATTACH_STATUS_OK);
         return 1;
     }
     return 0;
@@ -161,15 +178,16 @@ int attach0_try_attach_one(const Poly *base,
 
     for (int be = 0; be < fc; be++) {
         if (!coord_eq(frontier[be].b, target)) continue;
-        if (attach0_try_attach_one_on_edge(base,
-                                           tile,
-                                           target,
-                                           frontier[be],
-                                           item,
-                                           out,
-                                           aligned_out,
-                                           NULL,
-                                           stats)) {
+        if (attach0_try_attach_one_on_edge_status(base,
+                                                  tile,
+                                                  target,
+                                                  frontier[be],
+                                                  item,
+                                                  out,
+                                                  aligned_out,
+                                                  NULL,
+                                                  stats,
+                                                  NULL)) {
             return 1;
         }
     }
@@ -186,14 +204,54 @@ int attach0_try_attach_arc(const Poly *base,
                            Cycle *out_tiles,
                            int *out_tile_count,
                            Attach0Stats *stats) {
+    return attach0_try_attach_arc_status(base,
+                                         tile,
+                                         tiles,
+                                         tile_count,
+                                         target,
+                                         arc,
+                                         out,
+                                         out_tiles,
+                                         out_tile_count,
+                                         stats,
+                                         NULL);
+}
+
+int attach0_try_attach_arc_status(const Poly *base,
+                                  const Tile *tile,
+                                  const Cycle *tiles,
+                                  int tile_count,
+                                  Coord target,
+                                  const RL0FMArc *arc,
+                                  Poly *out,
+                                  Cycle *out_tiles,
+                                  int *out_tile_count,
+                                  Attach0Stats *stats,
+                                  AttachStatus *status_out) {
     Edge frontier[A0_MAX_EDGES];
     int fc;
-    if (!base || !tile || !arc || !out || !out_tiles || !out_tile_count) return 0;
-    if (tile_count < 0 || tile_count > ATTACH0_MAX_TILES) return 0;
-    if (arc->n < 0 || arc->n > RL0_FM_MAX_ITEMS) return 0;
-    if (tile_count + arc->n > ATTACH0_MAX_TILES) return 0;
+    attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
+    if (!base || !tile || !arc || !out || !out_tiles || !out_tile_count) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+    if (tile_count < 0 || tile_count > ATTACH0_MAX_TILES) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+    if (arc->n < 0 || arc->n > RL0_FM_MAX_ITEMS) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+    if (tile_count + arc->n > ATTACH0_MAX_TILES) {
+        attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+        return 0;
+    }
     fc = build_boundary_edges(base, frontier);
-    if (fc < 0 || fc > A0_MAX_EDGES) return 0;
+    if (fc < 0 || fc > A0_MAX_EDGES) {
+        attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+        return 0;
+    }
 
     if (stats) stats->attach_arc_attempts++;
 
@@ -202,6 +260,7 @@ int attach0_try_attach_arc(const Poly *base,
         for (int i = 0; i < tile_count; i++) out_tiles[i] = tiles[i];
         *out_tile_count = tile_count;
         if (stats) stats->attach_arc_successes++;
+        attach0_status_set(status_out, ATTACH_STATUS_OK);
         return 1;
     }
 
@@ -223,19 +282,33 @@ int attach0_try_attach_arc(const Poly *base,
             Poly grown;
             Cycle aligned;
             Edge next;
-            if (!attach0_try_attach_one_on_edge(&cur,
-                                                tile,
-                                                target,
-                                                current,
-                                                arc->item[k],
-                                                &grown,
-                                                &aligned,
-                                                &next,
-                                                stats)) {
-                ok = 0;
-                break;
+            {
+                AttachStatus one_status = ATTACH_STATUS_GEOMETRY;
+                if (!attach0_try_attach_one_on_edge_status(&cur,
+                                                           tile,
+                                                           target,
+                                                           current,
+                                                           arc->item[k],
+                                                           &grown,
+                                                           &aligned,
+                                                           &next,
+                                                           stats,
+                                                           &one_status)) {
+                    if (one_status == ATTACH_STATUS_BOUNDARY_BOUND ||
+                        one_status == ATTACH_STATUS_CYCLE_BOUND ||
+                        one_status == ATTACH_STATUS_INTERNAL_BOUND) {
+                        attach0_status_set(status_out, one_status);
+                        return 0;
+                    }
+                    ok = 0;
+                    break;
+                }
             }
             cur = grown;
+            if (carried_count >= ATTACH0_MAX_TILES) {
+                attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+                return 0;
+            }
             carried[carried_count++] = aligned;
             current = next;
         }
@@ -245,6 +318,7 @@ int attach0_try_attach_arc(const Poly *base,
             for (int i = 0; i < carried_count; i++) out_tiles[i] = carried[i];
             *out_tile_count = carried_count;
             if (stats) stats->attach_arc_successes++;
+            attach0_status_set(status_out, ATTACH_STATUS_OK);
             return 1;
         }
     }
@@ -259,16 +333,46 @@ int attach0_force_live_closure(Poly *poly,
                                int max_steps,
                                Attach0Stats *attach_stats,
                                Attach0ClosureStats *closure_stats) {
+    return attach0_force_live_closure_status(poly,
+                                             tile,
+                                             tiles,
+                                             tile_count,
+                                             map,
+                                             max_steps,
+                                             attach_stats,
+                                             closure_stats,
+                                             NULL);
+}
+
+int attach0_force_live_closure_status(Poly *poly,
+                                      const Tile *tile,
+                                      Cycle *tiles,
+                                      int *tile_count,
+                                      const RL0ForgetMap *map,
+                                      int max_steps,
+                                      Attach0Stats *attach_stats,
+                                      Attach0ClosureStats *closure_stats,
+                                      AttachStatus *status_out) {
     int steps = 0;
-    if (!poly || !tile || !tiles || !tile_count || !map) return 0;
-    if (*tile_count < 0 || *tile_count > ATTACH0_MAX_TILES) return 0;
+    attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
+    if (!poly || !tile || !tiles || !tile_count || !map) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+    if (*tile_count < 0 || *tile_count > ATTACH0_MAX_TILES) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
     if (max_steps <= 0) max_steps = 1024;
 
     while (steps < max_steps) {
         Coord verts[A0_MAX_EDGES];
         int vc = build_boundary_vertices(poly, verts);
         int forced_this_pass = 0;
-        if (vc < 0 || vc > A0_MAX_EDGES) return 0;
+        if (vc < 0 || vc > A0_MAX_EDGES) {
+            attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+            return 0;
+        }
 
         for (int v = 0; v < vc; v++) {
             RL0FMArc key;
@@ -282,6 +386,7 @@ int attach0_force_live_closure(Poly *poly,
                 !rl0_fm_lookup_any_rotation(map, &key, &values, &value_count, NULL) ||
                 value_count <= 0) {
                 if (closure_stats) closure_stats->zero_choice_failures++;
+                attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
                 return 0;
             }
 
@@ -304,22 +409,28 @@ int attach0_force_live_closure(Poly *poly,
                 Poly grown;
                 Cycle out_tiles[ATTACH0_MAX_TILES];
                 int out_tile_count = 0;
+                AttachStatus forced_status = ATTACH_STATUS_GEOMETRY;
                 if (closure_stats) closure_stats->forced_vertices++;
-                if (!attach0_try_attach_arc(poly,
-                                            tile,
-                                            tiles,
-                                            *tile_count,
-                                            verts[v],
-                                            &values[nonempty_index],
-                                            &grown,
-                                            out_tiles,
-                                            &out_tile_count,
-                                            attach_stats)) {
+                if (!attach0_try_attach_arc_status(poly,
+                                                   tile,
+                                                   tiles,
+                                                   *tile_count,
+                                                   verts[v],
+                                                   &values[nonempty_index],
+                                                   &grown,
+                                                   out_tiles,
+                                                   &out_tile_count,
+                                                   attach_stats,
+                                                   &forced_status)) {
                     if (closure_stats) closure_stats->forced_failures++;
+                    attach0_status_set(status_out, forced_status);
                     return 0;
                 }
                 *poly = grown;
-                if (out_tile_count < 0 || out_tile_count > ATTACH0_MAX_TILES) return 0;
+                if (out_tile_count < 0 || out_tile_count > ATTACH0_MAX_TILES) {
+                    attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+                    return 0;
+                }
                 for (int i = 0; i < out_tile_count; i++) tiles[i] = out_tiles[i];
                 *tile_count = out_tile_count;
                 if (closure_stats) {
@@ -332,7 +443,11 @@ int attach0_force_live_closure(Poly *poly,
             }
         }
 
-        if (!forced_this_pass) return 1;
+        if (!forced_this_pass) {
+            attach0_status_set(status_out, ATTACH_STATUS_OK);
+            return 1;
+        }
     }
+    attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
     return 0;
 }

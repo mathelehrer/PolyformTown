@@ -24,6 +24,149 @@
 #define SEARCH0_DEFAULT_OPTIMIZE "preferences/optimize.dat"
 #define SEARCH0_DEFAULT_HIDDEN_BOUND 256
 
+
+
+typedef enum {
+    S0C_OK = 0,
+    S0C_OK_CARRY,
+    S0C_OK_NO_PORT,
+    S0C_PRUNE_ATTACH,
+    S0C_PRUNE_CLOSURE,
+    S0C_ESCAPE_HIDDEN_BOUND,
+    S0C_ESCAPE_TILE_BOUND,
+    S0C_ESCAPE_BOUNDARY_BOUND,
+    S0C_ESCAPE_CYCLE_BOUND,
+    S0C_ESCAPE_INTERNAL_BOUND,
+    S0C_ESCAPE_CLOSURE_STEPS,
+    S0C_ESCAPE_GLOBAL_STEPS,
+    S0C_ERROR_CHOOSE_PORT,
+    S0C_ERROR_STATE_LIMIT,
+    S0C_COUNT
+} Search0Code;
+
+typedef enum {
+    S0K_OK = 0,
+    S0K_PRUNE,
+    S0K_ESCAPE,
+    S0K_ERROR
+} Search0Kind;
+
+typedef struct {
+    Search0Code code;
+    const char *name;
+    Search0Kind kind;
+} Search0CodeInfo;
+
+static const Search0CodeInfo search0_code_table[S0C_COUNT] = {
+    {S0C_OK, "ok", S0K_OK},
+    {S0C_OK_CARRY, "ok:carry", S0K_OK},
+    {S0C_OK_NO_PORT, "ok:no-port", S0K_OK},
+    {S0C_PRUNE_ATTACH, "prune:attach", S0K_PRUNE},
+    {S0C_PRUNE_CLOSURE, "prune:closure", S0K_PRUNE},
+    {S0C_ESCAPE_HIDDEN_BOUND, "escape:hidden-bound", S0K_ESCAPE},
+    {S0C_ESCAPE_TILE_BOUND, "escape:tile-bound", S0K_ESCAPE},
+    {S0C_ESCAPE_BOUNDARY_BOUND, "escape:boundary-bound", S0K_ESCAPE},
+    {S0C_ESCAPE_CYCLE_BOUND, "escape:cycle-bound", S0K_ESCAPE},
+    {S0C_ESCAPE_INTERNAL_BOUND, "escape:internal-bound", S0K_ESCAPE},
+    {S0C_ESCAPE_CLOSURE_STEPS, "escape:closure-steps", S0K_ESCAPE},
+    {S0C_ESCAPE_GLOBAL_STEPS, "escape:global-steps", S0K_ESCAPE},
+    {S0C_ERROR_CHOOSE_PORT, "error:choose-port", S0K_ERROR},
+    {S0C_ERROR_STATE_LIMIT, "error:state-limit", S0K_ERROR}
+};
+
+typedef struct {
+    int by_code[S0C_COUNT];
+} Search0CodeCounts;
+
+
+static const char *search0_code_name(Search0Code code) {
+    if (code < 0 || code >= S0C_COUNT) return "error:bad-code";
+    return search0_code_table[code].name;
+}
+
+static void search0_counts_init(Search0CodeCounts *counts) {
+    if (counts) memset(counts, 0, sizeof(*counts));
+}
+
+static void search0_counts_add(Search0CodeCounts *counts, Search0Code code) {
+    if (!counts || code < 0 || code >= S0C_COUNT) return;
+    counts->by_code[code]++;
+}
+
+static int search0_counts_kind(const Search0CodeCounts *counts, Search0Kind kind) {
+    int total = 0;
+    if (!counts) return 0;
+    for (int i = 0; i < S0C_COUNT; i++) {
+        if (search0_code_table[i].kind == kind) total += counts->by_code[i];
+    }
+    return total;
+}
+
+static void search0_counts_print_detail(FILE *fp, const Search0CodeCounts *counts) {
+    int first = 1;
+    if (!fp || !counts) return;
+    for (int i = 0; i < S0C_COUNT; i++) {
+        if (counts->by_code[i] == 0) continue;
+        fprintf(fp, "%s%s=%d", first ? "" : " ", search0_code_table[i].name, counts->by_code[i]);
+        first = 0;
+    }
+    if (first) fprintf(fp, "-");
+}
+
+static const char *search0_note_code0(Search0Code code) {
+    switch (code) {
+    case S0C_ESCAPE_HIDDEN_BOUND: return "hidden";
+    case S0C_ESCAPE_TILE_BOUND: return "tile";
+    case S0C_ESCAPE_BOUNDARY_BOUND: return "boundary";
+    case S0C_ESCAPE_CYCLE_BOUND: return "cycle";
+    case S0C_ESCAPE_INTERNAL_BOUND: return "internal";
+    case S0C_ESCAPE_CLOSURE_STEPS: return "closure-steps";
+    case S0C_ESCAPE_GLOBAL_STEPS: return "global-steps";
+    case S0C_ERROR_CHOOSE_PORT: return "err:choose-port";
+    case S0C_ERROR_STATE_LIMIT: return "err:state-limit";
+    default: return NULL;
+    }
+}
+
+static void search0_counts_print_note(FILE *fp,
+                                      const Search0CodeCounts *branch_counts,
+                                      const Search0CodeCounts *checkpoint_counts) {
+    int first = 1;
+    if (!fp) return;
+    for (int i = 0; i < S0C_COUNT; i++) {
+        int n = 0;
+        const char *code;
+        if (branch_counts) n += branch_counts->by_code[i];
+        if (checkpoint_counts) n += checkpoint_counts->by_code[i];
+        if (n == 0) continue;
+        if (search0_code_table[i].kind != S0K_ESCAPE &&
+            search0_code_table[i].kind != S0K_ERROR) continue;
+        code = search0_note_code0((Search0Code)i);
+        if (!code) continue;
+        fprintf(fp, "%s%s", first ? "" : " ", code);
+        first = 0;
+    }
+    if (first) fprintf(fp, "-");
+}
+
+
+static Search0Code search0_code_from_attach_status0(AttachStatus status,
+                                                    Search0Code geometry_code) {
+    switch (status) {
+    case ATTACH_STATUS_OK:
+        return S0C_OK;
+    case ATTACH_STATUS_BOUNDARY_BOUND:
+        return S0C_ESCAPE_BOUNDARY_BOUND;
+    case ATTACH_STATUS_CYCLE_BOUND:
+        return S0C_ESCAPE_CYCLE_BOUND;
+    case ATTACH_STATUS_INTERNAL_BOUND:
+        return S0C_ESCAPE_INTERNAL_BOUND;
+    case ATTACH_STATUS_GEOMETRY:
+    default:
+        return geometry_code;
+    }
+}
+
 typedef struct {
     int file_no;
     int have_boundary;
@@ -95,7 +238,8 @@ static void emit_transition0(PrintCtx *print,
                              int step,
                              int graph_level,
                              const PortChoice *choice,
-                             const RL0FMArc *arc);
+                             const RL0FMArc *arc,
+                             Search0Code code);
 
 static void emit_relation0(PrintCtx *print,
                            const Tile *tile,
@@ -117,6 +261,11 @@ static void emit_graph_node_update0(PrintCtx *print,
                                    int id,
                                    int discover_step,
                                    int node_division);
+
+static void emit_graph_node_mark0(PrintCtx *print,
+                                  int id,
+                                  const char *mark,
+                                  Search0Code code);
 
 static int ensure_graph_node0(PrintCtx *print,
                               const Tile *tile,
@@ -637,11 +786,16 @@ static int force_live_closure_bounded0(Poly *poly,
                                        Coord *hidden,
                                        int *hidden_count_out,
                                        Attach0Stats *astats,
-                                       Attach0ClosureStats *cstats) {
+                                       Attach0ClosureStats *cstats,
+                                       Search0Code *code_out) {
     Attach0ClosureStats local_cstats;
     Attach0ClosureStats *use_cstats = cstats;
     int hidden_count;
-    if (!poly || !tile || !tiles || !tile_count || !map || !hidden) return 0;
+    if (code_out) *code_out = S0C_OK;
+    if (!poly || !tile || !tiles || !tile_count || !map || !hidden) {
+        if (code_out) *code_out = S0C_ESCAPE_INTERNAL_BOUND;
+        return 0;
+    }
     if (!use_cstats) {
         attach0_closure_stats_init(&local_cstats);
         use_cstats = &local_cstats;
@@ -649,21 +803,44 @@ static int force_live_closure_bounded0(Poly *poly,
     if (max_steps <= 0) max_steps = 1024;
     for (int step = 0; step < max_steps; step++) {
         int before_steps = use_cstats->closure_steps;
-        int ok = attach0_force_live_closure(poly,
-                                            tile,
-                                            tiles,
-                                            tile_count,
-                                            map,
-                                            1,
-                                            astats,
-                                            use_cstats);
+        AttachStatus closure_status = ATTACH_STATUS_GEOMETRY;
+        int ok = attach0_force_live_closure_status(poly,
+                                                   tile,
+                                                   tiles,
+                                                   tile_count,
+                                                   map,
+                                                   1,
+                                                   astats,
+                                                   use_cstats,
+                                                   &closure_status);
         hidden_count = rebuild_hidden0(poly, tiles, *tile_count, hidden);
-        if (hidden_count < 0) return 0;
+        if (hidden_count < 0) {
+            if (code_out) *code_out = S0C_ESCAPE_INTERNAL_BOUND;
+            return -1;
+        }
         if (hidden_count_out) *hidden_count_out = hidden_count;
-        if (hidden_count > hidden_bound) return -1;
-        if (ok) return 1;
-        if (use_cstats->closure_steps <= before_steps) return 0;
+        if (hidden_count > hidden_bound) {
+            if (code_out) *code_out = S0C_ESCAPE_HIDDEN_BOUND;
+            return -1;
+        }
+        if (ok) {
+            if (code_out) *code_out = S0C_OK;
+            return 1;
+        }
+        if (use_cstats->closure_steps <= before_steps) {
+            if (code_out) {
+                *code_out = search0_code_from_attach_status0(closure_status,
+                                                             S0C_PRUNE_CLOSURE);
+            }
+            if (closure_status == ATTACH_STATUS_BOUNDARY_BOUND ||
+                closure_status == ATTACH_STATUS_CYCLE_BOUND ||
+                closure_status == ATTACH_STATUS_INTERNAL_BOUND) {
+                return -1;
+            }
+            return 0;
+        }
     }
+    if (code_out) *code_out = S0C_ESCAPE_CLOSURE_STEPS;
     return -1;
 }
 
@@ -675,33 +852,62 @@ static int state_after_attach0(const Search0State *s,
                                int hidden_bound,
                                Search0State *out,
                                Attach0Stats *astats,
-                               Attach0ClosureStats *cstats) {
+                               Attach0ClosureStats *cstats,
+                               Search0Code *code_out) {
     int hidden_count;
     Cycle grown_tiles[ATTACH0_MAX_TILES];
     int grown_tile_count = 0;
 
+    if (code_out) *code_out = S0C_OK;
     *out = *s;
 
-    if (!attach0_try_attach_arc(&s->poly,
-                                tile,
-                                s->tiles,
-                                s->tile_count,
-                                choice->q,
-                                &choice->values[value_index],
-                                &out->poly,
-                                grown_tiles,
-                                &grown_tile_count,
-                                astats)) {
-        return 0;
+    if (s->tile_count + choice->values[value_index].n > ATTACH0_MAX_TILES) {
+        if (code_out) *code_out = S0C_ESCAPE_TILE_BOUND;
+        return -1;
     }
-    if (grown_tile_count < 0 || grown_tile_count > ATTACH0_MAX_TILES) return 0;
+
+    {
+        AttachStatus attach_status = ATTACH_STATUS_GEOMETRY;
+        if (!attach0_try_attach_arc_status(&s->poly,
+                                           tile,
+                                           s->tiles,
+                                           s->tile_count,
+                                           choice->q,
+                                           &choice->values[value_index],
+                                           &out->poly,
+                                           grown_tiles,
+                                           &grown_tile_count,
+                                           astats,
+                                           &attach_status)) {
+            if (code_out) {
+                *code_out = search0_code_from_attach_status0(attach_status,
+                                                             S0C_PRUNE_ATTACH);
+            }
+            if (attach_status == ATTACH_STATUS_BOUNDARY_BOUND ||
+                attach_status == ATTACH_STATUS_CYCLE_BOUND ||
+                attach_status == ATTACH_STATUS_INTERNAL_BOUND) {
+                return -1;
+            }
+            return 0;
+        }
+    }
+    if (grown_tile_count < 0 || grown_tile_count > ATTACH0_MAX_TILES) {
+        if (code_out) *code_out = S0C_ESCAPE_TILE_BOUND;
+        return -1;
+    }
     out->tile_count = grown_tile_count;
     for (int i = 0; i < grown_tile_count; i++) out->tiles[i] = grown_tiles[i];
 
     hidden_count = rebuild_hidden0(&out->poly, out->tiles, out->tile_count, out->hidden);
-    if (hidden_count < 0) return 0;
+    if (hidden_count < 0) {
+        if (code_out) *code_out = S0C_ESCAPE_INTERNAL_BOUND;
+        return -1;
+    }
     out->hidden_count = hidden_count;
-    if (out->hidden_count > hidden_bound) return -1;
+    if (out->hidden_count > hidden_bound) {
+        if (code_out) *code_out = S0C_ESCAPE_HIDDEN_BOUND;
+        return -1;
+    }
 
     /* Force only after the requested arc has completed. */
     {
@@ -715,12 +921,14 @@ static int state_after_attach0(const Search0State *s,
                                              out->hidden,
                                              &hidden_count,
                                              astats,
-                                             cstats);
+                                             cstats,
+                                             code_out);
         if (cr < 0) return -1;
         if (cr == 0) return 0;
     }
     out->hidden_count = hidden_count;
     poly_to_key0(&out->poly, out->key, sizeof(out->key));
+    if (code_out) *code_out = S0C_OK;
     return 1;
 }
 
@@ -750,6 +958,53 @@ static void union_prov0(unsigned char *dst, const unsigned char *src) {
     }
 }
 
+static void make_display_dead0(const unsigned char *proven_dead,
+                               const unsigned char *terminal_dead,
+                               unsigned char *display_dead) {
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        display_dead[p] = (unsigned char)((proven_dead[p] || terminal_dead[p]) ? 1 : 0);
+    }
+}
+
+static int add_terminal_state_prov0(unsigned char *terminal_dead,
+                                    const Search0State *s) {
+    int added = 0;
+    if (!terminal_dead || !s) return 0;
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        if (!s->prov[p] || terminal_dead[p]) continue;
+        terminal_dead[p] = 1;
+        added++;
+    }
+    return added;
+}
+
+static int strip_state_prov0(Search0State *s, const unsigned char *remove) {
+    int keep = 0;
+    if (!s || !remove) return s ? 1 : 0;
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        if (remove[p]) s->prov[p] = 0;
+        if (s->prov[p]) keep = 1;
+    }
+    return keep;
+}
+
+static int filter_statevec_prov0(StateVec *v, const unsigned char *remove) {
+    StateVec next;
+    if (!v || !remove) return 1;
+    statevec_init0(&next);
+    for (int i = 0; i < v->count; i++) {
+        Search0State s = v->data[i];
+        if (!strip_state_prov0(&s, remove)) continue;
+        if (!statevec_add_merge0(&next, &s)) {
+            statevec_free0(&next);
+            return 0;
+        }
+    }
+    statevec_free0(v);
+    *v = next;
+    return 1;
+}
+
 static int count_marks0(const unsigned char *present) {
     int count = 0;
     for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
@@ -772,6 +1027,25 @@ static int count_unknown0(const unsigned char *initial,
     int count = 0;
     for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
         if (initial[p] && !escaped[p] && !dead[p]) count++;
+    }
+    return count;
+}
+
+static int count_initial_present0(const unsigned char *initial,
+                                  const unsigned char *present) {
+    int count = 0;
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        if (initial[p] && present[p]) count++;
+    }
+    return count;
+}
+
+static int count_initial_removed0(const unsigned char *initial,
+                                  const unsigned char *escaped,
+                                  const unsigned char *dead) {
+    int count = 0;
+    for (int p = 0; p < SEARCH0_MAX_PROV; p++) {
+        if (initial[p] && dead[p] && !escaped[p]) count++;
     }
     return count;
 }
@@ -847,8 +1121,10 @@ static int refilter_states0(StateVec *cur,
                             const RL0ForgetMap *map,
                             int hidden_bound,
                             unsigned char *escaped,
+                            unsigned char *terminal_dead,
                             Attach0Stats *astats,
                             Attach0ClosureStats *cstats,
+                            Search0CodeCounts *counts,
                             PrintCtx *print,
                             int step,
                             int graph_level) {
@@ -859,6 +1135,7 @@ static int refilter_states0(StateVec *cur,
         Search0State s = src;
         {
             int hidden_count = 0;
+            Search0Code code = S0C_OK;
             int cr = force_live_closure_bounded0(&s.poly,
                                                  tile,
                                                  s.tiles,
@@ -869,13 +1146,30 @@ static int refilter_states0(StateVec *cur,
                                                  s.hidden,
                                                  &hidden_count,
                                                  astats,
-                                                 cstats);
+                                                 cstats,
+                                                 &code);
             if (cr < 0) {
+                search0_counts_add(counts, code);
                 s.hidden_count = hidden_count;
                 add_state_prov0(escaped, &s);
+                add_terminal_state_prov0(terminal_dead, &s);
+                if (print && print->fp) {
+                    int src_id = ensure_graph_node0(print,
+                                                    tile,
+                                                    &src,
+                                                    "carry",
+                                                    step,
+                                                    graph_level,
+                                                    NULL);
+                    emit_graph_node_mark0(print, src_id, "escape", code);
+                }
                 continue;
             }
-            if (cr == 0) continue;
+            if (cr == 0) {
+                search0_counts_add(counts, code);
+                continue;
+            }
+            search0_counts_add(counts, S0C_OK);
             s.hidden_count = hidden_count;
         }
         poly_to_key0(&s.poly, s.key, sizeof(s.key));
@@ -901,12 +1195,14 @@ static int checkpoint_fixed_point0(StateVec *cur,
                                    int hidden_bound,
                                    const unsigned char *initial,
                                    unsigned char *escaped,
+                                   unsigned char *terminal_dead,
                                    unsigned char *dead,
                                    int *death_level,
                                    const Search0Record *records,
                                    int record_count,
                                    Attach0Stats *astats,
                                    Attach0ClosureStats *cstats,
+                                   Search0CodeCounts *checkpoint_counts,
                                    int *new_dead,
                                    int *new_dead_count,
                                    PrintCtx *print,
@@ -954,28 +1250,28 @@ static int checkpoint_fixed_point0(StateVec *cur,
             if (!rebuild_map0(map, remembrance_path, deletions, level)) return 0;
         }
         if (print && print->fp) print->sublevel++;
-        if (!refilter_states0(cur, tile, map, hidden_bound, escaped, astats, cstats, print, step, graph_level)) return 0;
+        if (!refilter_states0(cur,
+                              tile,
+                              map,
+                              hidden_bound,
+                              escaped,
+                              terminal_dead,
+                              astats,
+                              cstats,
+                              checkpoint_counts,
+                              print,
+                              step,
+                              graph_level)) return 0;
     }
 }
 
 static FILE *progress_fp0 = NULL;
 static int progress_enabled0 = 1;
+static int progress_detail0 = 0;
 
 static FILE *progress_out0(void) {
     return progress_fp0 ? progress_fp0 : stdout;
 }
-
-static void print_new_dead0(const int *new_dead, int new_dead_count) {
-    if (new_dead_count <= 0) {
-        fprintf(progress_out0(), "-");
-        return;
-    }
-    for (int i = 0; i < new_dead_count; i++) {
-        if (i) fprintf(progress_out0(), ",");
-        fprintf(progress_out0(), "%d", new_dead[i]);
-    }
-}
-
 
 static void fprint_fm_cycle0(FILE *fp, const RL0FMCycle *cycle) {
     fprintf(fp, "[");
@@ -1126,8 +1422,11 @@ static int deletion_set_max_level0(const RL0FMDeletionSet *set) {
 
 static void print_header0(void) {
     if (!progress_enabled0) return;
-    fprintf(progress_out0(), "%8s %8s | %8s %8s %8s %8s  %s\n",
-           "distance", "living", "escaped", "unknown", "dead", "dropped", "new");
+    fprintf(progress_out0(),
+            "%5s %6s %4s %5s | %5s %6s %6s | %-16s\n",
+            "lvl", "states", "ok", "prune",
+            "roots", "remove", "escape",
+            progress_detail0 ? "detail" : "note");
 }
 
 static void print_progress0(int distance,
@@ -1135,20 +1434,37 @@ static void print_progress0(int distance,
                             const unsigned char *initial,
                             const unsigned char *escaped,
                             const unsigned char *dead,
-                            int dropped,
+                            const Search0CodeCounts *branch_counts,
+                            const Search0CodeCounts *checkpoint_counts,
                             const int *new_dead,
                             int new_dead_count) {
+    int ok = search0_counts_kind(branch_counts, S0K_OK) +
+             search0_counts_kind(checkpoint_counts, S0K_OK);
+    int prune = search0_counts_kind(branch_counts, S0K_PRUNE) +
+                search0_counts_kind(checkpoint_counts, S0K_PRUNE);
+    (void)new_dead;
+    (void)new_dead_count;
     if (!progress_enabled0) return;
-    fprintf(progress_out0(), "%8d %8d | %8d %8d %8d %8d  ",
+    fprintf(progress_out0(), "%5d %6d %4d %5d | %5d %6d %6d | ",
            distance,
            living,
-           count_marks0(escaped),
+           ok,
+           prune,
            count_unknown0(initial, escaped, dead),
-           count_marks0(dead),
-           dropped);
-    print_new_dead0(new_dead, new_dead_count);
+           count_initial_removed0(initial, escaped, dead),
+           count_initial_present0(initial, escaped));
+    if (progress_detail0) {
+        fprintf(progress_out0(), "branch{");
+        search0_counts_print_detail(progress_out0(), branch_counts);
+        fprintf(progress_out0(), "} check{");
+        search0_counts_print_detail(progress_out0(), checkpoint_counts);
+        fprintf(progress_out0(), "}");
+    } else {
+        search0_counts_print_note(progress_out0(), branch_counts, checkpoint_counts);
+    }
     fprintf(progress_out0(), "\n");
 }
+
 
 static int min_distance_all0(const StateVec *v, const Tile *tile, const RL0ForgetMap *map) {
     int md = SEARCH0_INF;
@@ -1360,6 +1676,19 @@ static void emit_graph_node_update0(PrintCtx *print,
     fflush(print->fp);
 }
 
+static void emit_graph_node_mark0(PrintCtx *print,
+                                  int id,
+                                  const char *mark,
+                                  Search0Code code) {
+    if (!print || !print->fp || id < 0) return;
+    fprintf(print->fp, "---node-mark---\n");
+    fprintf(print->fp, "id: %d\n", id);
+    fprintf(print->fp, "mark: %s\n", mark ? mark : "highlight");
+    fprintf(print->fp, "status: %s\n", search0_code_name(code));
+    fprintf(print->fp, "---end-node-mark---\n");
+    fflush(print->fp);
+}
+
 static int ensure_graph_node0(PrintCtx *print,
                               const Tile *tile,
                               const Search0State *s,
@@ -1413,11 +1742,13 @@ static void emit_graph_edge0(PrintCtx *print,
                              int distance,
                              Coord port,
                              const RL0FMArc *arc,
-                             const char *kind) {
+                             const char *kind,
+                             Search0Code code) {
     if (!print || !print->fp) return;
     if (src_id < 0 || dst_id < 0) return;
     fprintf(print->fp, "---edge---\n");
     fprintf(print->fp, "kind: %s\n", kind ? kind : "edge");
+    fprintf(print->fp, "status: %s\n", search0_code_name(code));
     fprintf(print->fp, "src: %d\n", src_id);
     fprintf(print->fp, "dst: %d\n", dst_id);
     fprintf(print->fp, "step: %d\n", step);
@@ -1507,7 +1838,8 @@ static void emit_transition0(PrintCtx *print,
                              int step,
                              int graph_level,
                              const PortChoice *choice,
-                             const RL0FMArc *arc) {
+                             const RL0FMArc *arc,
+                             Search0Code code) {
     int src_id;
     int dst_id;
     int is_new = 0;
@@ -1528,7 +1860,8 @@ static void emit_transition0(PrintCtx *print,
                      choice ? choice->distance : SEARCH0_INF,
                      choice ? choice->q : (Coord){0,0,0},
                      arc,
-                     is_new ? "discover" : "collision");
+                     is_new ? "discover" : "collision",
+                     code);
 }
 
 static void emit_relation0(PrintCtx *print,
@@ -1561,7 +1894,8 @@ static void emit_relation0(PrintCtx *print,
                      SEARCH0_INF,
                      (Coord){0,0,0},
                      NULL,
-                     edge_kind ? edge_kind : "carry");
+                     edge_kind ? edge_kind : "carry",
+                     S0C_OK);
 }
 
 
@@ -1592,6 +1926,8 @@ int main(int argc, char **argv) {
     unsigned char initial_prov[SEARCH0_MAX_PROV];
     unsigned char escaped_prov[SEARCH0_MAX_PROV];
     unsigned char dead_prov[SEARCH0_MAX_PROV];
+    unsigned char terminal_dead_prov[SEARCH0_MAX_PROV];
+    unsigned char display_dead_prov[SEARCH0_MAX_PROV];
     int death_level[SEARCH0_MAX_PROV];
     int initial_exclusions[SEARCH0_MAX_PROV];
     int initial_exclusion_count = 0;
@@ -1665,6 +2001,10 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[ai], "--keep-deletions") == 0) {
             keep_deletions = 1;
+            continue;
+        }
+        if (strcmp(argv[ai], "--progress-detail") == 0) {
+            progress_detail0 = 1;
             continue;
         }
         if (!parse_record_selection_token0(argv[ai],
@@ -1766,6 +2106,8 @@ int main(int argc, char **argv) {
     memset(initial_prov, 0, sizeof(initial_prov));
     memset(escaped_prov, 0, sizeof(escaped_prov));
     memset(dead_prov, 0, sizeof(dead_prov));
+    memset(terminal_dead_prov, 0, sizeof(terminal_dead_prov));
+    memset(display_dead_prov, 0, sizeof(display_dead_prov));
     for (int p = 0; p < SEARCH0_MAX_PROV; p++) death_level[p] = -1;
     for (int i = 0; i < initial_exclusion_count; i++) {
         int p = initial_exclusions[i];
@@ -1818,7 +2160,8 @@ int main(int argc, char **argv) {
                                                  s.hidden,
                                                  &hidden_count,
                                                  &astats,
-                                                 &cstats);
+                                                 &cstats,
+                                                 NULL);
             if (cr < 0) {
                 s.hidden_count = hidden_count;
                 add_state_prov0(escaped_prov, &s);
@@ -1836,20 +2179,31 @@ int main(int argc, char **argv) {
 
     count_prov_with_escaped0(&cur, escaped_prov, initial_prov);
     print_header0();
-    print_progress0(0,
-                    cur.count,
-                    initial_prov,
-                    escaped_prov,
-                    dead_prov,
-                    0,
-                    initial_exclusions,
-                    initial_exclusion_count);
+    {
+        Search0CodeCounts seed_counts;
+        search0_counts_init(&seed_counts);
+        Search0CodeCounts seed_check_counts;
+        search0_counts_init(&seed_check_counts);
+        make_display_dead0(dead_prov, terminal_dead_prov, display_dead_prov);
+        print_progress0(0,
+                        cur.count,
+                        initial_prov,
+                        escaped_prov,
+                        display_dead_prov,
+                        &seed_counts,
+                        &seed_check_counts,
+                        initial_exclusions,
+                        initial_exclusion_count);
+    }
     emit_seed_statevec0(&print, &tile, map, &cur);
 
-    while (cur.count > 0 && step < 1000) {
+    while (cur.count > 0) {
         int global_min = min_distance_all0(&cur, &tile, map);
-        int dropped = 0;
+        Search0CodeCounts step_counts;
+        Search0CodeCounts checkpoint_counts;
         int old_count = cur.count;
+        search0_counts_init(&step_counts);
+        search0_counts_init(&checkpoint_counts);
         if (global_min == SEARCH0_INF) {
             if (progress_enabled0) fprintf(progress_out0(), "checkpoint complete: no remaining ports states=%d\n", cur.count);
             break;
@@ -1857,71 +2211,117 @@ int main(int argc, char **argv) {
         statevec_free0(&next);
         statevec_init0(&next);
         for (int i = 0; i < cur.count; i++) {
+            Search0State src_state = cur.data[i];
             PortChoice ch;
             int pc = 0, d = SEARCH0_INF;
-            int r = choose_port0(&cur.data[i], &tile, map, &ch, &pc, &d);
+            int r;
+            if (!strip_state_prov0(&src_state, escaped_prov)) continue;
+            r = choose_port0(&src_state, &tile, map, &ch, &pc, &d);
             if (r < 0) {
                 if (print.fp) {
-                    int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, graph_division_from_distance0(global_min), NULL);
-                    emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
+                    int node_id = ensure_graph_node0(&print, &tile, &src_state, "carry", step, graph_division_from_distance0(global_min), NULL);
+                    emit_focus0(&print, node_id, &src_state, step, ch.q);
                 }
-                dropped++; continue;
+                search0_counts_add(&step_counts, S0C_ERROR_CHOOSE_PORT); continue;
             }
-            if (r == 0) { statevec_add_merge0(&next, &cur.data[i]); continue; }
-            if (d != global_min) { statevec_add_merge0(&next, &cur.data[i]); continue; }
+            if (r == 0) {
+                search0_counts_add(&step_counts, S0C_OK_NO_PORT);
+                if (!statevec_add_merge0(&next, &src_state)) {
+                    fprintf(stderr, "state limit while carrying no-port state\n");
+                    return 1;
+                }
+                continue;
+            }
+            if (d != global_min) {
+                search0_counts_add(&step_counts, S0C_OK_CARRY);
+                if (!statevec_add_merge0(&next, &src_state)) {
+                    fprintf(stderr, "state limit while carrying future-distance state\n");
+                    return 1;
+                }
+                continue;
+            }
             if (print.fp) {
-                int node_id = ensure_graph_node0(&print, &tile, &cur.data[i], "carry", step, graph_division_from_distance0(global_min), NULL);
-                emit_focus0(&print, node_id, &cur.data[i], step, ch.q);
+                int node_id = ensure_graph_node0(&print, &tile, &src_state, "carry", step, graph_division_from_distance0(global_min), NULL);
+                emit_focus0(&print, node_id, &src_state, step, ch.q);
             }
             for (int k = 0; k < ch.value_count; k++) {
                 Search0State out;
                 if (ch.values[k].n <= 0) continue;
                 {
-                    int ar = state_after_attach0(&cur.data[i], &tile, map, &ch, k, hidden_bound, &out, &astats, &cstats);
+                    Search0Code code = S0C_OK;
+                    int ar = state_after_attach0(&src_state, &tile, map, &ch, k, hidden_bound, &out, &astats, &cstats, &code);
+                    search0_counts_add(&step_counts, code);
                     if (ar > 0) {
-                        if (print.fp) emit_transition0(&print, &tile, map, &cur.data[i], &out, step, graph_division_from_distance0(global_min), &ch, &ch.values[k]);
-                        statevec_add_merge0(&next, &out);
+                        if (print.fp) emit_transition0(&print, &tile, map, &src_state, &out, step, graph_division_from_distance0(global_min), &ch, &ch.values[k], code);
+                        if (!statevec_add_merge0(&next, &out)) {
+                            fprintf(stderr, "state limit while adding generated state\n");
+                            return 1;
+                        }
                     } else if (ar < 0) {
                         add_state_prov0(escaped_prov, &out);
-                    } else {
-                        dropped++;
+                        add_terminal_state_prov0(terminal_dead_prov, &out);
+                        if (print.fp) {
+                            int src_id = ensure_graph_node0(&print,
+                                                            &tile,
+                                                            &src_state,
+                                                            "carry",
+                                                            step,
+                                                            graph_division_from_distance0(global_min),
+                                                            NULL);
+                            emit_graph_node_mark0(&print, src_id, "escape", code);
+                        }
+                        if (!filter_statevec_prov0(&next, out.prov)) {
+                            fprintf(stderr, "state limit while pruning escaped provenance\n");
+                            return 1;
+                        }
+                        break;
                     }
                 }
             }
+        }
+        if (!filter_statevec_prov0(&next, escaped_prov)) {
+            fprintf(stderr, "state limit while filtering escaped provenance\n");
+            return 1;
         }
         count_prov_with_escaped0(&next, escaped_prov, current_prov);
         (void)old_count;
         if (next.count == 0) {
             int new_dead[SEARCH0_MAX_PROV];
             int new_dead_count = 0;
-            if (!checkpoint_fixed_point0(&next,
-                                         &tile,
-                                         map,
-                                         remembrance_path,
-                                         &deletions,
-                                         global_min,
-                                         hidden_bound,
-                                         initial_prov,
-                                         escaped_prov,
-                                         dead_prov,
-                                         death_level,
-                                         records,
-                                         record_count,
-                                         &astats,
-                                         &cstats,
-                                         new_dead,
-                                         &new_dead_count,
-                                         &print,
-                                         step,
-                                         graph_division_from_distance0(global_min))) {
-                fprintf(stderr, "checkpoint fixed point failed\n");
-                return 1;
+            {
+                int cf = checkpoint_fixed_point0(&next,
+                                                 &tile,
+                                                 map,
+                                                 remembrance_path,
+                                                 &deletions,
+                                                 global_min,
+                                                 hidden_bound,
+                                                 initial_prov,
+                                                 escaped_prov,
+                                                 terminal_dead_prov,
+                                                 dead_prov,
+                                                 death_level,
+                                                 records,
+                                                 record_count,
+                                                 &astats,
+                                                 &cstats,
+                                                 &checkpoint_counts,
+                                                 new_dead,
+                                                 &new_dead_count,
+                                                 &print,
+                                                 step,
+                                                 graph_division_from_distance0(global_min));
+                if (cf == 0) {
+                    fprintf(stderr, "checkpoint fixed point failed\n");
+                    return 1;
+                }
             }
             if (new_dead_count > 0 && !write_search_deletions0(deletions_path, records, record_count, death_level)) {
                 fprintf(stderr, "failed to write deletions: %s\n", deletions_path);
                 return 1;
             }
-            print_progress0(global_min, next.count, initial_prov, escaped_prov, dead_prov, dropped, new_dead, new_dead_count);
+            make_display_dead0(dead_prov, terminal_dead_prov, display_dead_prov);
+            print_progress0(global_min, next.count, initial_prov, escaped_prov, display_dead_prov, &step_counts, &checkpoint_counts, new_dead, new_dead_count);
             break;
         }
         {
@@ -1934,36 +2334,42 @@ int main(int argc, char **argv) {
                 int new_dead[SEARCH0_MAX_PROV];
                 int new_dead_count = 0;
                 completed_distance = global_min;
-                if (!checkpoint_fixed_point0(&cur,
-                                             &tile,
-                                             map,
-                                             remembrance_path,
-                                             &deletions,
-                                             completed_distance,
-                                             hidden_bound,
-                                             initial_prov,
-                                             escaped_prov,
-                                             dead_prov,
-                                             death_level,
-                                             records,
-                                             record_count,
-                                             &astats,
-                                             &cstats,
-                                             new_dead,
-                                             &new_dead_count,
-                                             &print,
-                                             step,
-                                             graph_division_from_distance0(completed_distance))) {
-                    fprintf(stderr, "checkpoint fixed point failed\n");
-                    return 1;
+                {
+                    int cf = checkpoint_fixed_point0(&cur,
+                                                     &tile,
+                                                     map,
+                                                     remembrance_path,
+                                                     &deletions,
+                                                     completed_distance,
+                                                     hidden_bound,
+                                                     initial_prov,
+                                                     escaped_prov,
+                                                     terminal_dead_prov,
+                                                     dead_prov,
+                                                     death_level,
+                                                     records,
+                                                     record_count,
+                                                     &astats,
+                                                     &cstats,
+                                                     &checkpoint_counts,
+                                                     new_dead,
+                                                     &new_dead_count,
+                                                     &print,
+                                                     step,
+                                                     graph_division_from_distance0(completed_distance));
+                    if (cf == 0) {
+                        fprintf(stderr, "checkpoint fixed point failed\n");
+                        return 1;
+                    }
                 }
                 if (new_dead_count > 0 && !write_search_deletions0(deletions_path, records, record_count, death_level)) {
                     fprintf(stderr, "failed to write deletions: %s\n", deletions_path);
                     return 1;
                 }
-                print_progress0(completed_distance, cur.count, initial_prov, escaped_prov, dead_prov, dropped, new_dead, new_dead_count);
+                make_display_dead0(dead_prov, terminal_dead_prov, display_dead_prov);
+                print_progress0(completed_distance, cur.count, initial_prov, escaped_prov, display_dead_prov, &step_counts, &checkpoint_counts, new_dead, new_dead_count);
                 count_prov_with_escaped0(&cur, escaped_prov, current_prov);
-                if (count_unknown0(initial_prov, escaped_prov, dead_prov) == 0) break;
+                if (count_unknown0(initial_prov, escaped_prov, display_dead_prov) == 0) break;
             }
         }
         step++;

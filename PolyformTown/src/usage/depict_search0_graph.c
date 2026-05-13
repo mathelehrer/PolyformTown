@@ -37,6 +37,7 @@ typedef struct { const char *s; const Shape *shape; } ExprParser;
 
 typedef struct {
     int id;
+    int highlighted;
     int discover_step;
     int division;
     int tile_count;
@@ -617,6 +618,29 @@ static int parse_graph_file(FILE *fp, NodeVec *nodes, EdgeVec *edges) {
                         break;
                     }
                 }
+            }
+        } else if (strncmp(line, "---node-mark---", 15) == 0) {
+            int id = -1;
+            int highlight = 0;
+            char mark[64] = {0};
+            char status[128] = {0};
+            while (fgets(line, sizeof(line), fp)) {
+                if (strncmp(line, "---end-node-mark---", 19) == 0) break;
+                if (strncmp(line, "id:", 3) == 0) {
+                    id = atoi(line + 3);
+                } else if (strncmp(line, "mark:", 5) == 0) {
+                    copy_trim(mark, sizeof(mark), line + 5, strlen(line + 5));
+                } else if (strncmp(line, "status:", 7) == 0) {
+                    copy_trim(status, sizeof(status), line + 7, strlen(line + 7));
+                }
+            }
+            if (strcmp(mark, "escape") == 0 ||
+                strncmp(status, "escape:", 7) == 0) {
+                highlight = 1;
+            }
+            if (id >= 0 && highlight) {
+                int ni = find_node_index_by_id(nodes, id);
+                if (ni >= 0) nodes->data[ni].highlighted = 1;
             }
         } else if (strncmp(line, "---edge---", 10) == 0) {
             GraphEdge e;
@@ -1575,7 +1599,10 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
             double y0 = box_y[idx];
             double minx, miny, maxx, maxy, bw, bh, scale, tx, ty;
             double shape_h = BOX_H - 18.0;
-            printf("<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" rx=\"8\" ry=\"8\" fill=\"#fafafa\" stroke=\"black\" stroke-width=\"1.2\"/>\n", x0, y0, BOX_W, BOX_H);
+            const char *frame_fill = node->highlighted ? "#ffd7d7" : "#fafafa";
+            const char *frame_stroke = node->highlighted ? "#cc0000" : "black";
+            double frame_stroke_width = node->highlighted ? 4.0 : 1.2;
+            printf("<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" rx=\"8\" ry=\"8\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\"/>\n", x0, y0, BOX_W, BOX_H, frame_fill, frame_stroke, frame_stroke_width);
             shape_bbox(&node->aggregate, &minx, &miny, &maxx, &maxy);
             bw = maxx - minx; bh = maxy - miny;
             if (bw < 1e-9) bw = 1.0;
@@ -1605,19 +1632,80 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
     free(seed_for_prov); free(process_order);
 }
 
+
+static int parse_highlight_nodes0(const char *arg, int **ids_out, int *count_out) {
+    size_t arg_len = strlen(arg);
+    char *copy = (char *)malloc(arg_len + 1);
+    char *tok;
+    if (copy) memcpy(copy, arg, arg_len + 1);
+    int cap = 16;
+    int count = 0;
+    int *ids = (int *)calloc((size_t)cap, sizeof(int));
+    if (!copy || !ids) {
+        free(copy);
+        free(ids);
+        return 0;
+    }
+    for (tok = strtok(copy, ","); tok; tok = strtok(NULL, ",")) {
+        char *end = NULL;
+        long v = strtol(tok, &end, 10);
+        while (end && isspace((unsigned char)*end)) end++;
+        if (!end || *end != '\0') {
+            free(copy);
+            free(ids);
+            return 0;
+        }
+        if (count == cap) {
+            int nc = 2 * cap;
+            int *next = (int *)realloc(ids, (size_t)nc * sizeof(int));
+            if (!next) {
+                free(copy);
+                free(ids);
+                return 0;
+            }
+            ids = next;
+            cap = nc;
+        }
+        ids[count++] = (int)v;
+    }
+    free(copy);
+    *ids_out = ids;
+    *count_out = count;
+    return 1;
+}
+
+static void mark_highlight_nodes0(NodeVec *nodes, const int *ids, int count) {
+    for (int j = 0; j < count; j++) {
+        for (int i = 0; i < nodes->count; i++) {
+            if (nodes->data[i].id == ids[j]) nodes->data[i].highlighted = 1;
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     const char *path = NULL;
     FILE *fp = stdin;
     NodeVec nodes = {0};
     EdgeVec edges = {0};
     int use_color = 0;
+    int *highlight_ids = NULL;
+    int highlight_count = 0;
     for (int ai = 1; ai < argc; ai++) {
         if (strcmp(argv[ai], "--color") == 0 || strcmp(argv[ai], "--colors") == 0) {
             use_color = 1;
+        } else if ((strcmp(argv[ai], "--highlight") == 0 || strcmp(argv[ai], "--red-nodes") == 0) && ai + 1 < argc) {
+            free(highlight_ids);
+            highlight_ids = NULL;
+            highlight_count = 0;
+            if (!parse_highlight_nodes0(argv[++ai], &highlight_ids, &highlight_count)) {
+                fprintf(stderr, "bad highlight node list: %s\n", argv[ai]);
+                return 1;
+            }
         } else if (!path) {
             path = argv[ai];
         } else {
-            fprintf(stderr, "usage: %s [--color] [graph_dump.txt]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--color] [--highlight ids] [graph_dump.txt]\n", argv[0]);
+            free(highlight_ids);
             return 1;
         }
     }
@@ -1638,8 +1726,10 @@ int main(int argc, char **argv) {
     if (fp != stdin) fclose(fp);
     qsort(nodes.data, (size_t)nodes.count, sizeof(GraphNode), cmp_node_step_id);
     filter_leaf_duplicate_boundary_nodes0(&nodes, &edges);
+    mark_highlight_nodes0(&nodes, highlight_ids, highlight_count);
     emit_svg(&nodes, &edges, use_color);
     free_nodes(&nodes);
     free(edges.data);
+    free(highlight_ids);
     return 0;
 }

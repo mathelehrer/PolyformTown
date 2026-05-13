@@ -3,6 +3,7 @@
 
 #include "core/cycle.h"
 #include "core/tile.h"
+#include "core/attach.h"
 #include "rl0/forget_map.h"
 
 #define ATTACH0_MAX_TILES 128
@@ -49,6 +50,18 @@ int attach0_try_attach_arc(const Poly *base,
                            int *out_tile_count,
                            Attach0Stats *stats);
 
+int attach0_try_attach_arc_status(const Poly *base,
+                                  const Tile *tile,
+                                  const Cycle *tiles,
+                                  int tile_count,
+                                  Coord target,
+                                  const RL0FMArc *arc,
+                                  Poly *out,
+                                  Cycle *out_tiles,
+                                  int *out_tile_count,
+                                  Attach0Stats *stats,
+                                  AttachStatus *status_out);
+
 int attach0_force_live_closure(Poly *poly,
                                const Tile *tile,
                                Cycle *tiles,
@@ -57,5 +70,15 @@ int attach0_force_live_closure(Poly *poly,
                                int max_steps,
                                Attach0Stats *attach_stats,
                                Attach0ClosureStats *closure_stats);
+
+int attach0_force_live_closure_status(Poly *poly,
+                                      const Tile *tile,
+                                      Cycle *tiles,
+                                      int *tile_count,
+                                      const RL0ForgetMap *map,
+                                      int max_steps,
+                                      Attach0Stats *attach_stats,
+                                      Attach0ClosureStats *closure_stats,
+                                      AttachStatus *status_out);
 
 #endif

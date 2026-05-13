@@ -17,8 +17,13 @@ typedef struct {
 enum {
     WALK_FAIL = 0,
     WALK_OK = 1,
-    WALK_DUP = 2
+    WALK_DUP = 2,
+    WALK_BOUND = 3
 };
+
+static void attach_status_set(AttachStatus *status, AttachStatus value) {
+    if (status) *status = value;
+}
 
 static int edge_same(Edge a, Edge b) { return coord_eq(a.a,b.a) && coord_eq(a.b,b.b); }
 static int edge_opp(Edge a, Edge b) { return coord_eq(a.a,b.b) && coord_eq(a.b,b.a); }
@@ -81,21 +86,36 @@ int align_tile_to_frontier_edge(const Poly *base, const Cycle *tile_variant,
     return align_tile(tile_variant, tile_edge_index, frontier[base_edge_index], TILE_LATTICE_SQUARE, aligned);
 }
 
-static int build_union_edges(const Poly *a, const Cycle *b, LEdge *out, int *out_n) {
+static int build_union_edges(const Poly *a, const Cycle *b, LEdge *out, int *out_n,
+                             AttachStatus *status) {
     int n = 0;
 
-    for (int i = 0; i < a->cycle_count; i++)
-        for (int j = 0; j < a->cycles[i].n; j++)
+    for (int i = 0; i < a->cycle_count; i++) {
+        for (int j = 0; j < a->cycles[i].n; j++) {
+            if (n >= MAX_LOCAL) {
+                attach_status_set(status, ATTACH_STATUS_BOUNDARY_BOUND);
+                return 0;
+            }
             out[n++] = (LEdge){ cycle_edge(&a->cycles[i], j), 0 };
+        }
+    }
 
-    for (int i = 0; i < b->n; i++)
+    for (int i = 0; i < b->n; i++) {
+        if (n >= MAX_LOCAL) {
+            attach_status_set(status, ATTACH_STATUS_BOUNDARY_BOUND);
+            return 0;
+        }
         out[n++] = (LEdge){ cycle_edge(b, i), 0 };
+    }
 
     for (int i = 0; i < n; i++) {
         if (out[i].canceled) continue;
         for (int j = i + 1; j < n; j++) {
             if (out[j].canceled) continue;
-            if (edge_same(out[i].e, out[j].e)) return 0;
+            if (edge_same(out[i].e, out[j].e)) {
+                attach_status_set(status, ATTACH_STATUS_GEOMETRY);
+                return 0;
+            }
             if (edge_opp(out[i].e, out[j].e)) {
                 out[i].canceled = 1;
                 out[j].canceled = 1;
@@ -156,7 +176,7 @@ static int walk_one_cycle(const Edge *edges, int m, int *used, int start,
 
     while (1) {
         if (used[cur]) return WALK_FAIL;
-        if (out->n >= MAX_VERTS) return WALK_FAIL;
+        if (out->n >= MAX_VERTS) return WALK_BOUND;
         if (coord_seen_before(seen, seen_n, edges[cur].a)) return WALK_DUP;
 
         seen[seen_n++] = edges[cur].a;
@@ -206,7 +226,8 @@ static int find_start_edge(const Edge *edges, int m, const int *used, int lattic
     return start;
 }
 
-static int extract_cycles(const LEdge *in, int in_n, int prefer_left, int lattice, Poly *out) {
+static int extract_cycles(const LEdge *in, int in_n, int prefer_left, int lattice, Poly *out,
+                          AttachStatus *status) {
     Edge edges[MAX_LOCAL];
     int m = 0;
     int used[MAX_LOCAL] = {0};
@@ -217,13 +238,19 @@ static int extract_cycles(const LEdge *in, int in_n, int prefer_left, int lattic
         if (!in[i].canceled)
             edges[m++] = in[i].e;
 
-    if (m == 0) return 0;
+    if (m == 0) {
+        attach_status_set(status, ATTACH_STATUS_GEOMETRY);
+        return 0;
+    }
 
     while (1) {
         int start = find_start_edge(edges, m, used, lattice);
         if (start < 0) break;
 
-        if (out->cycle_count >= MAX_CYCLES) return 0;
+        if (out->cycle_count >= MAX_CYCLES) {
+            attach_status_set(status, ATTACH_STATUS_CYCLE_BOUND);
+            return 0;
+        }
 
         int used_snapshot[MAX_LOCAL];
         memcpy(used_snapshot, used, sizeof(used));
@@ -236,7 +263,14 @@ static int extract_cycles(const LEdge *in, int in_n, int prefer_left, int lattic
             r = walk_one_cycle(edges, m, used, start, !prefer_left, lattice, &c);
         }
 
-        if (r != WALK_OK) return 0;
+        if (r == WALK_BOUND) {
+            attach_status_set(status, ATTACH_STATUS_CYCLE_BOUND);
+            return 0;
+        }
+        if (r != WALK_OK) {
+            attach_status_set(status, ATTACH_STATUS_GEOMETRY);
+            return 0;
+        }
 
         out->cycles[out->cycle_count++] = c;
     }
@@ -293,22 +327,55 @@ int try_attach_tile_poly_ex(const Poly *base, const Cycle *tile_variant,
                             int base_edge_index, int tile_edge_index,
                             Poly *out,
                             Cycle *aligned_out) {
+    return try_attach_tile_poly_ex_status(base,
+                                          tile_variant,
+                                          lattice,
+                                          base_edge_index,
+                                          tile_edge_index,
+                                          out,
+                                          aligned_out,
+                                          NULL);
+}
+
+int try_attach_tile_poly_ex_status(const Poly *base,
+                                   const Cycle *tile_variant,
+                                   int lattice,
+                                   int base_edge_index,
+                                   int tile_edge_index,
+                                   Poly *out,
+                                   Cycle *aligned_out,
+                                   AttachStatus *status_out) {
     Edge frontier[MAX_VERTS * MAX_CYCLES];
     Cycle aligned;
     LEdge merged[MAX_LOCAL];
     int frontier_n;
     int merged_n;
 
+    attach_status_set(status_out, ATTACH_STATUS_GEOMETRY);
+    if (!base || !tile_variant || !out) {
+        attach_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+
     frontier_n = build_boundary_edges(base, frontier);
+    if (frontier_n < 0) {
+        attach_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
+    if (frontier_n + tile_variant->n > MAX_LOCAL) {
+        attach_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
+        return 0;
+    }
     if (base_edge_index < 0 || base_edge_index >= frontier_n) return 0;
 
     if (!align_tile(tile_variant, tile_edge_index, frontier[base_edge_index], lattice, &aligned)) return 0;
 
-    if (!build_union_edges(base, &aligned, merged, &merged_n)) return 0;
-    if (!extract_cycles(merged, merged_n, 1, lattice, out)) return 0;
+    if (!build_union_edges(base, &aligned, merged, &merged_n, status_out)) return 0;
+    if (!extract_cycles(merged, merged_n, 1, lattice, out, status_out)) return 0;
 
     if (has_overlap_via_tile_test(out, &aligned, lattice)) return 0;
     if (aligned_out) *aligned_out = aligned;
 
+    attach_status_set(status_out, ATTACH_STATUS_OK);
     return 1;
 }
