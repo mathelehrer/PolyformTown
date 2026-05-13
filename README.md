@@ -34,7 +34,7 @@
 
 <img src="./PolyformTown/img/rl2_survivors.svg" alt="RL2 surrounds" />
 
-<p><em>Figure: structure emerging?.</em></p>
+<p><em>Figure: structure emerging?</em></p>
 
 
 
