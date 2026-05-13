@@ -42,4 +42,4 @@
 
 <img src="./PolyformTown/img/rl3_survivors.svg" alt="RL3 surrounds" />
 
-<p><em>Figure: almost good enough for hexagaon extraction?</em></p>
+<p><em>Figure: almost good enough for hexagon extraction?</em></p>
