@@ -586,6 +586,46 @@ static int make_seed0(const Search0Record *r, Search0State *s) {
     return 1;
 }
 
+static int force_live_closure_bounded0(Poly *poly,
+                                       const Tile *tile,
+                                       Cycle *tiles,
+                                       int *tile_count,
+                                       const RL0ForgetMap *map,
+                                       int max_steps,
+                                       int hidden_bound,
+                                       Coord *hidden,
+                                       int *hidden_count_out,
+                                       Attach0Stats *astats,
+                                       Attach0ClosureStats *cstats) {
+    Attach0ClosureStats local_cstats;
+    Attach0ClosureStats *use_cstats = cstats;
+    int hidden_count;
+    if (!poly || !tile || !tiles || !tile_count || !map || !hidden) return 0;
+    if (!use_cstats) {
+        attach0_closure_stats_init(&local_cstats);
+        use_cstats = &local_cstats;
+    }
+    if (max_steps <= 0) max_steps = 1024;
+    for (int step = 0; step < max_steps; step++) {
+        int before_steps = use_cstats->closure_steps;
+        int ok = attach0_force_live_closure(poly,
+                                            tile,
+                                            tiles,
+                                            tile_count,
+                                            map,
+                                            1,
+                                            astats,
+                                            use_cstats);
+        hidden_count = rebuild_hidden0(poly, tiles, *tile_count, hidden);
+        if (hidden_count < 0) return 0;
+        if (hidden_count_out) *hidden_count_out = hidden_count;
+        if (hidden_count > hidden_bound) return -1;
+        if (ok) return 1;
+        if (use_cstats->closure_steps <= before_steps) return 0;
+    }
+    return -1;
+}
+
 static int state_after_attach0(const Search0State *s,
                                const Tile *tile,
                                const RL0ForgetMap *map,
@@ -623,21 +663,22 @@ static int state_after_attach0(const Search0State *s,
     if (out->hidden_count > hidden_bound) return -1;
 
     /* Force only after the requested arc has completed. */
-    if (!attach0_force_live_closure(&out->poly,
-                                    tile,
-                                    out->tiles,
-                                    &out->tile_count,
-                                    map,
-                                    1024,
-                                    astats,
-                                    cstats)) {
-        return 0;
+    {
+        int cr = force_live_closure_bounded0(&out->poly,
+                                             tile,
+                                             out->tiles,
+                                             &out->tile_count,
+                                             map,
+                                             1024,
+                                             hidden_bound,
+                                             out->hidden,
+                                             &hidden_count,
+                                             astats,
+                                             cstats);
+        if (cr < 0) return -1;
+        if (cr == 0) return 0;
     }
-
-    hidden_count = rebuild_hidden0(&out->poly, out->tiles, out->tile_count, out->hidden);
-    if (hidden_count < 0) return 0;
     out->hidden_count = hidden_count;
-    if (out->hidden_count > hidden_bound) return -1;
     poly_to_key0(&out->poly, out->key, sizeof(out->key));
     return 1;
 }
@@ -762,21 +803,26 @@ static int refilter_states0(StateVec *cur,
     for (int i = 0; i < cur->count; i++) {
         Search0State src = cur->data[i];
         Search0State s = src;
-        if (!attach0_force_live_closure(&s.poly,
-                                        tile,
-                                        s.tiles,
-                                        &s.tile_count,
-                                        map,
-                                        1024,
-                                        astats,
-                                        cstats)) {
-            continue;
-        }
-        s.hidden_count = rebuild_hidden0(&s.poly, s.tiles, s.tile_count, s.hidden);
-        if (s.hidden_count < 0) continue;
-        if (s.hidden_count > hidden_bound) {
-            add_state_prov0(escaped, &s);
-            continue;
+        {
+            int hidden_count = 0;
+            int cr = force_live_closure_bounded0(&s.poly,
+                                                 tile,
+                                                 s.tiles,
+                                                 &s.tile_count,
+                                                 map,
+                                                 1024,
+                                                 hidden_bound,
+                                                 s.hidden,
+                                                 &hidden_count,
+                                                 astats,
+                                                 cstats);
+            if (cr < 0) {
+                s.hidden_count = hidden_count;
+                add_state_prov0(escaped, &s);
+                continue;
+            }
+            if (cr == 0) continue;
+            s.hidden_count = hidden_count;
         }
         poly_to_key0(&s.poly, s.key, sizeof(s.key));
         if (print && print->fp && strcmp(src.key, s.key) != 0) {
@@ -1641,14 +1687,26 @@ int main(int argc, char **argv) {
         if (ignore_pairwise && records[i].full_cycle.n == 2) continue;
         if (!rl0_fm_contains_complete(map, &records[i].full_cycle)) continue;
         if (!make_seed0(&records[i], &s)) continue;
-        if (!attach0_force_live_closure(&s.poly, &tile, s.tiles, &s.tile_count, map, 1024, &astats, &cstats)) {
-            continue;
-        }
-        s.hidden_count = rebuild_hidden0(&s.poly, s.tiles, s.tile_count, s.hidden);
-        if (s.hidden_count < 0) continue;
-        if (s.hidden_count > hidden_bound) {
-            add_state_prov0(escaped_prov, &s);
-            continue;
+        {
+            int hidden_count = 0;
+            int cr = force_live_closure_bounded0(&s.poly,
+                                                 &tile,
+                                                 s.tiles,
+                                                 &s.tile_count,
+                                                 map,
+                                                 1024,
+                                                 hidden_bound,
+                                                 s.hidden,
+                                                 &hidden_count,
+                                                 &astats,
+                                                 &cstats);
+            if (cr < 0) {
+                s.hidden_count = hidden_count;
+                add_state_prov0(escaped_prov, &s);
+                continue;
+            }
+            if (cr == 0) continue;
+            s.hidden_count = hidden_count;
         }
         poly_to_key0(&s.poly, s.key, sizeof(s.key));
         if (!statevec_add_merge0(&cur, &s)) {
@@ -1664,6 +1722,11 @@ int main(int argc, char **argv) {
                     initial_prov,
                     escaped_prov,
                     dead_prov,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
                     initial_exclusions,
                     initial_exclusion_count);
     emit_seed_statevec0(&print, &tile, map, &cur);
@@ -1723,7 +1786,7 @@ int main(int argc, char **argv) {
         (void)old_count;
         (void)expanded;
         (void)branch_count;
-        (void)dropped;
+        (void)total_dropped;
         (void)zero;
         (void)no_ports;
         if (next.count == 0) {
@@ -1756,7 +1819,7 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "failed to write deletions: %s\n", deletions_path);
                 return 1;
             }
-            print_progress0(global_min, next.count, initial_prov, escaped_prov, dead_prov, new_dead, new_dead_count);
+            print_progress0(global_min, next.count, initial_prov, escaped_prov, dead_prov, dropped, branch_count, expanded, zero, no_ports, new_dead, new_dead_count);
             break;
         }
         {
@@ -1796,7 +1859,7 @@ int main(int argc, char **argv) {
                     fprintf(stderr, "failed to write deletions: %s\n", deletions_path);
                     return 1;
                 }
-                print_progress0(completed_distance, cur.count, initial_prov, escaped_prov, dead_prov, new_dead, new_dead_count);
+                print_progress0(completed_distance, cur.count, initial_prov, escaped_prov, dead_prov, dropped, branch_count, expanded, zero, no_ports, new_dead, new_dead_count);
                 count_prov_with_escaped0(&cur, escaped_prov, current_prov);
                 if (count_unknown0(initial_prov, escaped_prov, dead_prov) == 0) break;
             }

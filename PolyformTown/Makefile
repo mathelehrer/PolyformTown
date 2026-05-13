@@ -11,7 +11,7 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 \
+.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 \
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
@@ -146,11 +146,34 @@ $(BIN)/rl4_generate: $(SRC)/rl4/generate_rl4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE
 # -----------------------------------------------------------------------------
 # BOOT
 # -----------------------------------------------------------------------------
-# Boot tower: purge generated runlevel data, then rebuild the current
-# deterministic boot chain through RL1 completions/deletions.
+# Boot tower: purge generated runlevel data, then rebuild a deterministic
+# prefix of the boot chain.
+#
+#   make boot       # full boot, through RL4
+#   make boot RL=0  # full boot, through RL4
+#   make boot RL=1  # stop after RL0; do not start RL1 generation
+#   make boot RL=2  # stop after RL1; do not start RL2 generation
+#   make boot RL=3  # stop after RL2; do not start RL3 generation
+#   make boot RL=4  # stop after RL3; do not start RL4 generation
 #
 
-boot: clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4
+RL ?= 0
+
+ifeq ($(RL),0)
+BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4
+else ifeq ($(RL),1)
+BOOT_RUNLEVELS := boot_rl0
+else ifeq ($(RL),2)
+BOOT_RUNLEVELS := boot_rl0 boot_rl1
+else ifeq ($(RL),3)
+BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2
+else ifeq ($(RL),4)
+BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3
+else
+$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..4 to stop before that runlevel)
+endif
+
+boot: clean_boot_data $(BOOT_RUNLEVELS)
 
 clean_boot_data:
 	@echo "==> purge data/rl*/*"
