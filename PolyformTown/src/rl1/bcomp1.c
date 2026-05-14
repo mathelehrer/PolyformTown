@@ -241,18 +241,23 @@ static int bracket_delta(const char *text, int *seen_bracket) {
 }
 
 static int read_section_value(FILE *fp, const char *initial, char *dst, size_t cap) {
-    char line[262144];
+    enum { LINE_CAP = 262144 };
+    char *line = malloc(LINE_CAP);
     size_t off = 0;
     int seen = 0;
     int balance = 0;
+    int ok;
+    if (!line) return 0;
     dst[0] = '\0';
-    if (!append_value_text(dst, cap, &off, initial)) return 0;
+    if (!append_value_text(dst, cap, &off, initial)) { free(line); return 0; }
     balance += bracket_delta(initial, &seen);
-    while ((!seen || balance > 0) && fgets(line, sizeof(line), fp)) {
-        if (!append_value_text(dst, cap, &off, line)) return 0;
+    while ((!seen || balance > 0) && fgets(line, LINE_CAP, fp)) {
+        if (!append_value_text(dst, cap, &off, line)) { free(line); return 0; }
         balance += bracket_delta(line, &seen);
     }
-    return seen && balance == 0;
+    ok = seen && balance == 0;
+    free(line);
+    return ok;
 }
 
 static int parse_int_line0(const char *line, const char *prefix, int *out) {
@@ -282,58 +287,67 @@ static int records_push(BComp1RecordVec *v, const BComp1Record *r) {
 }
 
 static int load_records(const char *path, BComp1RecordVec *out) {
+    enum { LINE_CAP = 262144, VALUE_CAP = 1048576 };
     FILE *fp = fopen(path, "r");
-    char line[262144];
-    BComp1Record r;
+    char *line = NULL;
+    char *value = NULL;
+    BComp1Record *r = NULL;
+    int ok = 0;
     if (!fp) return 0;
-    record_reset(&r);
-    while (fgets(line, sizeof(line), fp)) {
+    line = malloc(LINE_CAP);
+    value = malloc(VALUE_CAP);
+    r = malloc(sizeof(*r));
+    if (!line || !value || !r) goto done;
+    record_reset(r);
+    while (fgets(line, LINE_CAP, fp)) {
         if (strncmp(line, "---[", 4) == 0) {
-            if (record_has_content(&r)) {
-                if (!records_push(out, &r)) { fclose(fp); return 0; }
+            if (record_has_content(r)) {
+                if (!records_push(out, r)) goto done;
             }
-            record_reset(&r);
+            record_reset(r);
             continue;
         }
-        if (parse_int_line0(line, "level:", &r.level)) continue;
-        if (parse_int_line0(line, "tile_count:", &r.tile_count)) continue;
-        if (parse_int_line0(line, "start_index:", &r.start_index)) continue;
+        if (parse_int_line0(line, "level:", &r->level)) continue;
+        if (parse_int_line0(line, "tile_count:", &r->tile_count)) continue;
+        if (parse_int_line0(line, "start_index:", &r->start_index)) continue;
         if (strncmp(line, "direction:", 10) == 0) {
-            r.dir = (strstr(line + 10, "cw") && !strstr(line + 10, "ccw")) ? -1 : 1;
+            r->dir = (strstr(line + 10, "cw") && !strstr(line + 10, "ccw")) ? -1 : 1;
             continue;
         }
         if (strncmp(line, "center_tile:", 12) == 0) {
-            char value[1048576];
             const char *p;
-            if (!read_section_value(fp, line + 12, value, sizeof(value))) { fclose(fp); return 0; }
+            if (!read_section_value(fp, line + 12, value, VALUE_CAP)) goto done;
             p = value;
-            r.have_center = parse_cycle0(&p, &r.center);
+            r->have_center = parse_cycle0(&p, &r->center);
             continue;
         }
         if (strncmp(line, "boundary:", 9) == 0) {
-            char value[1048576];
-            if (!read_section_value(fp, line + 9, value, sizeof(value))) { fclose(fp); return 0; }
-            r.have_boundary = parse_poly0(value, &r.boundary);
+            if (!read_section_value(fp, line + 9, value, VALUE_CAP)) goto done;
+            r->have_boundary = parse_poly0(value, &r->boundary);
             continue;
         }
         if (strncmp(line, "constellation:", 14) == 0) {
-            char value[1048576];
-            if (!read_section_value(fp, line + 14, value, sizeof(value))) { fclose(fp); return 0; }
-            r.have_hidden = parse_coord_list0(value, r.hidden, &r.hidden_count);
+            if (!read_section_value(fp, line + 14, value, VALUE_CAP)) goto done;
+            r->have_hidden = parse_coord_list0(value, r->hidden, &r->hidden_count);
             continue;
         }
         if (strncmp(line, "tiles:", 6) == 0) {
-            char value[1048576];
-            if (!read_section_value(fp, line + 6, value, sizeof(value))) { fclose(fp); return 0; }
-            r.have_tiles = parse_cycle_list0(value, r.tiles, &r.tiles_count);
+            if (!read_section_value(fp, line + 6, value, VALUE_CAP)) goto done;
+            r->have_tiles = parse_cycle_list0(value, r->tiles, &r->tiles_count);
             continue;
         }
     }
-    if (record_has_content(&r)) {
-        if (!records_push(out, &r)) { fclose(fp); return 0; }
+    if (record_has_content(r)) {
+        if (!records_push(out, r)) goto done;
     }
+    ok = 1;
+
+done:
+    free(r);
+    free(value);
+    free(line);
     fclose(fp);
-    return 1;
+    return ok;
 }
 
 static int coord_cmp_local(const void *A, const void *B) {
@@ -370,19 +384,23 @@ static int collect_tile_vertices(const Cycle *tiles, int tile_count, Coord *vert
 }
 
 static int rebuild_hidden(const Poly *p, const Cycle *tiles, int tile_count, Coord *hidden) {
-    Coord all[BCOMP1_MAX_COORDS];
-    Coord boundary[BCOMP1_MAX_COORDS];
-    int ac = collect_tile_vertices(tiles, tile_count, all);
-    int bc = build_boundary_vertices(p, boundary);
+    Coord *all = malloc(sizeof(*all) * BCOMP1_MAX_COORDS);
+    Coord *boundary = malloc(sizeof(*boundary) * BCOMP1_MAX_COORDS);
+    int ac, bc;
     int hc = 0;
-    if (ac < 0 || bc < 0) return -1;
+    if (!all || !boundary) { free(boundary); free(all); return -1; }
+    ac = collect_tile_vertices(tiles, tile_count, all);
+    bc = build_boundary_vertices(p, boundary);
+    if (ac < 0 || bc < 0) { free(boundary); free(all); return -1; }
     for (int i = 0; i < ac; i++) {
         if (!coord_in_list(boundary, bc, all[i])) {
-            if (hc >= BCOMP1_MAX_COORDS) return -1;
+            if (hc >= BCOMP1_MAX_COORDS) { free(boundary); free(all); return -1; }
             hidden[hc++] = all[i];
         }
     }
-    qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
+    if (hc > 1) qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
+    free(boundary);
+    free(all);
     return hc;
 }
 

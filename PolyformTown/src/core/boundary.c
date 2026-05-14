@@ -2,6 +2,8 @@
 #include "core/cycle.h"
 #include "core/attach.h"
 
+#include <stdlib.h>
+
 #define MAX_BOUNDARY_VERTS (MAX_VERTS * MAX_CYCLES)
 
 static int dfs_has_completion(const Poly *p,
@@ -53,15 +55,24 @@ int build_boundary_edges(const Poly *p, Edge *edges) {
 }
 
 int poly_has_live_boundary(const Poly *p, const Tile *tile) {
-    Coord verts[2 * MAX_BOUNDARY_VERTS];
-    int vc = build_boundary_vertices(p, verts);
-    if (vc < 0 || vc > 2 * MAX_BOUNDARY_VERTS) return 0;
+    Coord *verts = malloc(sizeof(*verts) * (size_t)(2 * MAX_BOUNDARY_VERTS));
+    int vc;
+    int ok = 1;
+
+    if (!verts) return 0;
+    vc = build_boundary_vertices(p, verts);
+    if (vc < 0 || vc > 2 * MAX_BOUNDARY_VERTS) {
+        free(verts);
+        return 0;
+    }
     for (int i = 0; i < vc; i++) {
         if (!dfs_has_completion(p, tile, verts[i])) {
-            return 0;
+            ok = 0;
+            break;
         }
     }
-    return 1;
+    free(verts);
+    return ok;
 }
 
 /* boundary checking top level */
@@ -70,34 +81,45 @@ static int dfs_has_completion(const Poly *p,
                               const Tile *tile,
                               Coord target)
 {
-    Edge edges[2 * MAX_BOUNDARY_VERTS];
-    int ec = build_boundary_edges(p, edges);
+    Edge *edges = malloc(sizeof(*edges) * (size_t)(2 * MAX_BOUNDARY_VERTS));
+    Poly *grown = malloc(sizeof(*grown));
+    Cycle *aligned = malloc(sizeof(*aligned));
+    int ec;
+    int result = 0;
 
-    for (int be = 0; be < ec; be++) {
+    if (!edges || !grown || !aligned) goto done;
+    ec = build_boundary_edges(p, edges);
+
+    for (int be = 0; be < ec && !result; be++) {
 
         if (!coord_eq(edges[be].a, target))
             continue;
 
-        for (int v = 0; v < tile->variant_count; v++) {
+        for (int v = 0; v < tile->variant_count && !result; v++) {
             const Cycle *tv = &tile->variants[v];
 
             for (int te = 0; te < tv->n; te++) {
-                Poly grown;
-                Cycle aligned;
-
                 if (!try_attach_tile_poly_ex(p, tv, tile->lattice,
-                                             be, te, &grown, &aligned))
+                                             be, te, grown, aligned))
                     continue;
 
                 /* success: target no longer on boundary */
-                if (!point_on_poly_boundary(&grown, target, tile->lattice))
-                    return 1;
+                if (!point_on_poly_boundary(grown, target, tile->lattice)) {
+                    result = 1;
+                    break;
+                }
 
-                if (dfs_has_completion(&grown, tile, target))
-                    return 1;
+                if (dfs_has_completion(grown, tile, target)) {
+                    result = 1;
+                    break;
+                }
             }
         }
     }
 
-    return 0;
+done:
+    free(aligned);
+    free(grown);
+    free(edges);
+    return result;
 }

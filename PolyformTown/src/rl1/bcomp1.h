@@ -105,6 +105,10 @@ void bcomp1_context_clear(BComp1Context *ctx);
 
 int bcomp1_load_records(const char *path, BComp1RecordVec *out);
 void bcomp1_free_records(BComp1RecordVec *vec);
+int bcomp1_force_live_closure(const BComp1Context *ctx,
+                              BComp1State *state,
+                              int max_steps,
+                              Attach0ClosureStats *closure_stats);
 int bcomp1_make_seed_state(const BComp1Context *ctx, BComp1State *state);
 int bcomp1_state_from_record(const BComp1Record *record, BComp1State *state);
 int bcomp1_complete_state(const BComp1Context *ctx,

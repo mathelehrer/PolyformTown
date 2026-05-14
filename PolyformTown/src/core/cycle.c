@@ -3,6 +3,8 @@
 #include "core/lattice.h"
 #include "core/tetrille.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static void tetrille_embed6_scaled(Coord p, long long *sx, long long *sy) {
     tetrille_embed_point_scaled(p, sx, sy);
@@ -359,35 +361,53 @@ void poly_canonicalize(const Poly *src, Poly *out) {
 }
 
 static void poly_canonicalize_tetrille(const Poly *src, Poly *out) {
-    Poly best = {0}, cur;
+    Poly *best = calloc(1, sizeof(*best));
+    Poly *cur = malloc(sizeof(*cur));
     int first = 1;
+    if (!best || !cur) {
+        free(best);
+        free(cur);
+        if (out) memset(out, 0, sizeof(*out));
+        return;
+    }
     for (int t = 0; t < 12; t++) {
-        poly_transform_lattice(src, &cur, TILE_LATTICE_TETRILLE, t);
-        poly_normalize_position(&cur, TILE_LATTICE_TETRILLE);
-        poly_prepare_cycles(&cur, TILE_LATTICE_TETRILLE);
-        if (first || poly_less(&cur, &best)) {
-            best = cur;
+        poly_transform_lattice(src, cur, TILE_LATTICE_TETRILLE, t);
+        poly_normalize_position(cur, TILE_LATTICE_TETRILLE);
+        poly_prepare_cycles(cur, TILE_LATTICE_TETRILLE);
+        if (first || poly_less(cur, best)) {
+            *best = *cur;
             first = 0;
         }
     }
-    *out = best;
+    *out = *best;
+    free(best);
+    free(cur);
 }
 
 void poly_canonicalize_lattice(const Poly *src, Poly *out, int lattice) {
     if (lattice != TILE_LATTICE_TETRILLE) {
-        Poly best = {0}, cur;
+        Poly *best = calloc(1, sizeof(*best));
+        Poly *cur = malloc(sizeof(*cur));
         int first = 1;
         int count = lattice_transform_count(lattice);
+        if (!best || !cur) {
+            free(best);
+            free(cur);
+            if (out) memset(out, 0, sizeof(*out));
+            return;
+        }
         for (int t = 0; t < count; t++) {
-            poly_transform_lattice(src, &cur, lattice, t);
-            poly_normalize_position(&cur, lattice);
-            poly_prepare_cycles(&cur, lattice);
-            if (first || poly_less(&cur, &best)) {
-                best = cur;
+            poly_transform_lattice(src, cur, lattice, t);
+            poly_normalize_position(cur, lattice);
+            poly_prepare_cycles(cur, lattice);
+            if (first || poly_less(cur, best)) {
+                *best = *cur;
                 first = 0;
             }
         }
-        *out = best;
+        *out = *best;
+        free(best);
+        free(cur);
         return;
     }
 

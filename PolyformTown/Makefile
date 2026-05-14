@@ -18,6 +18,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 	rl3_generate rl3_refine rl4_generate \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
+	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
 	meta_graph tiling_3x3_demo tiling_4x4_demo hat_boundary_dfs_check \
 	check_indexed_variants check_rl1_tile_order search1 refine1
 
@@ -275,7 +276,7 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 		$(CORE) $(SRC)/core/dfs.o
 
 
-figures: rl0_svg rl0_refine_svg rl1_svg_naive
+figures: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg
 
 # -----------------------------------------------------------------------------
 # DEPICT
@@ -311,6 +312,43 @@ rl1_svg_naive: rl1_data_naive rl1_depict imgtable
 	mkdir -p img
 	$(BIN)/rl1_depict preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl1_naive_completions.svg
+
+RL1_SURVIVORS ?= data/rl4/rl1_filtered.dat
+RL2_SURVIVORS ?= data/rl4/rl2_filtered.dat
+RL3_SURVIVORS ?= data/rl4/rl3_filtered.dat
+RL1_SURVIVORS_SVG ?= img/rl1_survivors.svg
+RL2_SURVIVORS_SVG ?= img/rl2_survivors.svg
+RL3_SURVIVORS_SVG ?= img/rl3_survivors.svg
+
+rl1_survivors_svg: rl1_depict imgtable
+	@test -s $(RL1_SURVIVORS) || { \
+		echo "missing $(RL1_SURVIVORS); run: make boot" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL1_SURVIVORS_SVG))
+	@$(BIN)/rl1_depict preferences/focus.tile $(RL1_SURVIVORS) --grouped | \
+		$(BIN)/imgtable > $(RL1_SURVIVORS_SVG)
+	@echo $(RL1_SURVIVORS_SVG)
+
+rl2_survivors_svg: rl1_depict imgtable
+	@test -s $(RL2_SURVIVORS) || { \
+		echo "missing $(RL2_SURVIVORS); run: make boot" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL2_SURVIVORS_SVG))
+	@$(BIN)/rl1_depict preferences/focus.tile $(RL2_SURVIVORS) --grouped | \
+		$(BIN)/imgtable > $(RL2_SURVIVORS_SVG)
+	@echo $(RL2_SURVIVORS_SVG)
+
+rl3_survivors_svg: rl1_depict imgtable
+	@test -s $(RL3_SURVIVORS) || { \
+		echo "missing $(RL3_SURVIVORS); run: make boot" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL3_SURVIVORS_SVG))
+	@$(BIN)/rl1_depict preferences/focus.tile $(RL3_SURVIVORS) --grouped | \
+		$(BIN)/imgtable > $(RL3_SURVIVORS_SVG)
+	@echo $(RL3_SURVIVORS_SVG)
 
 imgtable: $(BIN)/imgtable
 $(BIN)/imgtable: $(SRC)/usage/imgtable.o | $(BIN)

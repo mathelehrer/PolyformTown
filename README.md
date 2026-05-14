@@ -6,12 +6,17 @@
 
 
 
-<h2>RL0.x Optimized Eliminations</h2>
+<h2>RL0.x Optimized Eliminations (bounded)</h2>
 
-<img src="./PolyformTown/img/rl0_refine.svg" alt="RL0.x Optimized Eliminations" />
+<img src="./PolyformTown/img/rl0_refine_escape.svg" alt="RL0.x (escapes)" />
+
+<p><em>Figure: A failed attempt bound at |constellation| = 256.</em></p>
+
+<h2>RL0.x Optimized Eliminations (full)</h2>
+
+<img src="./PolyformTown/img/rl0_refine.svg" alt="RL0.x (complete?)" />
 
 <p><em>Figure: Booting through 0.x efficiency surfaces.</em></p>
-
 
  
 <h2>RL1 validated surrounds of one central tile</h2>

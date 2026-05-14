@@ -1,5 +1,6 @@
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 #include "core/attach.h"
 #include "core/lattice.h"
 #include "core/tetrille.h"
@@ -345,11 +346,12 @@ int try_attach_tile_poly_ex_status(const Poly *base,
                                    Poly *out,
                                    Cycle *aligned_out,
                                    AttachStatus *status_out) {
-    Edge frontier[MAX_VERTS * MAX_CYCLES];
-    Cycle aligned;
-    LEdge merged[MAX_LOCAL];
+    Edge *frontier = NULL;
+    Cycle *aligned = NULL;
+    LEdge *merged = NULL;
     int frontier_n;
     int merged_n;
+    int ok = 0;
 
     attach_status_set(status_out, ATTACH_STATUS_GEOMETRY);
     if (!base || !tile_variant || !out) {
@@ -357,25 +359,39 @@ int try_attach_tile_poly_ex_status(const Poly *base,
         return 0;
     }
 
+    frontier = malloc((size_t)MAX_VERTS * MAX_CYCLES * sizeof(*frontier));
+    aligned = malloc(sizeof(*aligned));
+    merged = malloc((size_t)MAX_LOCAL * sizeof(*merged));
+    if (!frontier || !aligned || !merged) {
+        attach_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        goto done;
+    }
+
     frontier_n = build_boundary_edges(base, frontier);
     if (frontier_n < 0) {
         attach_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
-        return 0;
+        goto done;
     }
     if (frontier_n + tile_variant->n > MAX_LOCAL) {
         attach_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
-        return 0;
+        goto done;
     }
-    if (base_edge_index < 0 || base_edge_index >= frontier_n) return 0;
+    if (base_edge_index < 0 || base_edge_index >= frontier_n) goto done;
 
-    if (!align_tile(tile_variant, tile_edge_index, frontier[base_edge_index], lattice, &aligned)) return 0;
+    if (!align_tile(tile_variant, tile_edge_index, frontier[base_edge_index], lattice, aligned)) goto done;
 
-    if (!build_union_edges(base, &aligned, merged, &merged_n, status_out)) return 0;
-    if (!extract_cycles(merged, merged_n, 1, lattice, out, status_out)) return 0;
+    if (!build_union_edges(base, aligned, merged, &merged_n, status_out)) goto done;
+    if (!extract_cycles(merged, merged_n, 1, lattice, out, status_out)) goto done;
 
-    if (has_overlap_via_tile_test(out, &aligned, lattice)) return 0;
-    if (aligned_out) *aligned_out = aligned;
+    if (has_overlap_via_tile_test(out, aligned, lattice)) goto done;
+    if (aligned_out) *aligned_out = *aligned;
 
     attach_status_set(status_out, ATTACH_STATUS_OK);
-    return 1;
+    ok = 1;
+
+done:
+    free(frontier);
+    free(aligned);
+    free(merged);
+    return ok;
 }

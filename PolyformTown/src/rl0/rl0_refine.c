@@ -806,7 +806,7 @@ static int choose_port_from_analysis0(const Search0State *s,
                                       PortChoice *choice,
                                       int *port_count,
                                       int *min_distance_out) {
-    Coord boundary[SEARCH0_MAX_COORDS];
+    Coord *boundary = NULL;
     int vc;
     int best = 0;
     int pc = 0;
@@ -815,8 +815,13 @@ static int choose_port_from_analysis0(const Search0State *s,
     best_choice.value_count = 0;
     best_choice.nonempty_count = 0;
     if (!s || !map || !a || !choice) return 0;
+    boundary = malloc((size_t)SEARCH0_MAX_COORDS * sizeof(*boundary));
+    if (!boundary) return 0;
     vc = build_boundary_vertices(&s->poly, boundary);
-    if (vc < 0) return 0;
+    if (vc < 0) {
+        free(boundary);
+        return 0;
+    }
     for (int i = 0; i < vc; i++) {
         RL0FMArc key;
         const RL0FMArc *values = NULL;
@@ -842,6 +847,7 @@ static int choose_port_from_analysis0(const Search0State *s,
             *choice = best_choice;
             if (port_count) *port_count = pc;
             if (min_distance_out) *min_distance_out = d;
+            free(boundary);
             return -1;
         }
         for (int k = 0; k < value_count; k++) if (values[k].n > 0) nonempty++;
@@ -858,8 +864,12 @@ static int choose_port_from_analysis0(const Search0State *s,
     }
     if (port_count) *port_count = pc;
     if (min_distance_out) *min_distance_out = best ? best_choice.distance : SEARCH0_INF;
-    if (!best) return 0;
+    if (!best) {
+        free(boundary);
+        return 0;
+    }
     *choice = best_choice;
+    free(boundary);
     return 1;
 }
 
@@ -878,19 +888,35 @@ static int collect_tile_vertices0(const Cycle *tiles, int tile_count, Coord *ver
 }
 
 static int rebuild_hidden0(const Poly *p, const Cycle *tiles, int tile_count, Coord *hidden) {
-    Coord all[SEARCH0_MAX_COORDS];
-    Coord boundary[SEARCH0_MAX_COORDS];
-    int ac = collect_tile_vertices0(tiles, tile_count, all);
-    int bc = build_boundary_vertices(p, boundary);
+    Coord *all = malloc((size_t)SEARCH0_MAX_COORDS * sizeof(*all));
+    Coord *boundary = malloc((size_t)SEARCH0_MAX_COORDS * sizeof(*boundary));
+    int ac, bc;
     int hc = 0;
-    if (ac < 0 || bc < 0) return -1;
+    if (!all || !boundary) {
+        free(all);
+        free(boundary);
+        return -1;
+    }
+    ac = collect_tile_vertices0(tiles, tile_count, all);
+    bc = build_boundary_vertices(p, boundary);
+    if (ac < 0 || bc < 0) {
+        free(all);
+        free(boundary);
+        return -1;
+    }
     for (int i = 0; i < ac; i++) {
         if (!coord_in_list0(boundary, bc, all[i])) {
-            if (hc >= SEARCH0_MAX_COORDS) return -1;
+            if (hc >= SEARCH0_MAX_COORDS) {
+                free(all);
+                free(boundary);
+                return -1;
+            }
             hidden[hc++] = all[i];
         }
     }
-    qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp0);
+    if (hc > 1) qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp0);
+    free(all);
+    free(boundary);
     return hc;
 }
 
@@ -916,19 +942,24 @@ static void statevec_free0(StateVec *v) { free(v->data); v->data = NULL; v->coun
 
 static void poly_to_key0(const Poly *p, char *buf, size_t cap) {
     size_t off = 0;
-    Poly key;
-    poly_hash_key_lattice(p, TILE_LATTICE_TETRILLE, &key);
+    Poly *key = malloc(sizeof(*key));
+    if (!key) {
+        if (cap > 0) buf[0] = '\0';
+        return;
+    }
+    poly_hash_key_lattice(p, TILE_LATTICE_TETRILLE, key);
     off += (size_t)snprintf(buf + off, cap - off, "[");
-    for (int c = 0; c < key.cycle_count && off < cap; c++) {
+    for (int c = 0; c < key->cycle_count && off < cap; c++) {
         if (c) off += (size_t)snprintf(buf + off, cap - off, "|");
         off += (size_t)snprintf(buf + off, cap - off, "[");
-        for (int i = 0; i < key.cycles[c].n && off < cap; i++) {
+        for (int i = 0; i < key->cycles[c].n && off < cap; i++) {
             if (i) off += (size_t)snprintf(buf + off, cap - off, ",");
-            off += (size_t)snprintf(buf + off, cap - off, "(%d,%d,%d)", key.cycles[c].v[i].v, key.cycles[c].v[i].x, key.cycles[c].v[i].y);
+            off += (size_t)snprintf(buf + off, cap - off, "(%d,%d,%d)", key->cycles[c].v[i].v, key->cycles[c].v[i].x, key->cycles[c].v[i].y);
         }
         off += (size_t)snprintf(buf + off, cap - off, "]");
     }
     snprintf(buf + off, cap - off, "]");
+    free(key);
 }
 
 static int statevec_add_merge0(StateVec *v, const Search0State *s) {
@@ -1502,23 +1533,31 @@ static void fprint_fm_cycle0(FILE *fp, const RL0FMCycle *cycle) {
 static int strict_record_live0(const Search0Record *r,
                                const Tile *tile,
                                const RL0ForgetMap *map) {
-    Coord boundary[SEARCH0_MAX_COORDS];
+    Coord *boundary = NULL;
     int vc;
     if (!r || !r->have_boundary || !r->have_tiles) return 0;
+    boundary = malloc((size_t)SEARCH0_MAX_COORDS * sizeof(*boundary));
+    if (!boundary) return 0;
     vc = build_boundary_vertices(&r->boundary, boundary);
-    if (vc < 0) return 0;
+    if (vc < 0) {
+        free(boundary);
+        return 0;
+    }
     for (int i = 0; i < vc; i++) {
         RL0FMArc key;
         const RL0FMArc *values = NULL;
         int value_count = 0;
         if (!boundary0_build_vertex_arc(tile, r->tiles, r->tile_count, boundary[i], &key)) {
+            free(boundary);
             return 0;
         }
         if (!rl0_fm_lookup_any_rotation(map, &key, &values, &value_count, NULL) ||
             value_count <= 0) {
+            free(boundary);
             return 0;
         }
     }
+    free(boundary);
     return 1;
 }
 
@@ -2026,14 +2065,20 @@ static int coord_less0(Coord a, Coord b) {
 }
 
 static Coord default_focus_coord0(const Search0State *s) {
-    Coord boundary[SEARCH0_MAX_COORDS];
-    int vc = build_boundary_vertices(&s->poly, boundary);
+    Coord *boundary = malloc((size_t)SEARCH0_MAX_COORDS * sizeof(*boundary));
+    int vc;
     Coord best = {0,0,0};
-    if (vc <= 0) return best;
+    if (!boundary) return best;
+    vc = build_boundary_vertices(&s->poly, boundary);
+    if (vc <= 0) {
+        free(boundary);
+        return best;
+    }
     best = boundary[0];
     for (int i = 1; i < vc; i++) {
         if (coord_less0(boundary[i], best)) best = boundary[i];
     }
+    free(boundary);
     return best;
 }
 
