@@ -14,6 +14,7 @@
 #define MAX_VERTS_PER_CYCLE 4096
 #define BOX_W 210.0
 #define BOX_H 165.0
+#define CIRCLE_D 58.0
 #define BOX_GAP_X 36.0
 #define BOX_GAP_Y 70.0
 #define PAGE_MARGIN 28.0
@@ -1082,20 +1083,21 @@ static double compute_subtree_width0(int idx,
                                      const int *child_offsets,
                                      const int *child_counts,
                                      const int *children,
+                                     double node_w,
+                                     double child_gap,
                                      double *subtree_width) {
-    const double child_gap = BOX_GAP_X * 1.55;
     int count = child_counts[idx];
     if (count <= 0) {
-        subtree_width[idx] = BOX_W;
+        subtree_width[idx] = node_w;
         return subtree_width[idx];
     }
     double total = 0.0;
     for (int k = 0; k < count; k++) {
         int child = children[child_offsets[idx] + k];
-        total += compute_subtree_width0(child, child_offsets, child_counts, children, subtree_width);
+        total += compute_subtree_width0(child, child_offsets, child_counts, children, node_w, child_gap, subtree_width);
     }
     total += child_gap * (count - 1);
-    if (total < BOX_W) total = BOX_W;
+    if (total < node_w) total = node_w;
     subtree_width[idx] = total;
     return total;
 }
@@ -1105,9 +1107,9 @@ static void assign_subtree_centers0(int idx,
                                     const int *child_offsets,
                                     const int *child_counts,
                                     const int *children,
+                                    double child_gap,
                                     const double *subtree_width,
                                     double *center_x) {
-    const double child_gap = BOX_GAP_X * 1.55;
     int count = child_counts[idx];
     double width = subtree_width[idx];
     if (count <= 0) {
@@ -1123,7 +1125,7 @@ static void assign_subtree_centers0(int idx,
     double cur = left + (width - child_total) * 0.5;
     for (int k = 0; k < count; k++) {
         int child = children[child_offsets[idx] + k];
-        assign_subtree_centers0(child, cur, child_offsets, child_counts, children, subtree_width, center_x);
+        assign_subtree_centers0(child, cur, child_offsets, child_counts, children, child_gap, subtree_width, center_x);
         cur += subtree_width[child] + child_gap;
     }
     {
@@ -1264,6 +1266,91 @@ static void filter_leaf_duplicate_boundary_nodes0(NodeVec *nodes, EdgeVec *edges
     free(suppress);
 }
 
+typedef struct {
+    int root;
+    int order;
+} RootOrderItem;
+
+static void compute_root_row_intervals0(int root_count,
+                                        const int *root_pos,
+                                        const int *root_of,
+                                        const int *division_levels,
+                                        const int *local_step,
+                                        const double *local_box_x,
+                                        double node_w,
+                                        int draw_rows,
+                                        int n,
+                                        double *row_min,
+                                        double *row_max,
+                                        unsigned char *row_used) {
+    for (int ri = 0; ri < root_count; ri++) {
+        for (int row = 0; row < draw_rows; row++) {
+            int off = ri * draw_rows + row;
+            row_min[off] = 0.0;
+            row_max[off] = 0.0;
+            row_used[off] = 0;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        int row = division_levels[i] < 0 ? 0 : division_levels[i] + 1;
+        int ri = root_pos[root_of[i]];
+        double xmin = local_box_x[i];
+        double xmax = local_box_x[i] + node_w;
+        int off;
+        (void)local_step;
+        if (ri < 0 || row < 0 || row >= draw_rows) continue;
+        off = ri * draw_rows + row;
+        if (!row_used[off]) {
+            row_min[off] = xmin;
+            row_max[off] = xmax;
+            row_used[off] = 1;
+        } else {
+            if (xmin < row_min[off]) row_min[off] = xmin;
+            if (xmax > row_max[off]) row_max[off] = xmax;
+        }
+    }
+}
+
+static void pack_roots_by_row0(int root_count,
+                               int draw_rows,
+                               const double *row_min,
+                               const double *row_max,
+                               const unsigned char *row_used,
+                               double gap_x,
+                               double *root_shift) {
+    double *occupied = (double *)calloc((size_t)draw_rows, sizeof(double));
+    unsigned char *occ_used = (unsigned char *)calloc((size_t)draw_rows, sizeof(unsigned char));
+    if (!occupied || !occ_used) exit(1);
+    for (int ri = 0; ri < root_count; ri++) {
+        double shift = 0.0;
+        int any = 0;
+        for (int row = 0; row < draw_rows; row++) {
+            int off = ri * draw_rows + row;
+            if (!row_used[off]) continue;
+            any = 1;
+            if (occ_used[row]) {
+                double need = occupied[row] + gap_x - row_min[off];
+                if (need > shift) shift = need;
+            } else {
+                double need = -row_min[off];
+                if (need > shift) shift = need;
+            }
+        }
+        if (!any) shift = 0.0;
+        root_shift[ri] = shift;
+        for (int row = 0; row < draw_rows; row++) {
+            int off = ri * draw_rows + row;
+            if (!row_used[off]) continue;
+            if (!occ_used[row] || shift + row_max[off] > occupied[row]) {
+                occupied[row] = shift + row_max[off];
+                occ_used[row] = 1;
+            }
+        }
+    }
+    free(occupied);
+    free(occ_used);
+}
+
 static const char *edge_color0(int sublevel, int use_color) {
     if (!use_color) return "#777777";
     switch (sublevel & 3) {
@@ -1298,7 +1385,7 @@ static void __attribute__((unused)) compute_node_sublevels0(const NodeVec *nodes
 }
 
 
-static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) {
+static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color, int use_frames) {
     int n = nodes->count;
     int topo_rows;
     int div_rows = 0;
@@ -1332,15 +1419,29 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
     int *seed_for_prov = (int *)calloc(64, sizeof(int));
     int *process_order = (int *)calloc((size_t)n, sizeof(int));
     int *parent_ready = (int *)calloc((size_t)n, sizeof(int));
+    int *roots = NULL;
+    int root_count = 0;
+    int *root_pos = NULL;
+    double *local_center_x = NULL;
+    double *local_box_x = NULL;
+    double *root_shift = NULL;
+    double *root_row_min = NULL;
+    double *root_row_max = NULL;
+    unsigned char *root_row_used = NULL;
     double min_box_x = 0.0, max_box_x = 0.0;
     double width, height, dx;
     int first_box = 1;
-    const double ROW_DY = BOX_H + 50.0;
-    const double ROW_GAP = ROW_DY - BOX_H;
+    const double NODE_W = use_frames ? BOX_W : CIRCLE_D;
+    const double NODE_H = use_frames ? BOX_H : CIRCLE_D;
+    const double ROW_DY = NODE_H + 50.0;
+    const double ROW_GAP = ROW_DY - NODE_H;
     const double DIV_GAP = 30.0;
     const double ROOT_GAP = ROW_GAP;
     const double DIV_TOP_GAP = ROW_GAP;
     const double ROOT_GAP_X = BOX_GAP_X * 1.05;
+    const double CHILD_GAP_X = BOX_GAP_X * 1.55;
+    const double NODE_INTERVAL_PAD = use_frames ? 10.0 : 6.0;
+    const double COMPONENT_GAP_X = ROOT_GAP_X + (use_frames ? NODE_W * 2.40 : NODE_W * 3.00);
     const double LABEL_FONT = 72.0;
 
     if (!levels || !division_levels || !local_step || !primary_parent || !parent_edge || !root_of ||
@@ -1456,43 +1557,35 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
     }
     sort_tree_children_by_metric0(n, child_offsets, child_counts, children, metric_cache, count_cache, order_in_row);
 
-    {
-        int *roots = (int *)calloc((size_t)n, sizeof(int));
-        int root_count = 0;
-        double cur_left = 0.0;
-        if (!roots) exit(1);
-        for (int i = 0; i < n; i++) if (primary_parent[i] < 0) roots[root_count++] = i;
-        for (int a = 0; a < root_count; a++) {
-            for (int b = a + 1; b < root_count; b++) {
-                int ia = roots[a], ib = roots[b];
-                if (metric_cache[ib] < metric_cache[ia] ||
-                    (metric_cache[ib] == metric_cache[ia] && count_cache[ib] < count_cache[ia]) ||
-                    (metric_cache[ib] == metric_cache[ia] && count_cache[ib] == count_cache[ia] && order_in_row[ib] < order_in_row[ia])) {
-                    int tmp = roots[a];
-                    roots[a] = roots[b];
-                    roots[b] = tmp;
-                }
+    roots = (int *)calloc((size_t)n, sizeof(int));
+    root_pos = (int *)calloc((size_t)n, sizeof(int));
+    local_center_x = (double *)calloc((size_t)n, sizeof(double));
+    local_box_x = (double *)calloc((size_t)n, sizeof(double));
+    if (!roots || !root_pos || !local_center_x || !local_box_x) exit(1);
+    for (int i = 0; i < n; i++) root_pos[i] = -1;
+    for (int i = 0; i < n; i++) if (primary_parent[i] < 0) roots[root_count++] = i;
+    for (int a = 0; a < root_count; a++) {
+        for (int b = a + 1; b < root_count; b++) {
+            int ia = roots[a], ib = roots[b];
+            if (metric_cache[ib] < metric_cache[ia] ||
+                (metric_cache[ib] == metric_cache[ia] && count_cache[ib] < count_cache[ia]) ||
+                (metric_cache[ib] == metric_cache[ia] && count_cache[ib] == count_cache[ia] && order_in_row[ib] < order_in_row[ia])) {
+                int tmp = roots[a];
+                roots[a] = roots[b];
+                roots[b] = tmp;
             }
         }
-        /*
-           Optimized multi-seed layout needs one ordering exception:
-           after normal metric sorting, place the first root component last.
-           This is a renderer-only translation/order hack; it does not alter
-           graph nodes, edges, or divisions.
-        */
-        if (root_count == 5) {
-            int first_root = roots[0];
-            for (int r = 1; r < root_count; r++) roots[r - 1] = roots[r];
-            roots[root_count - 1] = first_root;
-        }
-        for (int r = 0; r < root_count; r++) {
-            int idx = roots[r];
-            compute_subtree_width0(idx, child_offsets, child_counts, children, subtree_width);
-            if (r > 0) cur_left += ROOT_GAP_X;
-            assign_subtree_centers0(idx, cur_left, child_offsets, child_counts, children, subtree_width, center_x);
-            cur_left += subtree_width[idx];
-        }
-        free(roots);
+    }
+    if (root_count == 5) {
+        int first_root = roots[0];
+        for (int r = 1; r < root_count; r++) roots[r - 1] = roots[r];
+        roots[root_count - 1] = first_root;
+    }
+    for (int r = 0; r < root_count; r++) {
+        int idx = roots[r];
+        root_pos[idx] = r;
+        compute_subtree_width0(idx, child_offsets, child_counts, children, NODE_W, CHILD_GAP_X, subtree_width);
+        assign_subtree_centers0(idx, 0.0, child_offsets, child_counts, children, CHILD_GAP_X, subtree_width, center_x);
     }
 
     for (int oi = 0; oi < n; oi++) {
@@ -1505,32 +1598,52 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
     }
     for (int d = 0; d < div_rows; d++) if (rows_per_div[d] <= 0) rows_per_div[d] = 1;
 
-    divider_y[0] = PAGE_MARGIN + BOX_H + ROOT_GAP;
+    draw_rows = div_rows + 1;
+    build_division_row_layout0(division_levels, local_step, n, div_rows, &draw_nodes, &draw_offsets, &draw_counts);
+
+    root_shift = (double *)calloc((size_t)root_count, sizeof(double));
+    root_row_min = (double *)calloc((size_t)(root_count * draw_rows), sizeof(double));
+    root_row_max = (double *)calloc((size_t)(root_count * draw_rows), sizeof(double));
+    root_row_used = (unsigned char *)calloc((size_t)(root_count * draw_rows), sizeof(unsigned char));
+    if (!root_shift || !root_row_min || !root_row_max || !root_row_used) exit(1);
+    for (int i = 0; i < n; i++) {
+        local_center_x[i] = center_x[i];
+        local_box_x[i] = local_center_x[i] - NODE_W * 0.5 - NODE_INTERVAL_PAD;
+    }
+    compute_root_row_intervals0(root_count, root_pos, root_of,
+                                division_levels, local_step,
+                                local_box_x, NODE_W + 2.0 * NODE_INTERVAL_PAD, draw_rows, n,
+                                root_row_min, root_row_max, root_row_used);
+    pack_roots_by_row0(root_count, draw_rows,
+                       root_row_min, root_row_max, root_row_used,
+                       COMPONENT_GAP_X, root_shift);
+
+    divider_y[0] = PAGE_MARGIN + NODE_H + ROOT_GAP;
     for (int d = 0; d < div_rows; d++) {
-        double div_height = BOX_H + (rows_per_div[d] - 1) * ROW_DY;
+        double div_height = NODE_H + (rows_per_div[d] - 1) * ROW_DY;
         division_start[d] = divider_y[d] + DIV_TOP_GAP;
         divider_y[d + 1] = division_start[d] + div_height + DIV_GAP;
     }
 
     for (int i = 0; i < n; i++) {
         double y0;
-        if (division_levels[i] < 0) y0 = divider_y[0] - BOX_H - ROOT_GAP;
+        if (division_levels[i] < 0) y0 = divider_y[0] - NODE_H - ROOT_GAP;
         else y0 = division_start[division_levels[i]] + local_step[i] * ROW_DY;
-        box_x[i] = center_x[i] - BOX_W * 0.5;
-        box_y[i] = y0;
-        cx[i] = center_x[i];
+        {
+            int ri = root_pos[root_of[i]];
+            box_x[i] = local_center_x[i] + root_shift[ri] - NODE_W * 0.5;
+            box_y[i] = y0;
+            cx[i] = local_center_x[i] + root_shift[ri];
+        }
         if (first_box) {
             min_box_x = box_x[i];
-            max_box_x = box_x[i] + BOX_W;
+            max_box_x = box_x[i] + NODE_W;
             first_box = 0;
         } else {
             if (box_x[i] < min_box_x) min_box_x = box_x[i];
-            if (box_x[i] + BOX_W > max_box_x) max_box_x = box_x[i] + BOX_W;
+            if (box_x[i] + NODE_W > max_box_x) max_box_x = box_x[i] + NODE_W;
         }
     }
-
-    draw_rows = div_rows + 1;
-    build_division_row_layout0(division_levels, local_step, n, div_rows, &draw_nodes, &draw_offsets, &draw_counts);
 
     {
         double content_width = max_box_x - min_box_x;
@@ -1553,7 +1666,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
         }
 
         width = content_width + 2.0 * pad_x;
-        if (width < 2.0 * pad_x + BOX_W) width = 2.0 * pad_x + BOX_W;
+        if (width < 2.0 * pad_x + NODE_W) width = 2.0 * pad_x + NODE_W;
         height = divider_y[div_rows] + pad_y;
     }
 
@@ -1573,7 +1686,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
         if (use_color && d == 4) { div_color = "#cc3333"; text_color = "#cc3333"; }
         else if (use_color && d == 5) { div_color = "#2f8f46"; text_color = "#2f8f46"; }
         else if (use_color && d == 6) { div_color = "#3366cc"; text_color = "#3366cc"; }
-        else if (use_color && d == 10) { div_color = "#7a3db8"; text_color = "#7a3db8"; }
+        else if (use_color && d == 24) { div_color = "#7a3db8"; text_color = "#7a3db8"; }
         printf("<line x1=\"0\" y1=\"%.1f\" x2=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-width=\"2.2\"/>\n", yline, width, yline, div_color);
         printf("<text x=\"18\" y=\"%.1f\" font-size=\"%.0f\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">%d</text>\n", yline - 8.0, LABEL_FONT, text_color, d);
     }
@@ -1584,7 +1697,7 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
         double x1, y1, x2, y2;
         if (p < 0 || e < 0) continue;
         x1 = cx[p];
-        y1 = box_y[p] + BOX_H + 2.0;
+        y1 = box_y[p] + NODE_H + 2.0;
         x2 = cx[i];
         y2 = box_y[i] - 2.0;
         if (y2 <= y1) continue;
@@ -1599,29 +1712,40 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
             double x0 = box_x[idx];
             double y0 = box_y[idx];
             double minx, miny, maxx, maxy, bw, bh, scale, tx, ty;
-            double shape_h = BOX_H - 18.0;
+            double shape_h = use_frames ? (NODE_H - 18.0) : (NODE_H - 10.0);
             const char *frame_fill = node->highlighted ? "#ffd7d7" : "#fafafa";
             const char *frame_stroke = node->highlighted ? "#cc0000" : "black";
             double frame_stroke_width = node->highlighted ? 4.0 : 1.2;
-            printf("<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" rx=\"8\" ry=\"8\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\"/>\n", x0, y0, BOX_W, BOX_H, frame_fill, frame_stroke, frame_stroke_width);
-            shape_bbox(&node->aggregate, &minx, &miny, &maxx, &maxy);
-            bw = maxx - minx; bh = maxy - miny;
-            if (bw < 1e-9) bw = 1.0;
-            if (bh < 1e-9) bh = 1.0;
-            scale = (BOX_W - 2 * SHAPE_PAD < shape_h - 2 * SHAPE_PAD ? BOX_W - 2 * SHAPE_PAD : shape_h - 2 * SHAPE_PAD) / (bw > bh ? bw : bh);
-            tx = x0 + (BOX_W - scale * bw) * 0.5 - scale * minx;
-            ty = y0 + 9.0 + (shape_h - scale * bh) * 0.5 + scale * maxy;
-            emit_shape_path(stdout, &node->aggregate, tx, ty, scale);
-            emit_tile_paths(stdout, node, tx, ty, scale);
-            {
-                double hr = hidden_radius0(node);
-                for (int h = 0; h < node->hidden_count; h++) {
-                    DPoint q = vertex_to_xy(&node->aggregate, node->hidden[h]);
-                    fprintf(stdout, "<circle cx=\"%.3f\" cy=\"%.3f\" r=\"%.3f\" fill=\"black\"/>\n", tx + scale * q.x, ty - scale * q.y, hr);
+            if (use_frames) {
+                printf("<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" rx=\"8\" ry=\"8\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\"/>\n", x0, y0, NODE_W, NODE_H, frame_fill, frame_stroke, frame_stroke_width);
+                shape_bbox(&node->aggregate, &minx, &miny, &maxx, &maxy);
+                bw = maxx - minx; bh = maxy - miny;
+                if (bw < 1e-9) bw = 1.0;
+                if (bh < 1e-9) bh = 1.0;
+                scale = (NODE_W - 2 * SHAPE_PAD < shape_h - 2 * SHAPE_PAD ? NODE_W - 2 * SHAPE_PAD : shape_h - 2 * SHAPE_PAD) / (bw > bh ? bw : bh);
+                tx = x0 + (NODE_W - scale * bw) * 0.5 - scale * minx;
+                ty = y0 + (NODE_H - shape_h) * 0.5 + (shape_h - scale * bh) * 0.5 + scale * maxy;
+                emit_shape_path(stdout, &node->aggregate, tx, ty, scale);
+                emit_tile_paths(stdout, node, tx, ty, scale);
+                {
+                    double hr = hidden_radius0(node);
+                    for (int h = 0; h < node->hidden_count; h++) {
+                        DPoint q = vertex_to_xy(&node->aggregate, node->hidden[h]);
+                        fprintf(stdout, "<circle cx=\"%.3f\" cy=\"%.3f\" r=\"%.3f\" fill=\"black\"/>\n", tx + scale * q.x, ty - scale * q.y, hr);
+                    }
                 }
-            }
-            draw_node_red_marks0(stdout, nodes, edges, idx, tx, ty, scale);
-        }
+                draw_node_red_marks0(stdout, nodes, edges, idx, tx, ty, scale);
+            } else {
+                double cx0 = x0 + NODE_W * 0.5;
+                double cy0 = y0 + NODE_H * 0.5;
+                double r0 = (NODE_W < NODE_H ? NODE_W : NODE_H) * 0.42;
+                const char *node_fill = node->highlighted ? "#9b1c1c" : "#555555";
+                const char *node_stroke = node->highlighted ? "#cc0000" : "#333333";
+                const char *node_text = "#f2f2f2";
+                double node_stroke_width = node->highlighted ? 3.0 : 1.2;
+                printf("<circle cx=\"%.1f\" cy=\"%.1f\" r=\"%.1f\" fill=\"%s\" stroke=\"%s\" stroke-width=\"%.1f\"/>\n", cx0, cy0, r0, node_fill, node_stroke, node_stroke_width);
+                printf("<text x=\"%.1f\" y=\"%.1f\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\" font-family=\"monospace\" font-weight=\"bold\" fill=\"%s\">%d</text>\n", cx0, cy0, node_text, node->id);
+            }        }
     }
     printf("</svg>\n");
 
@@ -1631,6 +1755,8 @@ static void emit_svg(const NodeVec *nodes, const EdgeVec *edges, int use_color) 
     free(rows_per_div); free(metric_cache); free(count_cache); free(divider_y); free(division_start);
     free(parent_ready);
     free(seed_for_prov); free(process_order);
+    free(roots); free(root_pos); free(local_center_x); free(local_box_x);
+    free(root_shift); free(root_row_min); free(root_row_max); free(root_row_used);
 }
 
 
@@ -1689,11 +1815,14 @@ int main(int argc, char **argv) {
     NodeVec nodes = {0};
     EdgeVec edges = {0};
     int use_color = 0;
+    int use_frames = 0;
     int *highlight_ids = NULL;
     int highlight_count = 0;
     for (int ai = 1; ai < argc; ai++) {
         if (strcmp(argv[ai], "--color") == 0 || strcmp(argv[ai], "--colors") == 0) {
             use_color = 1;
+        } else if (strcmp(argv[ai], "--frames") == 0) {
+            use_frames = 1;
         } else if ((strcmp(argv[ai], "--highlight") == 0 || strcmp(argv[ai], "--red-nodes") == 0) && ai + 1 < argc) {
             free(highlight_ids);
             highlight_ids = NULL;
@@ -1705,7 +1834,7 @@ int main(int argc, char **argv) {
         } else if (!path) {
             path = argv[ai];
         } else {
-            fprintf(stderr, "usage: %s [--color] [--highlight ids] [graph_dump.txt]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--color] [--frames] [--highlight ids] [graph_dump.txt]\n", argv[0]);
             free(highlight_ids);
             return 1;
         }
@@ -1728,7 +1857,7 @@ int main(int argc, char **argv) {
     qsort(nodes.data, (size_t)nodes.count, sizeof(GraphNode), cmp_node_step_id);
     filter_leaf_duplicate_boundary_nodes0(&nodes, &edges);
     mark_highlight_nodes0(&nodes, highlight_ids, highlight_count);
-    emit_svg(&nodes, &edges, use_color);
+    emit_svg(&nodes, &edges, use_color, use_frames);
     free_nodes(&nodes);
     free(edges.data);
     free(highlight_ids);

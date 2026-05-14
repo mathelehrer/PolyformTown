@@ -1,3 +1,18 @@
+<h1>Input</h1>
+
+If you're interested in visual data about the hat tiling, you've come to the 
+right place. In the PolyformTown/ directory type: 
+
+```bash
+make boot; make figure
+```
+
+This launches the boot loader, goes through a sequence of four or five run levels,
+generating data needed to generate more data and finally figures. The figures can 
+then be found in the img/ directory. Latest versions are included below. 
+
+<h1>Output</h1>
+
 <h2>RL0.0 Hat Completions</h2>
 
 <img src="./PolyformTown/img/rl0_all.svg" alt="RL0.0 Hat Completions" />
