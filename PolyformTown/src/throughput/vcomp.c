@@ -23,6 +23,9 @@ typedef struct {
 } VCompCtx;
 
 typedef struct {
+    Edge frontier[MAX_VERTS * MAX_CYCLES];
+    Poly grown;
+    Cycle aligned;
     Coord next_hidden[MAX_BOUNDARY_VERTS];
     Coord new_hidden[MAX_BOUNDARY_VERTS];
     Coord next_ports[MAX_BOUNDARY_VERTS];
@@ -512,23 +515,21 @@ static void dfs_levels(const Poly *p,
                        const Coord *event_hidden,
                        int event_hidden_count) {
     TempBuffers *tmp = malloc(sizeof(*tmp));
-    Edge frontier[MAX_VERTS * MAX_CYCLES];
-    int fc = build_boundary_edges(p, frontier);
+    int fc;
 
     if (!tmp) return;
+    fc = build_boundary_edges(p, tmp->frontier);
     if (hidden_count >= ctx->max_hidden) {
         free(tmp);
         return;
     }
 
     for (int be = 0; be < fc; be++) {
-        if (!coord_eq(frontier[be].b, ctx->target)) continue;
+        if (!coord_eq(tmp->frontier[be].b, ctx->target)) continue;
 
         for (int v = 0; v < ctx->tile->variant_count; v++) {
             const Cycle *tv = &ctx->tile->variants[v];
             for (int te = 0; te < tv->n; te++) {
-                Poly grown;
-                Cycle aligned;
                 int next_hidden_count;
                 int new_hidden_count;
                 int next_port_count;
@@ -550,23 +551,23 @@ static void dfs_levels(const Poly *p,
                                              ctx->tile->lattice,
                                              be,
                                              te,
-                                             &grown,
-                                             &aligned)) {
+                                             &tmp->grown,
+                                             &tmp->aligned)) {
                     continue;
                 }
 
-                event_tiles[event_tile_count] = aligned;
+                event_tiles[event_tile_count] = tmp->aligned;
                 if (ctx->emit_tiles) {
-                    trace_tiles[trace_tile_count] = aligned;
+                    trace_tiles[trace_tile_count] = tmp->aligned;
                     next_trace_tile_count = trace_tile_count + 1;
                 }
 
-                grown_boundary_count = build_boundary_vertices(&grown,
+                grown_boundary_count = build_boundary_vertices(&tmp->grown,
                                                                tmp->grown_boundary);
                 /* hidden accumulation */
                 new_hidden_count = build_event_hidden(prev_boundary,
                                                        prev_boundary_count,
-                                                       &grown,
+                                                       &tmp->grown,
                                                        event_hidden,
                                                        event_hidden_count,
                                                        ctx->tile->lattice,
@@ -609,14 +610,14 @@ static void dfs_levels(const Poly *p,
                                                    tmp->next_ports);
                 if (next_port_count < 0) continue;
 
-                target_present = point_on_poly_boundary(&grown,
+                target_present = point_on_poly_boundary(&tmp->grown,
                                                         ctx->target,
                                                         ctx->tile->lattice);
                 if (!target_present) {
                     if (next_hidden_count > ctx->base_hidden_count) {
                         VCompRawState *state = calloc(1, sizeof(*state));
                         if (!state) continue;
-                        state->poly = grown;
+                        state->poly = tmp->grown;
                         state->target = ctx->target;
                         state->hidden_count = next_hidden_count;
                         for (int i = 0; i < next_hidden_count; i++) {
@@ -663,7 +664,7 @@ static void dfs_levels(const Poly *p,
                     continue;
                 }
 
-                dfs_levels(&grown,
+                dfs_levels(&tmp->grown,
                            ctx,
                            hidden,
                            hidden_count,

@@ -11,14 +11,18 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 figures \
-	checks test clean \
+RL ?= 0
+RL2_REFINE_DEPTH ?= 2
+RL3_REFINE_DEPTH ?= 1
+
+.PHONY: all core tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 figures \
+	checks test tests clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
-	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
-	rl3_generate rl3_refine rl4_generate \
+	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
+	rl3_generate rl4_generate \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
-	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
+	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg supertile_svg \
 	meta_graph tiling_3x3_demo tiling_4x4_demo hat_boundary_dfs_check \
 	check_indexed_variants check_rl1_tile_order search1 refine1
 
@@ -28,13 +32,15 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 # A maximal default build surface
 #
 
-all: tools
+all: core boot tests figures
+
+core: tools
 
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
-	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
-	rl3_generate rl3_refine rl4_generate \
+	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
+	rl3_generate rl4_generate \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
-	rl1_generate_naive rl1_supertiles rl1_hexagons rl1_search rl1_refine_all \
+	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
 	hat_boundary_dfs_check check_indexed_variants
 
@@ -56,8 +62,7 @@ clean:
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict $(BIN)/rl1_depict_naive \
 		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
-		$(BIN)/rl1_supertiles \
-		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine $(BIN)/rl1_refine_all \
+		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
@@ -130,14 +135,14 @@ $(BIN)/rl2_generate: $(SRC)/rl2/generate_rl2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl2/generate_rl2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl2_refine: rl1_refine
-	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 1
+	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth $(RL2_REFINE_DEPTH)
 
 rl3_generate: $(BIN)/rl3_generate
 $(BIN)/rl3_generate: $(SRC)/rl3/generate_rl3.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl3/generate_rl3.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl3_refine: rl1_refine
-	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth 1
+	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
 
 rl4_generate: $(BIN)/rl4_generate
 $(BIN)/rl4_generate: $(SRC)/rl4/generate_rl4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -158,7 +163,6 @@ $(BIN)/rl4_generate: $(SRC)/rl4/generate_rl4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE
 #   make boot RL=4  # stop after RL3; do not start RL4 generation
 #
 
-RL ?= 0
 
 ifeq ($(RL),0)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4
@@ -197,13 +201,13 @@ boot_rl2: rl2_generate rl1_refine
 	@echo "==> RL2 generate six children"
 	$(BIN)/rl2_generate
 	@echo "==> RL2 refine deletions"
-	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 1
+	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth $(RL2_REFINE_DEPTH)
 
 boot_rl3: rl3_generate rl1_refine
 	@echo "==> RL3 generate next ring"
 	$(BIN)/rl3_generate
 	@echo "==> RL3 refine deletions"
-	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth 1
+	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
 
 boot_rl4: rl4_generate
 	@echo "==> RL4 materialize filtered runlevel data"
@@ -236,6 +240,8 @@ checks: check_rl0 check_rl0_forget_map check_rl0_incremental_graph \
 
 test: tools checks
 	./tests/smoke.sh
+
+tests: test
 
 check_rl0: tests/check_rl0
 tests/check_rl0: tests/check_rl0.c
@@ -276,7 +282,7 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 		$(CORE) $(SRC)/core/dfs.o
 
 
-figures: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg
+figures: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg supertile_svg
 
 # -----------------------------------------------------------------------------
 # DEPICT
@@ -319,6 +325,17 @@ RL3_SURVIVORS ?= data/rl4/rl3_filtered.dat
 RL1_SURVIVORS_SVG ?= img/rl1_survivors.svg
 RL2_SURVIVORS_SVG ?= img/rl2_survivors.svg
 RL3_SURVIVORS_SVG ?= img/rl3_survivors.svg
+SUPERTILE_SVG ?= img/supertile.svg
+
+supertile_svg: rl1_depict imgtable
+	@test -s preferences/focus.supertile || { \
+		echo "missing preferences/focus.supertile" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(SUPERTILE_SVG))
+	@$(BIN)/rl1_depict preferences/focus.tile preferences/focus.supertile --grouped | \
+		$(BIN)/imgtable > $(SUPERTILE_SVG)
+	@echo $(SUPERTILE_SVG)
 
 rl1_survivors_svg: rl1_depict imgtable
 	@test -s $(RL1_SURVIVORS) || { \
@@ -381,21 +398,15 @@ $(BIN)/depict_search0_graph: $(SRC)/usage/depict_search0_graph.o | $(BIN)
 # should not control the normal develop/debug loop.
 
 
-rl1_supertiles: $(BIN)/rl1_supertiles
-$(BIN)/rl1_supertiles: $(SRC)/rl1/supertiles.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/supertiles.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl1_hexagons: $(BIN)/rl1_hexagons
-$(BIN)/rl1_hexagons: $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+$(BIN)/rl1_hexagons: $(SRC)/rl4/hexagons.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/hexagons.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
 
 rl1_search: $(BIN)/rl1_search
 $(BIN)/rl1_search: $(SRC)/rl1/search1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/search1.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
-rl1_refine_all: $(BIN)/rl1_refine_all
-$(BIN)/rl1_refine_all: $(SRC)/rl1/refine_all.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl1/refine_all.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 # Backward-compatible build aliases; binaries use contextual rl1_* names.
 search1: rl1_search

@@ -63,7 +63,7 @@ static R1Status classify_stats(const BComp1Stats *s) {
 
 static const char *status_name(R1Status st) {
     switch (st) {
-        case R1_LIVING: return "living";
+        case R1_LIVING: return "live";
         case R1_ESCAPED: return "escaped";
         case R1_DEAD: return "dead";
         case R1_UNKNOWN: return "unknown";
