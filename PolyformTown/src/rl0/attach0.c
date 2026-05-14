@@ -1,6 +1,7 @@
 #include "rl0/attach0.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "core/attach.h"
 #include "core/boundary.h"
@@ -69,13 +70,23 @@ static int edge_equal0(Edge a, Edge b) {
 }
 
 static int find_boundary_edge0(const Poly *p, Edge wanted) {
-    Edge edges[A0_MAX_EDGES];
-    int ec = build_boundary_edges(p, edges);
-    if (ec < 0 || ec > A0_MAX_EDGES) return -1;
-    for (int i = 0; i < ec; i++) {
-        if (edge_equal0(edges[i], wanted)) return i;
+    Edge *edges = malloc((size_t)A0_MAX_EDGES * sizeof(*edges));
+    int ec;
+    int found = -1;
+    if (!edges) return -1;
+    ec = build_boundary_edges(p, edges);
+    if (ec < 0 || ec > A0_MAX_EDGES) {
+        free(edges);
+        return -1;
     }
-    return -1;
+    for (int i = 0; i < ec; i++) {
+        if (edge_equal0(edges[i], wanted)) {
+            found = i;
+            break;
+        }
+    }
+    free(edges);
+    return found;
 }
 
 static Edge previous_edge_at_vertex0(const Cycle *c, Coord target) {
@@ -108,11 +119,19 @@ static int attach0_try_attach_one_on_edge_status(const Poly *base,
     for (int v = 0; v < tile->variant_count; v++) {
         const Cycle *tv = &tile->variants[v];
         int te;
-        Poly grown;
-        Cycle aligned;
+        Poly *grown = NULL;
+        Cycle *aligned = NULL;
         if (!variant_has_parity0(tile, tv, item.p)) continue;
         te = source_index_to_variant_slot0(tv->n, item.p, item.i);
         if (te < 0 || te >= tv->n) continue;
+        grown = malloc(sizeof(*grown));
+        aligned = malloc(sizeof(*aligned));
+        if (!grown || !aligned) {
+            free(grown);
+            free(aligned);
+            attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+            return 0;
+        }
         if (stats) stats->attach_one_attempts++;
         {
             AttachStatus one_status = ATTACH_STATUS_GEOMETRY;
@@ -121,9 +140,11 @@ static int attach0_try_attach_one_on_edge_status(const Poly *base,
                                                 tile->lattice,
                                                 be,
                                                 te,
-                                                &grown,
-                                                &aligned,
+                                                grown,
+                                                aligned,
                                                 &one_status)) {
+                free(grown);
+                free(aligned);
                 if (one_status == ATTACH_STATUS_BOUNDARY_BOUND ||
                     one_status == ATTACH_STATUS_CYCLE_BOUND ||
                     one_status == ATTACH_STATUS_INTERNAL_BOUND) {
@@ -133,9 +154,11 @@ static int attach0_try_attach_one_on_edge_status(const Poly *base,
                 continue;
             }
         }
-        *out = grown;
-        if (aligned_out) *aligned_out = aligned;
-        if (next_edge) *next_edge = previous_edge_at_vertex0(&aligned, target);
+        *out = *grown;
+        if (aligned_out) *aligned_out = *aligned;
+        if (next_edge) *next_edge = previous_edge_at_vertex0(aligned, target);
+        free(grown);
+        free(aligned);
         if (stats) stats->attach_one_successes++;
         attach0_status_set(status_out, ATTACH_STATUS_OK);
         return 1;
@@ -170,11 +193,17 @@ int attach0_try_attach_one(const Poly *base,
                            Poly *out,
                            Cycle *aligned_out,
                            Attach0Stats *stats) {
-    Edge frontier[A0_MAX_EDGES];
+    Edge *frontier;
     int fc;
+    int ok = 0;
     if (!base || !tile || !out) return 0;
+    frontier = malloc((size_t)A0_MAX_EDGES * sizeof(*frontier));
+    if (!frontier) return 0;
     fc = build_boundary_edges(base, frontier);
-    if (fc < 0 || fc > A0_MAX_EDGES) return 0;
+    if (fc < 0 || fc > A0_MAX_EDGES) {
+        free(frontier);
+        return 0;
+    }
 
     for (int be = 0; be < fc; be++) {
         if (!coord_eq(frontier[be].b, target)) continue;
@@ -188,10 +217,12 @@ int attach0_try_attach_one(const Poly *base,
                                                   NULL,
                                                   stats,
                                                   NULL)) {
-            return 1;
+            ok = 1;
+            break;
         }
     }
-    return 0;
+    free(frontier);
+    return ok;
 }
 
 int attach0_try_attach_arc(const Poly *base,
@@ -228,7 +259,7 @@ int attach0_try_attach_arc_status(const Poly *base,
                                   int *out_tile_count,
                                   Attach0Stats *stats,
                                   AttachStatus *status_out) {
-    Edge frontier[A0_MAX_EDGES];
+    Edge *frontier = NULL;
     int fc;
     attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
     if (!base || !tile || !arc || !out || !out_tiles || !out_tile_count) {
@@ -247,8 +278,14 @@ int attach0_try_attach_arc_status(const Poly *base,
         attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
         return 0;
     }
+    frontier = malloc((size_t)A0_MAX_EDGES * sizeof(*frontier));
+    if (!frontier) {
+        attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+        return 0;
+    }
     fc = build_boundary_edges(base, frontier);
     if (fc < 0 || fc > A0_MAX_EDGES) {
+        free(frontier);
         attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
         return 0;
     }
@@ -261,42 +298,66 @@ int attach0_try_attach_arc_status(const Poly *base,
         *out_tile_count = tile_count;
         if (stats) stats->attach_arc_successes++;
         attach0_status_set(status_out, ATTACH_STATUS_OK);
+        free(frontier);
         return 1;
     }
 
     for (int start = 0; start < fc; start++) {
-        Poly cur;
-        Cycle carried[ATTACH0_MAX_TILES];
+        Poly *cur = NULL;
+        Cycle *carried = NULL;
         int carried_count;
         Edge current;
         int ok = 1;
 
         if (!coord_eq(frontier[start].b, target)) continue;
 
-        cur = *base;
+        cur = malloc(sizeof(*cur));
+        carried = malloc((size_t)ATTACH0_MAX_TILES * sizeof(*carried));
+        if (!cur || !carried) {
+            free(cur);
+            free(carried);
+            free(frontier);
+            attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+            return 0;
+        }
+        *cur = *base;
         carried_count = tile_count;
         for (int i = 0; i < tile_count; i++) carried[i] = tiles[i];
         current = frontier[start];
 
         for (int k = 0; k < arc->n; k++) {
-            Poly grown;
-            Cycle aligned;
+            Poly *grown = malloc(sizeof(*grown));
+            Cycle *aligned = malloc(sizeof(*aligned));
             Edge next;
+            if (!grown || !aligned) {
+                free(grown);
+                free(aligned);
+                free(cur);
+                free(carried);
+                free(frontier);
+                attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+                return 0;
+            }
             {
                 AttachStatus one_status = ATTACH_STATUS_GEOMETRY;
-                if (!attach0_try_attach_one_on_edge_status(&cur,
+                if (!attach0_try_attach_one_on_edge_status(cur,
                                                            tile,
                                                            target,
                                                            current,
                                                            arc->item[k],
-                                                           &grown,
-                                                           &aligned,
+                                                           grown,
+                                                           aligned,
                                                            &next,
                                                            stats,
                                                            &one_status)) {
+                    free(grown);
+                    free(aligned);
                     if (one_status == ATTACH_STATUS_BOUNDARY_BOUND ||
                         one_status == ATTACH_STATUS_CYCLE_BOUND ||
                         one_status == ATTACH_STATUS_INTERNAL_BOUND) {
+                        free(cur);
+                        free(carried);
+                        free(frontier);
                         attach0_status_set(status_out, one_status);
                         return 0;
                     }
@@ -304,24 +365,37 @@ int attach0_try_attach_arc_status(const Poly *base,
                     break;
                 }
             }
-            cur = grown;
+            *cur = *grown;
             if (carried_count >= ATTACH0_MAX_TILES) {
+                free(grown);
+                free(aligned);
+                free(cur);
+                free(carried);
+                free(frontier);
                 attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
                 return 0;
             }
-            carried[carried_count++] = aligned;
+            carried[carried_count++] = *aligned;
             current = next;
+            free(grown);
+            free(aligned);
         }
 
         if (ok) {
-            *out = cur;
+            *out = *cur;
             for (int i = 0; i < carried_count; i++) out_tiles[i] = carried[i];
             *out_tile_count = carried_count;
             if (stats) stats->attach_arc_successes++;
             attach0_status_set(status_out, ATTACH_STATUS_OK);
+            free(cur);
+            free(carried);
+            free(frontier);
             return 1;
         }
+        free(cur);
+        free(carried);
     }
+    free(frontier);
     return 0;
 }
 
@@ -366,10 +440,16 @@ int attach0_force_live_closure_status(Poly *poly,
     if (max_steps <= 0) max_steps = 1024;
 
     while (steps < max_steps) {
-        Coord verts[A0_MAX_EDGES];
-        int vc = build_boundary_vertices(poly, verts);
+        Coord *verts = malloc((size_t)A0_MAX_EDGES * sizeof(*verts));
+        int vc;
         int forced_this_pass = 0;
+        if (!verts) {
+            attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+            return 0;
+        }
+        vc = build_boundary_vertices(poly, verts);
         if (vc < 0 || vc > A0_MAX_EDGES) {
+            free(verts);
             attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
             return 0;
         }
@@ -386,6 +466,7 @@ int attach0_force_live_closure_status(Poly *poly,
                 !rl0_fm_lookup_any_rotation(map, &key, &values, &value_count, NULL) ||
                 value_count <= 0) {
                 if (closure_stats) closure_stats->zero_choice_failures++;
+                free(verts);
                 attach0_status_set(status_out, ATTACH_STATUS_GEOMETRY);
                 return 0;
             }
@@ -406,10 +487,17 @@ int attach0_force_live_closure_status(Poly *poly,
             }
 
             {
-                Poly grown;
-                Cycle out_tiles[ATTACH0_MAX_TILES];
+                Poly *grown = malloc(sizeof(*grown));
+                Cycle *out_tiles = malloc((size_t)ATTACH0_MAX_TILES * sizeof(*out_tiles));
                 int out_tile_count = 0;
                 AttachStatus forced_status = ATTACH_STATUS_GEOMETRY;
+                if (!grown || !out_tiles) {
+                    free(grown);
+                    free(out_tiles);
+                    free(verts);
+                    attach0_status_set(status_out, ATTACH_STATUS_INTERNAL_BOUND);
+                    return 0;
+                }
                 if (closure_stats) closure_stats->forced_vertices++;
                 if (!attach0_try_attach_arc_status(poly,
                                                    tile,
@@ -417,21 +505,29 @@ int attach0_force_live_closure_status(Poly *poly,
                                                    *tile_count,
                                                    verts[v],
                                                    &values[nonempty_index],
-                                                   &grown,
+                                                   grown,
                                                    out_tiles,
                                                    &out_tile_count,
                                                    attach_stats,
                                                    &forced_status)) {
+                    free(grown);
+                    free(out_tiles);
+                    free(verts);
                     if (closure_stats) closure_stats->forced_failures++;
                     attach0_status_set(status_out, forced_status);
                     return 0;
                 }
-                *poly = grown;
+                *poly = *grown;
                 if (out_tile_count < 0 || out_tile_count > ATTACH0_MAX_TILES) {
+                    free(grown);
+                    free(out_tiles);
+                    free(verts);
                     attach0_status_set(status_out, ATTACH_STATUS_BOUNDARY_BOUND);
                     return 0;
                 }
                 for (int i = 0; i < out_tile_count; i++) tiles[i] = out_tiles[i];
+                free(grown);
+                free(out_tiles);
                 *tile_count = out_tile_count;
                 if (closure_stats) {
                     closure_stats->forced_successes++;
@@ -443,6 +539,7 @@ int attach0_force_live_closure_status(Poly *poly,
             }
         }
 
+        free(verts);
         if (!forced_this_pass) {
             attach0_status_set(status_out, ATTACH_STATUS_OK);
             return 1;

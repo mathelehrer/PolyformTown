@@ -11,15 +11,14 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 \
-	figures clean_figures checks test clean \
+.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 figures \
+	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
 	rl3_generate rl3_refine rl4_generate \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
-	rl0_svg rl0_all_svg rl0_refine_svg \
-	rl1_svg_naive rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
-	supertile_svg meta_graph tiling_3x3_demo tiling_4x4_demo hat_boundary_dfs_check \
+	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
+	meta_graph tiling_3x3_demo tiling_4x4_demo hat_boundary_dfs_check \
 	check_indexed_variants check_rl1_tile_order search1 refine1
 
 # -----------------------------------------------------------------------------
@@ -275,56 +274,43 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/hat_boundary_dfs_check.o \
 		$(CORE) $(SRC)/core/dfs.o
 
+
+figures: rl0_svg rl0_refine_svg rl1_svg_naive
+
 # -----------------------------------------------------------------------------
 # DEPICT
 # -----------------------------------------------------------------------------
-# SVG figure targets. Run `make boot` first, then `make figures`; these
-# commands consume the generated runlevel data rather than regenerating it.
+# Figures for a paper?
 #
 
-figures: rl0_all_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
-	supertile_svg rl0_refine_svg
-
-clean_figures:
-	rm -f img/*.svg img/*.png
-
-rl0_svg: rl0_all_svg
-
-rl0_all_svg: img/rl0_all.svg
-img/rl0_all.svg: data/rl0/completions.dat rl0_depict imgtable | img
+rl0_svg: rl0_data rl0_depict imgtable
 	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
-		$(BIN)/imgtable > $@
+		$(BIN)/imgtable > img/rl0_all.svg
 
-rl1_survivors_svg: img/rl1_survivors.svg
-img/rl1_survivors.svg: data/rl4/rl1_filtered.dat rl1_depict imgtable | img
-	$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl1_filtered.dat --grouped | \
-		$(BIN)/imgtable > $@
+RL0_SEARCH_GRAPH ?= data/rl0/search_graph.dat
+RL0_REFINE_SVG ?= img/rl0_refine.svg
 
-rl2_survivors_svg: img/rl2_survivors.svg
-img/rl2_survivors.svg: data/rl4/rl2_filtered.dat rl1_depict imgtable | img
-	$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl2_filtered.dat --grouped | \
-		$(BIN)/imgtable > $@
+rl0_refine_svg: depict_search0_graph
+	@test -s $(RL0_SEARCH_GRAPH) || { \
+		echo "missing $(RL0_SEARCH_GRAPH); run: make boot RL=1" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL0_REFINE_SVG))
+	@$(BIN)/depict_search0_graph --colors < $(RL0_SEARCH_GRAPH) > $(RL0_REFINE_SVG)
+	@echo $(RL0_REFINE_SVG)
 
-rl3_survivors_svg: img/rl3_survivors.svg
-img/rl3_survivors.svg: data/rl4/rl3_filtered.dat rl1_depict imgtable | img
-	$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl3_filtered.dat --grouped | \
-		$(BIN)/imgtable > $@
+rl0_refine_svg_print: depict_search0_graph
+	@test -s $(RL0_SEARCH_GRAPH) || { \
+		echo "missing $(RL0_SEARCH_GRAPH); run: make boot RL=1" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL0_REFINE_SVG))
+	@$(BIN)/depict_search0_graph --colors < $(RL0_SEARCH_GRAPH) | tee $(RL0_REFINE_SVG)
 
-supertile_svg: img/supertile.svg
-img/supertile.svg: data/rl2/supertile.dat rl1_depict imgtable | img
-	$(BIN)/rl1_depict preferences/focus.tile data/rl2/supertile.dat --grouped | \
-		$(BIN)/imgtable > $@
-
-rl0_refine_svg: img/rl0_refine.svg
-img/rl0_refine.svg: rl0_refine depict_search0_graph | img
-	$(BIN)/rl0_refine --print | $(BIN)/depict_search0_graph --colors > $@
-
-rl1_svg_naive: rl1_data_naive rl1_depict imgtable | img
+rl1_svg_naive: rl1_data_naive rl1_depict imgtable
+	mkdir -p img
 	$(BIN)/rl1_depict preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl1_naive_completions.svg
-
-img:
-	mkdir -p img
 
 imgtable: $(BIN)/imgtable
 $(BIN)/imgtable: $(SRC)/usage/imgtable.o | $(BIN)

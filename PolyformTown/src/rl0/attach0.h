@@ -6,7 +6,7 @@
 #include "core/attach.h"
 #include "rl0/forget_map.h"
 
-#define ATTACH0_MAX_TILES 128
+#define ATTACH0_MAX_TILES 256
 
 typedef struct {
     int variant_order_checked;

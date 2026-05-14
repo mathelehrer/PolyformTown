@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define MAX_VERTS 128
+#define MAX_VERTS 384
 #define MAX_CYCLES 32
 
 typedef struct {

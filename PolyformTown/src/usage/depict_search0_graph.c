@@ -634,8 +634,9 @@ static int parse_graph_file(FILE *fp, NodeVec *nodes, EdgeVec *edges) {
                     copy_trim(status, sizeof(status), line + 7, strlen(line + 7));
                 }
             }
-            if (strcmp(mark, "escape") == 0 ||
-                strncmp(status, "escape:", 7) == 0) {
+            (void)status;
+            if (strcmp(mark, "highlight") == 0 ||
+                strcmp(mark, "escape-arrow") == 0) {
                 highlight = 1;
             }
             if (id >= 0 && highlight) {

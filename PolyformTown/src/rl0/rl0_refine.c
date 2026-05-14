@@ -22,7 +22,7 @@
 #define SEARCH0_DEFAULT_REMEMBRANCE "data/rl0/remembrance.dat"
 #define SEARCH0_DEFAULT_DELETIONS "data/rl0/deletions.dat"
 #define SEARCH0_DEFAULT_OPTIMIZE "preferences/optimize.dat"
-#define SEARCH0_DEFAULT_HIDDEN_BOUND 256
+#define SEARCH0_DEFAULT_HIDDEN_BOUND 1024
 
 
 
@@ -212,9 +212,43 @@ typedef struct {
 } PortChoice;
 
 typedef struct {
+    int result;
+    int port_count;
+    int min_distance;
+    PortChoice choice;
+} PortChoiceCache;
+
+
+typedef struct {
+    RL0FMItem item;
+    Coord prev;
+    Coord next;
+    int tile_index;
+    int next_idx;
+    int prev_idx;
+    int used;
+} Search0Incident;
+
+typedef struct {
+    Coord q;
+    int dist;
+    unsigned char hidden;
+    int adj[RL0_FM_MAX_ITEMS * 2];
+    int adj_count;
+    Search0Incident inc[RL0_FM_MAX_ITEMS];
+    int inc_count;
+} Search0VertexInfo;
+
+typedef struct {
+    Search0VertexInfo verts[SEARCH0_MAX_COORDS];
+    int count;
+} Search0Analysis;
+
+typedef struct {
     int id;
     int discover_step;
     int division;
+    int prov_id;
     char key[SEARCH0_MAX_KEY];
     char display_key[SEARCH0_MAX_KEY];
 } PrintNodeRef;
@@ -267,6 +301,29 @@ static void emit_graph_node_mark0(PrintCtx *print,
                                   const char *mark,
                                   Search0Code code);
 
+
+static int singleton_prov0(const Search0State *s);
+
+static void emit_graph_prov_mark0(PrintCtx *print,
+                                  int prov_id,
+                                  const char *mark,
+                                  Search0Code code) {
+    if (!print || !print->fp || prov_id < 0 || prov_id >= SEARCH0_MAX_PROV) return;
+    for (int i = 0; i < print->node_count; i++) {
+        if (print->nodes[i].prov_id == prov_id) {
+            emit_graph_node_mark0(print, print->nodes[i].id, mark, code);
+        }
+    }
+}
+
+static void emit_graph_state_prov_mark0(PrintCtx *print,
+                                        const Search0State *s,
+                                        const char *mark,
+                                        Search0Code code) {
+    int prov_id = singleton_prov0(s);
+    emit_graph_prov_mark0(print, prov_id, mark, code);
+}
+
 static int ensure_graph_node0(PrintCtx *print,
                               const Tile *tile,
                               const Search0State *s,
@@ -279,11 +336,6 @@ static int graph_division_from_distance0(int distance) {
     if (distance <= 0 || distance >= SEARCH0_INF) return 0;
     return distance - 1;
 }
-
-static int graph_division_for_state0(const Search0State *s,
-                                     const Tile *tile,
-                                     const RL0ForgetMap *map,
-                                     int fallback);
 
 static int singleton_prov0(const Search0State *s) {
     int found = -1;
@@ -558,18 +610,259 @@ static int coord_cmp0(const void *A, const void *B) {
     return a->y - b->y;
 }
 
-static int edge_in_tiles0(const Cycle *tiles, int tile_count, Coord a, Coord b) {
-    for (int t = 0; t < tile_count; t++) {
-        const Cycle *c = &tiles[t];
-        for (int i = 0; i < c->n; i++) {
-            Coord u = c->v[i];
-            Coord v = c->v[(i + 1) % c->n];
-            if ((coord_eq(u, a) && coord_eq(v, b)) ||
-                (coord_eq(u, b) && coord_eq(v, a))) return 1;
+
+static int analysis_find_vertex0(const Search0Analysis *a, Coord q) {
+    if (!a) return -1;
+    for (int i = 0; i < a->count; i++) {
+        if (coord_eq(a->verts[i].q, q)) return i;
+    }
+    return -1;
+}
+
+static int analysis_add_vertex0(Search0Analysis *a, Coord q) {
+    int idx = analysis_find_vertex0(a, q);
+    if (idx >= 0) return idx;
+    if (!a || a->count >= SEARCH0_MAX_COORDS) return -1;
+    idx = a->count++;
+    memset(&a->verts[idx], 0, sizeof(a->verts[idx]));
+    a->verts[idx].q = q;
+    a->verts[idx].dist = SEARCH0_INF;
+    return idx;
+}
+
+static int analysis_add_adj0(Search0Analysis *a, int u, int v) {
+    Search0VertexInfo *vu;
+    if (!a || u < 0 || v < 0 || u >= a->count || v >= a->count) return 0;
+    if (u == v) return 1;
+    vu = &a->verts[u];
+    for (int i = 0; i < vu->adj_count; i++) if (vu->adj[i] == v) return 1;
+    if (vu->adj_count >= (int)(sizeof(vu->adj) / sizeof(vu->adj[0]))) return 0;
+    vu->adj[vu->adj_count++] = v;
+    return 1;
+}
+
+static int analysis_add_edge0(Search0Analysis *a, Coord q0, Coord q1) {
+    int u = analysis_add_vertex0(a, q0);
+    int v = analysis_add_vertex0(a, q1);
+    if (u < 0 || v < 0) return 0;
+    return analysis_add_adj0(a, u, v) && analysis_add_adj0(a, v, u);
+}
+
+static int search0_item_less0(RL0FMItem a, RL0FMItem b) {
+    if (a.p != b.p) return a.p < b.p;
+    return a.i < b.i;
+}
+
+static int search0_incident_less0(const Search0Incident *a, const Search0Incident *b) {
+    if (search0_item_less0(a->item, b->item)) return 1;
+    if (search0_item_less0(b->item, a->item)) return 0;
+    return a->tile_index < b->tile_index;
+}
+
+static int search0_edge_walk_order_incidents0(Search0Incident *inc, int count, RL0FMArc *arc) {
+    int start = -1;
+    int visited = 0;
+    int cur;
+
+    if (count <= 0 || count > RL0_FM_MAX_ITEMS) return 0;
+    arc->n = 0;
+
+    for (int i = 0; i < count; i++) {
+        inc[i].next_idx = -1;
+        inc[i].prev_idx = -1;
+        inc[i].used = 0;
+    }
+
+    for (int i = 0; i < count; i++) {
+        for (int j = 0; j < count; j++) {
+            if (i == j) continue;
+            if (coord_eq(inc[i].prev, inc[j].next)) {
+                if (inc[i].next_idx >= 0) return 0;
+                inc[i].next_idx = j;
+            }
+            if (coord_eq(inc[i].next, inc[j].prev)) {
+                if (inc[i].prev_idx >= 0) return 0;
+                inc[i].prev_idx = j;
+            }
         }
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (inc[i].prev_idx < 0) {
+            if (start < 0 || search0_incident_less0(&inc[i], &inc[start])) start = i;
+        }
+    }
+    if (start < 0) {
+        start = 0;
+        for (int i = 1; i < count; i++) {
+            if (search0_incident_less0(&inc[i], &inc[start])) start = i;
+        }
+    }
+
+    cur = start;
+    while (cur >= 0) {
+        if (inc[cur].used) break;
+        if (arc->n >= RL0_FM_MAX_ITEMS) return 0;
+        inc[cur].used = 1;
+        arc->item[arc->n++] = inc[cur].item;
+        visited++;
+        cur = inc[cur].next_idx;
+    }
+
+    return visited == count && arc->n == count;
+}
+
+static int analysis_build_vertex_arc0(const Search0Analysis *a, Coord q, RL0FMArc *arc) {
+    Search0Incident local[RL0_FM_MAX_ITEMS];
+    int idx = analysis_find_vertex0(a, q);
+    if (idx < 0 || !arc) return 0;
+    if (a->verts[idx].inc_count <= 0 || a->verts[idx].inc_count > RL0_FM_MAX_ITEMS) return 0;
+    for (int i = 0; i < a->verts[idx].inc_count; i++) local[i] = a->verts[idx].inc[i];
+    return search0_edge_walk_order_incidents0(local, a->verts[idx].inc_count, arc);
+}
+
+static int analysis_mark_hidden0(Search0Analysis *a, const Coord *hidden, int hidden_count) {
+    for (int h = 0; h < hidden_count; h++) {
+        int idx = analysis_find_vertex0(a, hidden[h]);
+        if (idx >= 0) a->verts[idx].hidden = 1;
+    }
+    return 1;
+}
+
+static int analysis_compute_distances0(Search0Analysis *a,
+                                       const Coord *sources,
+                                       int source_count) {
+    int queue[SEARCH0_MAX_COORDS];
+    int qh = 0, qt = 0;
+    if (!a) return 0;
+    for (int i = 0; i < a->count; i++) a->verts[i].dist = SEARCH0_INF;
+    for (int s = 0; s < source_count; s++) {
+        int idx = analysis_find_vertex0(a, sources[s]);
+        if (idx >= 0 && a->verts[idx].dist > 0) {
+            a->verts[idx].dist = 0;
+            if (qt >= SEARCH0_MAX_COORDS) return 0;
+            queue[qt++] = idx;
+        }
+    }
+    while (qh < qt) {
+        int cur = queue[qh++];
+        int nd = a->verts[cur].dist + 1;
+        for (int k = 0; k < a->verts[cur].adj_count; k++) {
+            int nb = a->verts[cur].adj[k];
+            if (a->verts[nb].dist <= nd) continue;
+            a->verts[nb].dist = nd;
+            if (qt >= SEARCH0_MAX_COORDS) return 0;
+            queue[qt++] = nb;
+        }
+    }
+    return 1;
+}
+
+static int analysis_vertex_is_port0(const Search0Analysis *a, Coord q) {
+    int idx = analysis_find_vertex0(a, q);
+    if (idx < 0) return 0;
+    for (int k = 0; k < a->verts[idx].adj_count; k++) {
+        int nb = a->verts[idx].adj[k];
+        if (nb >= 0 && nb < a->count && a->verts[nb].hidden) return 1;
     }
     return 0;
 }
+
+static int build_search0_analysis0(const Search0State *s, const Tile *tile, Search0Analysis *a) {
+    if (!s || !tile || !a) return 0;
+    memset(a, 0, sizeof(*a));
+    for (int t = 0; t < s->tile_count; t++) {
+        const Cycle *c = &s->tiles[t];
+        RL0FMItem items[MAX_VERTS];
+        int have_items[MAX_VERTS];
+        if (c->n < 0 || c->n > MAX_VERTS) return 0;
+        memset(have_items, 0, sizeof(have_items));
+        for (int i = 0; i < c->n; i++) {
+            if (!analysis_add_edge0(a, c->v[i], c->v[(i + 1) % c->n])) return 0;
+        }
+        for (int i = 0; i < c->n; i++) {
+            int vid = analysis_find_vertex0(a, c->v[i]);
+            Search0VertexInfo *vi;
+            if (vid < 0) return 0;
+            vi = &a->verts[vid];
+            if (!boundary0_tile_item_at_vertex(tile, c, c->v[i], &items[i])) return 0;
+            have_items[i] = 1;
+            if (vi->inc_count >= RL0_FM_MAX_ITEMS) return 0;
+            vi->inc[vi->inc_count].item = items[i];
+            vi->inc[vi->inc_count].prev = c->v[(i + c->n - 1) % c->n];
+            vi->inc[vi->inc_count].next = c->v[(i + 1) % c->n];
+            vi->inc[vi->inc_count].tile_index = t;
+            vi->inc_count++;
+        }
+        (void)have_items;
+    }
+    analysis_mark_hidden0(a, s->hidden, s->hidden_count);
+    return analysis_compute_distances0(a, s->initial_hidden, s->initial_hidden_count);
+}
+
+static int choose_port_from_analysis0(const Search0State *s,
+                                      const RL0ForgetMap *map,
+                                      const Search0Analysis *a,
+                                      PortChoice *choice,
+                                      int *port_count,
+                                      int *min_distance_out) {
+    Coord boundary[SEARCH0_MAX_COORDS];
+    int vc;
+    int best = 0;
+    int pc = 0;
+    PortChoice best_choice;
+    best_choice.distance = SEARCH0_INF;
+    best_choice.value_count = 0;
+    best_choice.nonempty_count = 0;
+    if (!s || !map || !a || !choice) return 0;
+    vc = build_boundary_vertices(&s->poly, boundary);
+    if (vc < 0) return 0;
+    for (int i = 0; i < vc; i++) {
+        RL0FMArc key;
+        const RL0FMArc *values = NULL;
+        int value_count = 0;
+        int nonempty = 0;
+        int vid;
+        int d;
+        if (!analysis_vertex_is_port0(a, boundary[i])) continue;
+        vid = analysis_find_vertex0(a, boundary[i]);
+        if (vid < 0) continue;
+        d = a->verts[vid].dist;
+        if (d == SEARCH0_INF) continue;
+        pc++;
+        if (!analysis_build_vertex_arc0(a, boundary[i], &key) ||
+            !rl0_fm_lookup_any_rotation(map, &key, &values, &value_count, NULL) ||
+            value_count <= 0) {
+            best_choice.distance = d;
+            best_choice.q = boundary[i];
+            best_choice.key = key;
+            best_choice.values = NULL;
+            best_choice.value_count = 0;
+            best_choice.nonempty_count = 0;
+            *choice = best_choice;
+            if (port_count) *port_count = pc;
+            if (min_distance_out) *min_distance_out = d;
+            return -1;
+        }
+        for (int k = 0; k < value_count; k++) if (values[k].n > 0) nonempty++;
+        if (!best || d < best_choice.distance ||
+            (d == best_choice.distance && value_count < best_choice.value_count)) {
+            best = 1;
+            best_choice.distance = d;
+            best_choice.q = boundary[i];
+            best_choice.key = key;
+            best_choice.values = values;
+            best_choice.value_count = value_count;
+            best_choice.nonempty_count = nonempty;
+        }
+    }
+    if (port_count) *port_count = pc;
+    if (min_distance_out) *min_distance_out = best ? best_choice.distance : SEARCH0_INF;
+    if (!best) return 0;
+    *choice = best_choice;
+    return 1;
+}
+
 
 static int collect_tile_vertices0(const Cycle *tiles, int tile_count, Coord *verts) {
     int n = 0;
@@ -601,125 +894,21 @@ static int rebuild_hidden0(const Poly *p, const Cycle *tiles, int tile_count, Co
     return hc;
 }
 
-static int compute_distances0(const Cycle *tiles,
-                              int tile_count,
-                              const Coord *sources,
-                              int source_count,
-                              Coord *verts,
-                              int *dist,
-                              int *vert_count) {
-    int n = collect_tile_vertices0(tiles, tile_count, verts);
-    int queue[SEARCH0_MAX_COORDS];
-    int qh = 0, qt = 0;
-    if (n < 0) return 0;
-    for (int i = 0; i < n; i++) dist[i] = SEARCH0_INF;
-    for (int s = 0; s < source_count; s++) {
-        for (int i = 0; i < n; i++) {
-            if (coord_eq(verts[i], sources[s]) && dist[i] > 0) {
-                dist[i] = 0;
-                queue[qt++] = i;
-            }
-        }
-    }
-    while (qh < qt) {
-        int cur = queue[qh++];
-        for (int j = 0; j < n; j++) {
-            if (dist[j] != SEARCH0_INF) continue;
-            if (!edge_in_tiles0(tiles, tile_count, verts[cur], verts[j])) continue;
-            dist[j] = dist[cur] + 1;
-            queue[qt++] = j;
-        }
-    }
-    *vert_count = n;
-    return 1;
-}
-
-static int find_dist0(Coord q, const Coord *verts, const int *dist, int count) {
-    for (int i = 0; i < count; i++) if (coord_eq(q, verts[i])) return dist[i];
-    return SEARCH0_INF;
-}
-
-static int is_port0(Coord q, const Coord *hidden, int hidden_count, const Cycle *tiles, int tile_count) {
-    for (int h = 0; h < hidden_count; h++) {
-        if (edge_in_tiles0(tiles, tile_count, q, hidden[h])) return 1;
-    }
-    return 0;
-}
-
 static int choose_port0(const Search0State *s,
                         const Tile *tile,
                         const RL0ForgetMap *map,
                         PortChoice *choice,
                         int *port_count,
                         int *min_distance_out) {
-    Coord boundary[SEARCH0_MAX_COORDS];
-    Coord verts[SEARCH0_MAX_COORDS];
-    int dist[SEARCH0_MAX_COORDS];
-    int vc, gc;
-    int best = 0;
-    int pc = 0;
-    PortChoice best_choice;
-    best_choice.distance = SEARCH0_INF;
-    best_choice.value_count = 0;
-    best_choice.nonempty_count = 0;
-    if (!compute_distances0(s->tiles, s->tile_count, s->initial_hidden, s->initial_hidden_count, verts, dist, &gc)) return 0;
-    vc = build_boundary_vertices(&s->poly, boundary);
-    if (vc < 0) return 0;
-    for (int i = 0; i < vc; i++) {
-        RL0FMArc key;
-        const RL0FMArc *values = NULL;
-        int value_count = 0;
-        int nonempty = 0;
-        int d;
-        if (!is_port0(boundary[i], s->hidden, s->hidden_count, s->tiles, s->tile_count)) continue;
-        d = find_dist0(boundary[i], verts, dist, gc);
-        if (d == SEARCH0_INF) continue;
-        pc++;
-        if (!boundary0_build_vertex_arc(tile, s->tiles, s->tile_count, boundary[i], &key) ||
-            !rl0_fm_lookup_any_rotation(map, &key, &values, &value_count, NULL) ||
-            value_count <= 0) {
-            best_choice.distance = d;
-            best_choice.q = boundary[i];
-            best_choice.key = key;
-            best_choice.values = NULL;
-            best_choice.value_count = 0;
-            best_choice.nonempty_count = 0;
-            *choice = best_choice;
-            *port_count = pc;
-            *min_distance_out = d;
-            return -1;
-        }
-        for (int k = 0; k < value_count; k++) if (values[k].n > 0) nonempty++;
-        if (!best || d < best_choice.distance ||
-            (d == best_choice.distance && value_count < best_choice.value_count)) {
-            best = 1;
-            best_choice.distance = d;
-            best_choice.q = boundary[i];
-            best_choice.key = key;
-            best_choice.values = values;
-            best_choice.value_count = value_count;
-            best_choice.nonempty_count = nonempty;
-        }
+    int r = 0;
+    Search0Analysis *analysis = malloc(sizeof(*analysis));
+    if (!analysis) return 0;
+    if (build_search0_analysis0(s, tile, analysis)) {
+        r = choose_port_from_analysis0(s, map, analysis, choice,
+                                       port_count, min_distance_out);
     }
-    if (port_count) *port_count = pc;
-    if (min_distance_out) *min_distance_out = best ? best_choice.distance : SEARCH0_INF;
-    if (!best) return 0;
-    *choice = best_choice;
-    return 1;
-}
-
-static int graph_division_for_state0(const Search0State *s,
-                                     const Tile *tile,
-                                     const RL0ForgetMap *map,
-                                     int fallback) {
-    PortChoice ch;
-    int pc = 0;
-    int d = SEARCH0_INF;
-    int r;
-    if (!s || !tile || !map) return fallback;
-    r = choose_port0(s, tile, map, &ch, &pc, &d);
-    if (r == 0 || d <= 0 || d >= SEARCH0_INF) return fallback;
-    return graph_division_from_distance0(d);
+    free(analysis);
+    return r;
 }
 
 static void statevec_init0(StateVec *v) { v->data = NULL; v->count = 0; v->cap = 0; }
@@ -1161,12 +1350,23 @@ static int refilter_states0(StateVec *cur,
                                                     step,
                                                     graph_level,
                                                     NULL);
-                    emit_graph_node_mark0(print, src_id, "escape", code);
+                    emit_graph_node_mark0(print, src_id, "escape-arrow", code);
+                    emit_graph_state_prov_mark0(print, &s, "escape", code);
                 }
                 continue;
             }
             if (cr == 0) {
                 search0_counts_add(counts, code);
+                if (print && print->fp) {
+                    int src_id = ensure_graph_node0(print,
+                                                    tile,
+                                                    &src,
+                                                    "carry",
+                                                    step,
+                                                    graph_level,
+                                                    NULL);
+                    emit_graph_node_mark0(print, src_id, "prune", code);
+                }
                 continue;
             }
             search0_counts_add(counts, S0C_OK);
@@ -1238,7 +1438,24 @@ static int checkpoint_fixed_point0(StateVec *cur,
            moving the "last node for provenance" in the graph.  A provenance
            may have merged into or merely last touched an unrelated visible
            state, so updating that node's division corrupts the layout.
+
+           A terminal mark is still useful QA data: it tells the graph checker
+           that the last visible endpoint for this singleton provenance stopped
+           because the provenance was deleted, not because a graph successor is
+           missing.
         */
+        if (print && print->fp && new_dead && new_dead_count) {
+            for (int i = new_dead_start; i < *new_dead_count; i++) {
+                int p = new_dead[i];
+                if (p >= 0 && p < SEARCH0_MAX_PROV) {
+                    emit_graph_node_mark0(print,
+                                          print->last_node_for_prov[p],
+                                          "dead",
+                                          S0C_PRUNE_CLOSURE);
+                    emit_graph_prov_mark0(print, p, "dead", S0C_PRUNE_CLOSURE);
+                }
+            }
+        }
         if (added == 0) return 1;
         if (!new_dead || !new_dead_count ||
             !delete_new_dead_from_map0(map,
@@ -1466,19 +1683,34 @@ static void print_progress0(int distance,
 }
 
 
-static int min_distance_all0(const StateVec *v, const Tile *tile, const RL0ForgetMap *map) {
+static int prepare_port_choices0(const StateVec *v,
+                                 const Tile *tile,
+                                 const RL0ForgetMap *map,
+                                 PortChoiceCache **cache_out,
+                                 int *min_distance_out) {
+    PortChoiceCache *cache = NULL;
     int md = SEARCH0_INF;
+    if (!cache_out || !min_distance_out) return 0;
+    *cache_out = NULL;
+    *min_distance_out = SEARCH0_INF;
+    if (!v || v->count <= 0) return 1;
+    cache = calloc((size_t)v->count, sizeof(*cache));
+    if (!cache) return 0;
     for (int i = 0; i < v->count; i++) {
         PortChoice ch;
-        int pc = 0, d = SEARCH0_INF;
+        int pc = 0;
+        int d = SEARCH0_INF;
         int r = choose_port0(&v->data[i], tile, map, &ch, &pc, &d);
+        cache[i].result = r;
+        cache[i].port_count = pc;
+        cache[i].min_distance = d;
+        if (r != 0) cache[i].choice = ch;
         if (r != 0 && d < md) md = d;
     }
-    return md;
+    *cache_out = cache;
+    *min_distance_out = md;
+    return 1;
 }
-
-
-
 
 
 static void fprint_coord_list_line0(FILE *fp, const Coord *coords, int count) {
@@ -1638,6 +1870,7 @@ static int emit_graph_node0(PrintCtx *print,
     slot->id = id;
     slot->discover_step = discover_step;
     slot->division = node_division;
+    slot->prov_id = singleton_prov0(s);
     snprintf(slot->key, sizeof(slot->key), "%s", s->key);
     poly_display_key0(&s->poly, slot->display_key, sizeof(slot->display_key));
 
@@ -1660,6 +1893,12 @@ static int emit_graph_node0(PrintCtx *print,
     fprint_imgtable_shape0(print->fp, tile, &s->poly);
     fprintf(print->fp, "---end-node---\n");
     fflush(print->fp);
+    {
+        int prov_id = singleton_prov0(s);
+        if (prov_id >= 0 && prov_id < SEARCH0_MAX_PROV) {
+            print->last_node_for_prov[prov_id] = id;
+        }
+    }
     return id;
 }
 
@@ -1724,6 +1963,7 @@ static int ensure_graph_node0(PrintCtx *print,
         {
             int prov_id = singleton_prov0(s);
             if (prov_id >= 0 && prov_id < SEARCH0_MAX_PROV) {
+                print->nodes[idx].prov_id = prov_id;
                 print->last_node_for_prov[prov_id] = print->nodes[idx].id;
             }
         }
@@ -1808,6 +2048,29 @@ static Coord choose_focus_coord0(const Search0State *s,
     return default_focus_coord0(s);
 }
 
+static void graph_state_info0(const Search0State *s,
+                              const Tile *tile,
+                              const RL0ForgetMap *map,
+                              int fallback_division,
+                              int *division_out,
+                              Coord *focus_out) {
+    PortChoice choice;
+    int port_count = 0;
+    int min_distance = SEARCH0_INF;
+    int r;
+    int division = fallback_division;
+    Coord focus = default_focus_coord0(s);
+    if (s && tile && map) {
+        r = choose_port0(s, tile, map, &choice, &port_count, &min_distance);
+        if (r != 0 && choice.q.v > 0) focus = choice.q;
+        if (r != 0 && min_distance > 0 && min_distance < SEARCH0_INF) {
+            division = graph_division_from_distance0(min_distance);
+        }
+    }
+    if (division_out) *division_out = division;
+    if (focus_out) *focus_out = focus;
+}
+
 static void emit_state_focus0(PrintCtx *print,
                               const Tile *tile,
                               const RL0ForgetMap *map,
@@ -1815,6 +2078,14 @@ static void emit_state_focus0(PrintCtx *print,
                               int node_id,
                               int step) {
     emit_focus0(print, node_id, s, step, choose_focus_coord0(s, tile, map));
+}
+
+static void emit_state_focus_coord0(PrintCtx *print,
+                                    const Search0State *s,
+                                    int node_id,
+                                    int step,
+                                    Coord focus) {
+    emit_focus0(print, node_id, s, step, focus);
 }
 
 static void emit_seed_statevec0(PrintCtx *print,
@@ -1843,16 +2114,19 @@ static void emit_transition0(PrintCtx *print,
     int src_id;
     int dst_id;
     int is_new = 0;
+    int dst_division = graph_level;
+    Coord dst_focus = {0,0,0};
     if (!print || !print->fp || !src || !dst) return;
+    graph_state_info0(dst, tile, map, graph_level, &dst_division, &dst_focus);
     src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
     dst_id = ensure_graph_node0(print,
                                 tile,
                                 dst,
                                 "generated",
                                 step,
-                                graph_division_for_state0(dst, tile, map, graph_level),
+                                dst_division,
                                 &is_new);
-    if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
+    if (is_new) emit_state_focus_coord0(print, dst, dst_id, step, dst_focus);
     emit_graph_edge0(print,
                      src_id,
                      dst_id,
@@ -1876,16 +2150,19 @@ static void emit_relation0(PrintCtx *print,
     int src_id;
     int dst_id;
     int is_new = 0;
+    int dst_division = graph_level;
+    Coord dst_focus = {0,0,0};
     if (!print || !print->fp || !src || !dst) return;
+    graph_state_info0(dst, tile, map, graph_level, &dst_division, &dst_focus);
     src_id = ensure_graph_node0(print, tile, src, "carry", step - 1, graph_level, NULL);
     dst_id = ensure_graph_node0(print,
                                 tile,
                                 dst,
                                 dst_kind ? dst_kind : "carry",
                                 step,
-                                graph_division_for_state0(dst, tile, map, graph_level),
+                                dst_division,
                                 &is_new);
-    if (is_new) emit_state_focus0(print, tile, map, dst, dst_id, step);
+    if (is_new) emit_state_focus_coord0(print, dst, dst_id, step, dst_focus);
     if (src_id == dst_id) return;
     emit_graph_edge0(print,
                      src_id,
@@ -1914,7 +2191,7 @@ int main(int argc, char **argv) {
     int ignore_pairwise = 0;
     int use_optimized_records = 1;
     int keep_deletions = 0;
-    const char *print_path = NULL;
+    const char *print_path = "data/rl0/search_graph.dat";
     int print_to_stdout = 0;
     int print_limit = 0;
     Tile tile;
@@ -1973,7 +2250,17 @@ int main(int argc, char **argv) {
             ai++;
             continue;
         }
+        if (strcmp(argv[ai], "--graph-output") == 0 && ai + 1 < argc) {
+            print_path = argv[++ai];
+            continue;
+        }
+        if (strcmp(argv[ai], "--no-graph") == 0) {
+            print_path = NULL;
+            print_to_stdout = 0;
+            continue;
+        }
         if (strcmp(argv[ai], "--print") == 0) {
+            /* Legacy compatibility: graph data now has a normal output path. */
             if (ai + 1 < argc && argv[ai + 1][0] != '-') {
                 print_path = argv[++ai];
             } else {
@@ -2019,7 +2306,7 @@ int main(int argc, char **argv) {
         focus_record = 0;
     }
 
-    if (print_to_stdout || print_path) progress_enabled0 = 0;
+    if (print_to_stdout) progress_enabled0 = 0;
     else progress_enabled0 = 1;
 
     if (use_optimized_records) {
@@ -2120,10 +2407,11 @@ int main(int argc, char **argv) {
     } else if (print_path) {
         print.fp = fopen(print_path, "w");
         if (!print.fp) {
-            fprintf(stderr, "failed to open print output: %s\n", print_path);
+            fprintf(stderr, "failed to open graph output: %s\n", print_path);
             return 1;
         }
-        progress_enabled0 = 0;
+        progress_enabled0 = 1;
+        progress_fp0 = stdout;
     } else {
         progress_enabled0 = 1;
         progress_fp0 = stdout;
@@ -2198,13 +2486,19 @@ int main(int argc, char **argv) {
     emit_seed_statevec0(&print, &tile, map, &cur);
 
     while (cur.count > 0) {
-        int global_min = min_distance_all0(&cur, &tile, map);
+        PortChoiceCache *choice_cache = NULL;
+        int global_min = SEARCH0_INF;
         Search0CodeCounts step_counts;
         Search0CodeCounts checkpoint_counts;
         int old_count = cur.count;
+        if (!prepare_port_choices0(&cur, &tile, map, &choice_cache, &global_min)) {
+            fprintf(stderr, "failed to prepare port choices\n");
+            return 1;
+        }
         search0_counts_init(&step_counts);
         search0_counts_init(&checkpoint_counts);
         if (global_min == SEARCH0_INF) {
+            free(choice_cache);
             if (progress_enabled0) fprintf(progress_out0(), "checkpoint complete: no remaining ports states=%d\n", cur.count);
             break;
         }
@@ -2213,10 +2507,12 @@ int main(int argc, char **argv) {
         for (int i = 0; i < cur.count; i++) {
             Search0State src_state = cur.data[i];
             PortChoice ch;
-            int pc = 0, d = SEARCH0_INF;
+            int d = SEARCH0_INF;
             int r;
             if (!strip_state_prov0(&src_state, escaped_prov)) continue;
-            r = choose_port0(&src_state, &tile, map, &ch, &pc, &d);
+            r = choice_cache[i].result;
+            d = choice_cache[i].min_distance;
+            if (r != 0) ch = choice_cache[i].choice;
             if (r < 0) {
                 if (print.fp) {
                     int node_id = ensure_graph_node0(&print, &tile, &src_state, "carry", step, graph_division_from_distance0(global_min), NULL);
@@ -2228,6 +2524,7 @@ int main(int argc, char **argv) {
                 search0_counts_add(&step_counts, S0C_OK_NO_PORT);
                 if (!statevec_add_merge0(&next, &src_state)) {
                     fprintf(stderr, "state limit while carrying no-port state\n");
+                    free(choice_cache);
                     return 1;
                 }
                 continue;
@@ -2236,6 +2533,7 @@ int main(int argc, char **argv) {
                 search0_counts_add(&step_counts, S0C_OK_CARRY);
                 if (!statevec_add_merge0(&next, &src_state)) {
                     fprintf(stderr, "state limit while carrying future-distance state\n");
+                    free(choice_cache);
                     return 1;
                 }
                 continue;
@@ -2255,6 +2553,7 @@ int main(int argc, char **argv) {
                         if (print.fp) emit_transition0(&print, &tile, map, &src_state, &out, step, graph_division_from_distance0(global_min), &ch, &ch.values[k], code);
                         if (!statevec_add_merge0(&next, &out)) {
                             fprintf(stderr, "state limit while adding generated state\n");
+                            free(choice_cache);
                             return 1;
                         }
                     } else if (ar < 0) {
@@ -2268,10 +2567,12 @@ int main(int argc, char **argv) {
                                                             step,
                                                             graph_division_from_distance0(global_min),
                                                             NULL);
-                            emit_graph_node_mark0(&print, src_id, "escape", code);
+                            emit_graph_node_mark0(&print, src_id, "escape-arrow", code);
+                            emit_graph_state_prov_mark0(&print, &out, "escape", code);
                         }
                         if (!filter_statevec_prov0(&next, out.prov)) {
                             fprintf(stderr, "state limit while pruning escaped provenance\n");
+                            free(choice_cache);
                             return 1;
                         }
                         break;
@@ -2279,6 +2580,8 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        free(choice_cache);
+        choice_cache = NULL;
         if (!filter_statevec_prov0(&next, escaped_prov)) {
             fprintf(stderr, "state limit while filtering escaped provenance\n");
             return 1;
@@ -2329,7 +2632,14 @@ int main(int argc, char **argv) {
             statevec_free0(&cur);
             cur = next;
             statevec_init0(&next);
-            next_min = min_distance_all0(&cur, &tile, map);
+            {
+                PortChoiceCache *next_choice_cache = NULL;
+                if (!prepare_port_choices0(&cur, &tile, map, &next_choice_cache, &next_min)) {
+                    fprintf(stderr, "failed to prepare next port choices\n");
+                    return 1;
+                }
+                free(next_choice_cache);
+            }
             if (next_min > global_min) {
                 int new_dead[SEARCH0_MAX_PROV];
                 int new_dead_count = 0;

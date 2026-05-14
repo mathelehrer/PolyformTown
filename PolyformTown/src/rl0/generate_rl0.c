@@ -600,9 +600,13 @@ static int write_remembrance_file(const RL0Ctx *ctx, const char *path) {
         return 0;
     }
 
-    qsort(tab.rows, tab.count, sizeof(*tab.rows), rem_row_cmp);
+    if (tab.count > 1) {
+        qsort(tab.rows, tab.count, sizeof(*tab.rows), rem_row_cmp);
+    }
     for (size_t r = 0; r < tab.count; r++) {
-        qsort(tab.rows[r].vals, tab.rows[r].val_count, sizeof(*tab.rows[r].vals), rem_val_cmp);
+        if (tab.rows[r].val_count > 1) {
+            qsort(tab.rows[r].vals, tab.rows[r].val_count, sizeof(*tab.rows[r].vals), rem_val_cmp);
+        }
     }
 
     FILE *fp = fopen(path, "w");
@@ -643,10 +647,12 @@ static int write_remembrance_file(const RL0Ctx *ctx, const char *path) {
 }
 
 static void write_records_to_file(FILE *fp, RL0Ctx *ctx) {
-    qsort(ctx->records,
-          ctx->record_count,
-          sizeof(*ctx->records),
-          record_cmp_local);
+    if (ctx->record_count > 1) {
+        qsort(ctx->records,
+              ctx->record_count,
+              sizeof(*ctx->records),
+              record_cmp_local);
+    }
 
     for (size_t i = 0; i < ctx->record_count; i++) {
         const RL0Record *rec = &ctx->records[i];
@@ -771,7 +777,9 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    qsort(verts, (size_t)vc, sizeof(Coord), coord_cmp_local);
+    if (vc > 1) {
+        qsort(verts, (size_t)vc, sizeof(Coord), coord_cmp_local);
+    }
 
     RL0Ctx ctx;
     ctx.fp = fp;

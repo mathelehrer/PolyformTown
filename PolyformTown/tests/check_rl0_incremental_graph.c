@@ -16,7 +16,7 @@
 #define DEFAULT_DELETIONS "data/rl0/deletions.dat"
 
 typedef struct {
-    int id, have_boundary, have_focus, outgoing;
+    int id, have_boundary, have_focus, outgoing, terminal_mark;
     int discover_step, division;
     Poly boundary;
     Coord focus;
@@ -95,6 +95,15 @@ static int read_stream(Graph *g){
         if(strncmp(line,"---focus---",11)==0){ int node=-1,hn=0,hp=0; Coord port={0,0,0};
             while(fgets(line,sizeof(line),stdin)){ if(strncmp(line,"---end-focus---",15)==0) break; if(strncmp(line,"node: ",6)==0){ if(sscanf(line+6,"%d",&node)==1) hn=1; } else if(strncmp(line,"port: ",6)==0){ const char *p=line+6; if(!parse_coord_comma(&p,&port)) return 0; hp=1; } }
             if(hn&&hp){ int idx=find_node(g,node); if(idx>=0){ g->nodes[idx].focus=port; g->nodes[idx].have_focus=1; } }
+            continue;
+        }
+        if(strncmp(line,"---node-mark---",15)==0){ int node=-1; int terminal=0;
+            while(fgets(line,sizeof(line),stdin)){
+                if(strncmp(line,"---end-node-mark---",19)==0) break;
+                if(strncmp(line,"id: ",4)==0) sscanf(line+4,"%d",&node);
+                else if(strncmp(line,"status: prune:",14)==0 || strncmp(line,"status: escape:",15)==0) terminal=1;
+            }
+            if(node>=0 && terminal){ int idx=find_node(g,node); if(idx>=0) g->nodes[idx].terminal_mark=1; }
             continue;
         }
         if(strncmp(line,"---edge---",10)==0){ int src=-1,dst=-1; while(fgets(line,sizeof(line),stdin)){ if(strncmp(line,"---end-edge---",14)==0) break; if(strncmp(line,"src: ",5)==0) sscanf(line+5,"%d",&src); else if(strncmp(line,"dst: ",5)==0) sscanf(line+5,"%d",&dst); } if(src>=0){ int idx=find_node(g,src); if(idx>=0) g->nodes[idx].outgoing++; } if(src>=0&&dst>=0&&!add_edge(g,src,dst)) return 0; continue; }
@@ -233,13 +242,18 @@ int main(int argc,char **argv){
     accepted_level_index=malloc((size_t)graph.count*sizeof(*accepted_level_index));
     if(!pending||!accepted_kind||!suppressed||!accepted_level_index){ fprintf(stderr,"out of memory\n"); return 2; }
     if(!mark_reduced_suppressed(&graph,suppressed,&reduced_nodes,&reduced_suppressed)){ fprintf(stderr,"failed to mark reduced graph suppressions\n"); return 2; }
-    for(int i=0;i<graph.count;i++){ pending[i]=(graph.nodes[i].have_focus && !suppressed[i])?1:0; accepted_level_index[i]=-1; }
+    for(int i=0;i<graph.count;i++){ pending[i]=(graph.nodes[i].have_focus && !suppressed[i] && !(graph.nodes[i].terminal_mark && graph.nodes[i].outgoing==0))?1:0; accepted_level_index[i]=-1; }
 
     int nodes_with_focus=0, skipped=0, accepted=0, accepted_dead=0, accepted_known=0, failed=0;
     int raw_total=0, dead_total=0, known_total=0, unexpected_total=0;
     int *accepted_by_level=calloc((size_t)level_count,sizeof(*accepted_by_level));
     if(!accepted_by_level){ fprintf(stderr,"out of memory\n"); return 2; }
-    for(int i=0;i<graph.count;i++) if(graph.nodes[i].have_focus && !suppressed[i]) nodes_with_focus++; else skipped++;
+    for(int i=0;i<graph.count;i++){
+        if(graph.nodes[i].have_focus && !suppressed[i]){
+            nodes_with_focus++;
+            if(graph.nodes[i].terminal_mark && graph.nodes[i].outgoing==0){ accepted++; accepted_dead++; }
+        }else skipped++;
+    }
 
     printf("incremental_graph_check_levels:");
     for(int l=0;l<level_count;l++) printf(" %d",levels[l]);
