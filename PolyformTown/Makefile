@@ -1,24 +1,32 @@
-CC = gcc
+Q ?= @
+CC = $(Q)gcc
 CFLAGS = -O3 -Wall -Wextra -std=c11
 SRC = src
 BIN = bin
 
+define announce
+	@if [ -t 1 ]; then printf "\033[33m==> %s\033[0m\n" "$(1)"; else printf "==> %s\n" "$(1)"; fi
+endef
+
 CORE = $(SRC)/core/cycle.o $(SRC)/core/tile.o $(SRC)/core/hash.o \
-       $(SRC)/core/vec.o $(SRC)/core/attach.o \
-       $(SRC)/core/tetrille.o $(SRC)/core/lattice.o \
-       $(SRC)/core/boundary.o $(SRC)/core/numerics.o
+    $(SRC)/core/vec.o $(SRC)/core/attach.o \
+    $(SRC)/core/tetrille.o $(SRC)/core/lattice.o \
+    $(SRC)/core/boundary.o $(SRC)/core/numerics.o \
+    $(SRC)/core/term_color.o
 POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures \
+.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files \
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
-	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
-	rl3_generate rl3_refine rl4_generate rl4_refine rl4_supertile_candidates rl5_generate rl5_refine \
+	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
+	rl3_generate rl4_generate rl4_supertile_candidates \
+	rl5_hexagons rl5_supertile_hexagons supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
+	supertile_hex_models_svg supertile_svg overlap_supertile_svg \
 	meta_graph tiling_3x3_demo tiling_4x4_demo hat_boundary_dfs_check \
 	check_indexed_variants check_rl1_tile_order search1 refine1
 
@@ -31,10 +39,11 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 all: tools
 
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
-	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate rl2_refine \
-	rl3_generate rl3_refine rl4_generate rl4_refine rl4_supertile_candidates rl5_generate rl5_refine \
+	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
+	rl3_generate rl4_generate rl4_supertile_candidates \
+	rl5_hexagons rl5_supertile_hexagons supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
-	rl1_generate_naive rl1_hexagons rl1_search  \
+	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
 	hat_boundary_dfs_check check_indexed_variants
 
@@ -44,19 +53,21 @@ $(SRC)/%.o: $(SRC)/%.c
 	$(CC) $(CFLAGS) -I$(SRC) -c $< -o $@
 
 $(BIN):
-	mkdir -p $(BIN)
+	@mkdir -p $(BIN)
 
 clean:
-	rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
+	$(call announce,clean compiled artifacts)
+	@rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
 		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict $(BIN)/rl1_depict_naive \
-		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate $(BIN)/rl4_refine $(BIN)/rl4_supertile_candidates $(BIN)/rl5_refine \
+		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate $(BIN)/rl4_supertile_candidates \
+		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons $(BIN)/supertile_depict $(BIN)/rl5_refine \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
-		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine  \
+		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
 		$(BIN)/depict_search0_graph \
@@ -87,7 +98,7 @@ $(BIN)/vcomp_count: $(SRC)/usage/count_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
 
 count_vcomp: $(BIN)/count_vcomp
 $(BIN)/count_vcomp: $(BIN)/vcomp_count | $(BIN)
-	cp $(BIN)/vcomp_count $(BIN)/count_vcomp
+	@cp $(BIN)/vcomp_count $(BIN)/count_vcomp
 
 vcomp_print: $(BIN)/vcomp_print
 $(BIN)/vcomp_print: $(SRC)/usage/print_vcomp.o $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -129,67 +140,53 @@ $(BIN)/rl2_generate: $(SRC)/rl2/generate_rl2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl2/generate_rl2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl2_refine: rl1_refine
-	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 2
+	@$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 2
 
 rl3_generate: $(BIN)/rl3_generate
 $(BIN)/rl3_generate: $(SRC)/rl3/generate_rl3.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl3/generate_rl3.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
 rl3_refine: rl1_refine
-	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth 1
+	@$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth 1
 
 rl4_generate: $(BIN)/rl4_generate
 $(BIN)/rl4_generate: $(SRC)/rl4/generate_rl4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/generate_rl4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
 
-rl4_refine: $(BIN)/rl4_refine
-$(BIN)/rl4_refine: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+# refine4.c no longer participates in RL4 throughput. It now serves two RL5/depict roles:
+#  1) rl5_supertile_hexagons -> write supertile hexagon/edge data
+#  2) supertile_depict    -> render supertile pictures for make figures
+supertile_depict: $(BIN)/supertile_depict
+$(BIN)/supertile_depict: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
 
 rl4_supertile_candidates: $(BIN)/rl4_supertile_candidates
 $(BIN)/rl4_supertile_candidates: $(SRC)/rl4/supertile_candidates.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/supertile_candidates.o
 
-rl5_refine: $(BIN)/rl5_refine
-$(BIN)/rl5_refine: $(SRC)/rl5/refine5.o | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/refine5.o
+# RL5 equivalence/index refinement is intentionally not implemented yet.
+# Keep this target out of `tools` and `boot`; wire it to a real source once the
+# final eliminations/index-map stage is specified.
+rl5_refine:
+	@echo "rl5_refine is not implemented yet" >&2
+	@exit 1
 
-
-
-
-RL4_HEXAGONS_DATA ?= data/rl4/hexagons.dat
-RL4_SUPERTILE ?= preferences/focus.supertile
-# Maximal/overlap-form override: make rl4_refine_data RL4_SUPERTILE=preferences/overlap.supertile
-RL4_SUPERTILE_HEXAGONS_DATA ?= data/rl4/supertile_hexagons.dat
 RL4_RL1_FILTERED ?= data/rl4/rl1_filtered.dat
 RL4_RL3_FILTERED ?= data/rl4/rl3_filtered.dat
-
-rl4_hexagons_data: rl1_hexagons
-	@test -s $(RL4_RL1_FILTERED) || { \
-		echo "missing $(RL4_RL1_FILTERED); run: make boot_rl4" >&2; \
-		exit 1; \
-	}
-	@mkdir -p $(dir $(RL4_HEXAGONS_DATA))
-	@$(BIN)/rl1_hexagons $(RL4_RL1_FILTERED) > $(RL4_HEXAGONS_DATA)
-	@echo $(RL4_HEXAGONS_DATA)
-
-rl4_supertile_hexagons_data: rl4_refine
-	@test -s $(RL4_RL3_FILTERED) || { \
-		echo "missing $(RL4_RL3_FILTERED); run: make boot_rl4" >&2; \
-		exit 1; \
-	}
-	@mkdir -p $(dir $(RL4_SUPERTILE_HEXAGONS_DATA))
-	@$(BIN)/rl4_refine preferences/focus.tile $(RL4_RL3_FILTERED) $(RL4_SUPERTILE) --data > $(RL4_SUPERTILE_HEXAGONS_DATA)
-	@echo $(RL4_SUPERTILE_HEXAGONS_DATA)
-
-rl4_refine_data: rl4_hexagons_data rl4_supertile_hexagons_data
-
 
 RL5_HEXAGONS_DATA ?= data/rl5/hexagons.dat
 RL5_SUPERTILE_HEXAGONS_DATA ?= data/rl5/supertile_hexagons.dat
 RL5_OVERLAP_HEXAGONS_DATA ?= data/rl5/overlap_supertile_hexagons.dat
 
-rl5_generate: rl1_hexagons rl4_refine
+rl5_hexagons: $(BIN)/rl5_hexagons
+$(BIN)/rl5_hexagons: $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+rl5_supertile_hexagons: $(BIN)/rl5_supertile_hexagons
+$(BIN)/rl5_supertile_hexagons: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+rl5_generate: rl5_hexagons rl5_supertile_hexagons
 	@test -s $(RL4_RL1_FILTERED) || { \
 		echo "missing $(RL4_RL1_FILTERED); run: make boot_rl4" >&2; \
 		exit 1; \
@@ -199,9 +196,10 @@ rl5_generate: rl1_hexagons rl4_refine
 		exit 1; \
 	}
 	@mkdir -p data/rl5
-	@$(BIN)/rl1_hexagons $(RL4_RL1_FILTERED) > $(RL5_HEXAGONS_DATA)
-	@$(BIN)/rl4_refine preferences/focus.tile $(RL4_RL3_FILTERED) preferences/focus.supertile --data > $(RL5_SUPERTILE_HEXAGONS_DATA)
-	@$(BIN)/rl4_refine preferences/focus.tile $(RL4_RL3_FILTERED) preferences/overlap.supertile --data > $(RL5_OVERLAP_HEXAGONS_DATA)
+	@$(BIN)/rl5_hexagons $(RL4_RL1_FILTERED) > $(RL5_HEXAGONS_DATA)
+	@$(BIN)/rl5_supertile_hexagons preferences/focus.tile $(RL4_RL3_FILTERED) preferences/focus.supertile --data > $(RL5_SUPERTILE_HEXAGONS_DATA)
+	@$(BIN)/rl5_supertile_hexagons preferences/focus.tile $(RL4_RL3_FILTERED) preferences/overlap.supertile --data > $(RL5_OVERLAP_HEXAGONS_DATA)
+	$(call announce,RL5 hexagon analysis data ready)
 	@echo $(RL5_HEXAGONS_DATA)
 	@echo $(RL5_SUPERTILE_HEXAGONS_DATA)
 	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
@@ -218,13 +216,13 @@ rl5_refine_data: rl5_generate rl5_refine
 # Boot tower: purge generated runlevel data, then rebuild a deterministic
 # prefix of the boot chain.
 #
-#   make boot       # full boot, through RL5
-#   make boot RL=0  # full boot, through RL5
-#   make boot RL=1  # stop after RL0; do not start RL1 generation
-#   make boot RL=2  # stop after RL1; do not start RL2 generation
-#   make boot RL=3  # stop after RL2; do not start RL3 generation
-#   make boot RL=4  # stop after RL3; do not start RL4 generation
-#   make boot RL=5  # stop after RL4; do not start RL5 generation
+#  make boot    # full boot, through RL5
+#  make boot RL=0 # full boot, through RL5
+#  make boot RL=1 # stop after RL0; do not start RL1 generation
+#  make boot RL=2 # stop after RL1; do not start RL2 generation
+#  make boot RL=3 # stop after RL2; do not start RL3 generation
+#  make boot RL=4 # stop after RL3; do not start RL4 generation
+#  make boot RL=5 # stop after RL4; do not start RL5 generation
 #
 
 RL ?= 0
@@ -249,58 +247,57 @@ endif
 boot: clean_boot_data $(BOOT_RUNLEVELS)
 
 clean_boot_data:
-	@echo "==> purge data/rl*/*"
+	$(call announce,purge data/rl*/*)
 	@if [ -d data ]; then find data -depth -mindepth 2 -path 'data/rl*/*' -delete; fi
 
 boot_rl0: rl0_generate rl0_refine
-	@echo "==> RL0 generate"
-	$(BIN)/rl0_generate preferences/focus.tile
-	@echo "==> RL0 refine"
-	$(BIN)/rl0_refine
+	$(call announce,RL0 generate)
+	@$(BIN)/rl0_generate preferences/focus.tile
+	$(call announce,RL0 refine)
+	@$(BIN)/rl0_refine
 
 boot_rl1: rl1_generate rl1_refine
-	@echo "==> RL1 generate completions"
+	$(call announce,RL1 generate completions)
 	@mkdir -p data/rl1
-	$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
-	@echo "==> RL1 refine deletions"
-	$(BIN)/rl1_refine
+	@$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
+	$(call announce,RL1 refine deletions)
+	@$(BIN)/rl1_refine
 
 boot_rl2: rl2_generate rl1_refine
-	@echo "==> RL2 generate six children"
-	$(BIN)/rl2_generate
-	@echo "==> RL2 refine deletions"
-	$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 2
+	$(call announce,RL2 generate weird children)
+	@$(BIN)/rl2_generate
+	$(call announce,RL2 refine deletions)
+	@$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 2
 
 boot_rl3: rl3_generate rl1_refine
-	@echo "==> RL3 generate next ring"
-	$(BIN)/rl3_generate
-	@echo "==> RL3 refine deletions"
-	$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
+	$(call announce,RL3 generate next ring)
+	@$(BIN)/rl3_generate
+	$(call announce,RL3 refine deletions)
+	@$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
 
 boot_rl4: rl4_generate rl4_supertile_candidates
-	@echo "==> RL4 materialize filtered runlevel data"
-	$(BIN)/rl4_generate
-	@echo "==> RL4 write supertile candidates"
-	$(BIN)/rl4_supertile_candidates
+	$(call announce,RL4 filter runlevel data)
+	@$(BIN)/rl4_generate
+	$(call announce,RL4 write supertile candidates)
+	@$(BIN)/rl4_supertile_candidates
 
 boot_rl5: rl5_generate
-	@echo "==> RL5 hexagon analysis data ready"
 
 rl0_data: rl0_generate
-	$(BIN)/rl0_generate preferences/focus.tile
+	@$(BIN)/rl0_generate preferences/focus.tile
 
 rl1_data: rl1_generate
-	mkdir -p data/rl1
-	$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
+	@mkdir -p data/rl1
+	@$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
 
 # needed for testing, not strict boot
 rl1_data_naive: rl1_generate_naive
-	mkdir -p data/rl1
-	$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_completions.dat 20 --live-only
+	@mkdir -p data/rl1
+	@$(BIN)/rl1_generate_naive preferences/focus.tile data/rl1/naive_completions.dat 20 --live-only
 
 meta_graph_data: meta_graph
-	mkdir -p data/meta
-	$(BIN)/gen_graph src > data/meta/dependencies.txt
+	@mkdir -p data/meta
+	@$(BIN)/gen_graph src > data/meta/dependencies.txt
 
 # -----------------------------------------------------------------------------
 # TEST
@@ -353,7 +350,11 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 		$(CORE) $(SRC)/core/dfs.o
 
 
-figures: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg rl4_refine_svg
+figures:
+	$(call announce,generate figures)
+	@$(MAKE) --no-print-directory figures_files
+
+figures_files: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg supertile_hex_models_svg supertile_svg overlap_supertile_svg
 
 # -----------------------------------------------------------------------------
 # DEPICT
@@ -362,8 +363,10 @@ figures: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivor
 #
 
 rl0_svg: rl0_data rl0_depict imgtable
-	$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
+	@mkdir -p img
+	@$(BIN)/rl0_depict --data data/rl0/completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl0_all.svg
+	@echo img/rl0_all.svg
 
 RL0_SEARCH_GRAPH ?= data/rl0/search_graph.dat
 RL0_REFINE_SVG ?= img/rl0_refine.svg
@@ -427,23 +430,56 @@ rl3_survivors_svg: rl1_depict imgtable
 		$(BIN)/imgtable > $(RL3_SURVIVORS_SVG)
 	@echo $(RL3_SURVIVORS_SVG)
 
-RL4_REFINE_DATA ?= data/rl4/rl3_filtered.dat
-RL4_REFINE_SUPERTILE ?= $(RL4_SUPERTILE)
-RL4_REFINE_SVG ?= img/rl4_refine.svg
+SUPERTILE_DEPICT_DATA ?= data/rl4/rl3_filtered.dat
+SUPERTILE_HEX_MODELS_SUPERTILE ?= $(RL4_SUPERTILE)
+SUPERTILE_HEX_MODELS_SVG ?= img/rl4_refine.svg
+SUPERTILE_SVG ?= img/supertile.svg
+OVERLAP_SUPERTILE_SVG ?= img/overlap_supertile.svg
 
-rl4_refine_svg: rl4_refine imgtable
-	@test -s $(RL4_REFINE_DATA) || { \
-		echo "missing $(RL4_REFINE_DATA); run: make boot" >&2; \
+# Compatibility alias. The clearer name is supertile_hex_models_svg.
+: supertile_hex_models_svg
+
+supertile_hex_models_svg: supertile_depict imgtable
+	@test -s $(SUPERTILE_DEPICT_DATA) || { \
+		echo "missing $(SUPERTILE_DEPICT_DATA); run: make boot" >&2; \
 		exit 1; \
 	}
-	@test -s $(RL4_REFINE_SUPERTILE) || { \
-		echo "missing $(RL4_REFINE_SUPERTILE)" >&2; \
+	@test -s $(SUPERTILE_HEX_MODELS_SUPERTILE) || { \
+		echo "missing $(SUPERTILE_HEX_MODELS_SUPERTILE)" >&2; \
 		exit 1; \
 	}
-	@mkdir -p $(dir $(RL4_REFINE_SVG))
-	@$(BIN)/rl4_refine preferences/focus.tile $(RL4_REFINE_DATA) $(RL4_REFINE_SUPERTILE) | \
-		$(BIN)/imgtable > $(RL4_REFINE_SVG)
-	@echo $(RL4_REFINE_SVG)
+	@mkdir -p $(dir $(SUPERTILE_HEX_MODELS_SVG))
+	@$(BIN)/supertile_depict preferences/focus.tile $(SUPERTILE_DEPICT_DATA) $(SUPERTILE_HEX_MODELS_SUPERTILE) | \
+		$(BIN)/imgtable > $(SUPERTILE_HEX_MODELS_SVG)
+	@echo $(SUPERTILE_HEX_MODELS_SVG)
+
+supertile_svg: supertile_depict imgtable
+	@test -s $(SUPERTILE_DEPICT_DATA) || { \
+		echo "missing $(SUPERTILE_DEPICT_DATA); run: make boot" >&2; \
+		exit 1; \
+	}
+	@test -s preferences/focus.supertile || { \
+		echo "missing preferences/focus.supertile" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(SUPERTILE_SVG))
+	@$(BIN)/supertile_depict preferences/focus.tile $(SUPERTILE_DEPICT_DATA) preferences/focus.supertile | \
+		$(BIN)/imgtable > $(SUPERTILE_SVG)
+	@echo $(SUPERTILE_SVG)
+
+overlap_supertile_svg: supertile_depict imgtable
+	@test -s $(SUPERTILE_DEPICT_DATA) || { \
+		echo "missing $(SUPERTILE_DEPICT_DATA); run: make boot" >&2; \
+		exit 1; \
+	}
+	@test -s preferences/overlap.supertile || { \
+		echo "missing preferences/overlap.supertile" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(OVERLAP_SUPERTILE_SVG))
+	@$(BIN)/supertile_depict preferences/focus.tile $(SUPERTILE_DEPICT_DATA) preferences/overlap.supertile | \
+		$(BIN)/imgtable > $(OVERLAP_SUPERTILE_SVG)
+	@echo $(OVERLAP_SUPERTILE_SVG)
 
 imgtable: $(BIN)/imgtable
 $(BIN)/imgtable: $(SRC)/usage/imgtable.o | $(BIN)
@@ -472,7 +508,7 @@ $(BIN)/depict_search0_graph: $(SRC)/usage/depict_search0_graph.o | $(BIN)
 # -----------------------------------------------------------------------------
 # EXTRA
 # -----------------------------------------------------------------------------
-# Historical, audit, debug, and non-boot tools.  These are kept buildable, but
+# Historical, audit, debug, and non-boot tools. These are kept buildable, but
 # should not control the normal develop/debug loop.
 
 

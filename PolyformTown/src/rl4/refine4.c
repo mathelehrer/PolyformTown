@@ -20,6 +20,7 @@ typedef struct {
     const char *parents_path;
     int limit;
     int data_mode;
+    int verbose;
 } Options;
 
 typedef struct {
@@ -48,8 +49,8 @@ typedef struct {
 } HiddenCluster;
 
 typedef struct {
-    char lhs[128];
-    char rhs[128];
+    char lhs[256];
+    char rhs[256];
 } EdgeRulePair;
 
 #define RL4_MAX_HIDDEN (MAX_VERTS * MAX_CYCLES)
@@ -66,7 +67,8 @@ static void usage(const char *prog) {
             "  --data                print supertile hexagon data instead of imgtable\n"
             "  --parents PATH        default data/rl4/rl2_filtered.dat\n"
             "  --remembrance PATH    default data/rl0/remembrance.dat\n"
-            "  --deletions PATH      default data/rl0/deletions.dat\n",
+            "  --deletions PATH      default data/rl0/deletions.dat\n"
+            "  --verbose             print per-record diagnostics to stderr\n",
             prog);
 }
 
@@ -80,6 +82,7 @@ static int parse_args(int argc, char **argv, Options *opt) {
     opt->parents_path = "data/rl4/rl2_filtered.dat";
     opt->limit = 0;
     opt->data_mode = 0;
+    opt->verbose = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--limit") == 0 && i + 1 < argc) {
             opt->limit = atoi(argv[++i]);
@@ -87,6 +90,10 @@ static int parse_args(int argc, char **argv, Options *opt) {
         }
         if (strcmp(argv[i], "--data") == 0) {
             opt->data_mode = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--verbose") == 0) {
+            opt->verbose = 1;
             continue;
         }
         if (strcmp(argv[i], "--parents") == 0 && i + 1 < argc) {
@@ -520,6 +527,7 @@ static int build_hidden_clusters(const Tile *tile,
             clusters[ci].x = 0.0;
             clusters[ci].y = 0.0;
             clusters[ci].label[0] = '\0';
+            clusters[ci].member_count = 0;
         }
         DPoint pt = coord_xy(tile, hidden[i]);
         clusters[ci].count++;
@@ -988,8 +996,8 @@ static void collect_projection_edge_rules(const Projection *proj,
                     seen_count++;
                 }
 
-                char lhs[128];
-                char rhs[128];
+                char lhs[256];
+                char rhs[256];
                 make_owned_edge_token(&central_owned, +1, central_edge, lhs, sizeof(lhs));
                 make_owned_edge_token(&adjacent_owned, -1, adjacent_edge, rhs, sizeof(rhs));
                 add_edge_rule_pair(rules_io, rule_count, rule_cap, lhs, rhs);
@@ -1010,19 +1018,6 @@ static void print_edge_rules(FILE *fp, EdgeRulePair *rules, int rule_count) {
     }
 }
 
-static int edge_rule_same_sign_reverse_count(const EdgeRulePair *rules, int rule_count) {
-    int bad = 0;
-    for (int i = 0; i < rule_count; i++) {
-        char la[64], lb[64], ra[64], rb[64];
-        if (sscanf(rules[i].lhs, "+e(%63[^,],%63[^)])", la, lb) == 2 &&
-            sscanf(rules[i].rhs, "+e(%63[^,],%63[^)])", ra, rb) == 2 &&
-            strcmp(la, rb) == 0 && strcmp(lb, ra) == 0) bad++;
-        if (sscanf(rules[i].lhs, "-e(%63[^,],%63[^)])", la, lb) == 2 &&
-            sscanf(rules[i].rhs, "-e(%63[^,],%63[^)])", ra, rb) == 2 &&
-            strcmp(la, rb) == 0 && strcmp(lb, ra) == 0) bad++;
-    }
-    return bad;
-}
 
 static int emit_record(const Tile *tile,
                        int out_index,
@@ -1116,11 +1111,12 @@ int main(int argc, char **argv) {
 
     const BComp1Record *supertile = &super_records.items[0];
     if (opt.data_mode) {
-        printf("# RL4 supertile hexagon extraction\n");
+        printf("# RL5 supertile hexagon extraction\n");
         printf("# input: %s\n", opt.data_path);
         printf("# supertile: %s\n", opt.supertile_path);
         printf("# rl2_parents: %s\n\n", opt.parents_path);
         printf("# Supertile hexagons use cyclic CCW lists of clustered triple-intersection vertices.\n");
+        printf("# Edge tokens use down(e(A,B)) = e(first(A),last(B)) on cyclic cluster edges.\n");
         printf("# Each row records the RL3 item, inferred RL2 parent, and unique reduction.\n\n");
     }
     for (size_t ri = 0; ri < records.count; ri++) {
@@ -1158,8 +1154,10 @@ int main(int argc, char **argv) {
         build_hex_key(clusters, cluster_count, hex_key, sizeof(hex_key));
         int unique_id = unique_hex_add(&unique_hexes, &unique_count, &unique_cap, hex_key, emitted) + 1;
         int parent_id = opt.data_mode ? find_parent_record(&parents, r) : 0;
-        fprintf(stderr, "[%d] source=%zu parent=%d unique=%d reflected=%d hidden=%d clusters=%d\n",
-                emitted, ri + 1, parent_id, unique_id, proj_count, hidden_count, cluster_count);
+        if (opt.verbose && !opt.data_mode) {
+            fprintf(stderr, "[%d] source=%zu parent=%d unique=%d reflected=%d hidden=%d clusters=%d\n",
+                    emitted, ri + 1, parent_id, unique_id, proj_count, hidden_count, cluster_count);
+        }
         if (opt.data_mode) {
             ModelRow row;
             memset(&row, 0, sizeof(row));
@@ -1178,10 +1176,12 @@ int main(int argc, char **argv) {
         } else {
             emit_record(&ctx.tile, emitted, r, proj, proj_count,
                         hidden, hidden_count);
-            print_hex_model(stderr, emitted, ri + 1, clusters, cluster_count);
+            if (opt.verbose) {
+                print_hex_model(stderr, emitted, ri + 1, clusters, cluster_count);
+            }
             collect_projection_edge_rules(proj, proj_count, clusters, cluster_count,
                                           &edge_rules, &edge_rule_count,
-                                          &edge_rule_cap, stderr);
+                                          &edge_rule_cap, opt.verbose ? stderr : NULL);
         }
         if (opt.limit > 0 && emitted >= opt.limit) break;
     }
@@ -1202,19 +1202,16 @@ int main(int argc, char **argv) {
         printf("  trusted_central_vertex_records=%d\n", trusted_vertex_records);
         printf("  status=%s\n", emitted > 0 && trusted_vertex_records == emitted ? "trusted_central_cycles" : "needs_review");
 
-        printf("\nSuper Hexagon Edge Rules\n");
+        printf("\nDownmapped Super Hexagon Edge Rules\n");
         print_edge_rules(stdout, edge_rules, edge_rule_count);
-        int bad_same_sign_reverse = edge_rule_same_sign_reverse_count(edge_rules, edge_rule_count);
-        printf("\nEdge QA\n");
-        printf("  rules=%d\n", edge_rule_count);
-        printf("  invalid_same_sign_reverse=%d\n", bad_same_sign_reverse);
-        printf("  status=%s\n", bad_same_sign_reverse == 0 ? "trusted_pairwise_owned_edges" : "untrusted");
         printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_rules=%d\n",
                emitted, projected_total, hidden_total, unique_count, edge_rule_count);
     }
 
-    fprintf(stderr, "rl4_refine: emitted=%d projected=%d hidden=%d unique=%d\n",
-            emitted, projected_total, hidden_total, unique_count);
+    if (opt.verbose) {
+        fprintf(stderr, "rl4_refine: emitted=%d projected=%d hidden=%d unique=%d\n",
+                emitted, projected_total, hidden_total, unique_count);
+    }
 
     free(unique_hexes);
     free(edge_rules);

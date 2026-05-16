@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/term_color.h"
 #include "rl1/bcomp1.h"
 
 #define REFINE1_MAX_SELECT 4096
@@ -107,9 +108,12 @@ static void print_header(void) {
 }
 
 static void print_row(size_t idx, R1Status st, const BComp1Stats *s) {
-    printf("%6zu  %-7s %8zu %9zu %9zu %10zu %8zu %8zu %8zu %10zu %7zu %8zu %9zu %10zu %10zu %10zu\n",
+    const char *status = status_name(st);
+    printf("%6zu  %s%-7s%s %8zu %9zu %9zu %10zu %8zu %8zu %8zu %10zu %7zu %8zu %9zu %10zu %10zu %10zu\n",
            idx,
-           status_name(st),
+           term_color_word(stdout, status),
+           status,
+           term_color_reset_for_word(stdout, status),
            s->outputs,
            s->attach_attempts,
            s->attach_successes,
@@ -125,6 +129,7 @@ static void print_row(size_t idx, R1Status st, const BComp1Stats *s) {
            s->max_boundary_vertices_seen,
            s->max_cycle_vertices_seen);
 }
+
 
 int main(int argc, char **argv) {
     const char *tile_path = "preferences/focus.tile";
@@ -220,8 +225,15 @@ int main(int argc, char **argv) {
         else unknown++;
         total++;
         if (print_table) print_row(idx, st, &result.stats);
-        else printf("record=%zu status=%s outputs=%zu escapes=%zu dfs=%zu\n",
-                    idx, status_name(st), result.stats.outputs, (size_t)has_escape(&result.stats), result.stats.dfs_calls);
+        else {
+            const char *status = status_name(st);
+            printf("record=%zu status=%s outputs=%zu escapes=%zu dfs=%zu\n",
+                   idx,
+                   status,
+                   result.stats.outputs,
+                   (size_t)has_escape(&result.stats),
+                   result.stats.dfs_calls);
+        }
         fflush(stdout);
         bcomp1_result_clear(&result);
     }

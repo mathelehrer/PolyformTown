@@ -1677,8 +1677,9 @@ static int deletion_set_max_level0(const RL0FMDeletionSet *set) {
 }
 
 static void print_header0(void) {
+    FILE *fp = progress_out0();
     if (!progress_enabled0) return;
-    fprintf(progress_out0(),
+    fprintf(fp,
             "%5s %6s %4s %5s | %5s %6s %6s | %-16s\n",
             "lvl", "states", "ok", "prune",
             "roots", "remove", "escape",

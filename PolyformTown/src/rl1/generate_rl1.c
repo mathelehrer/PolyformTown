@@ -746,18 +746,12 @@ int main(int argc, char **argv) {
     }
     rl0_fm_deletions_clear(&deletions);
 
-    print_seed_counts(&tile, map);
-    if (counts_only) return 0;
+    if (counts_only) {
+        print_seed_counts(&tile, map);
+        return 0;
+    }
 
     choose_heuristic(&tile, map, requested_start, requested_dir, &start_index, &dir);
-    fprintf(stderr,
-            "heuristic: start=%d direction=%s first_choices=%d max_tiles=%d live_only=%d\n",
-            start_index,
-            dir > 0 ? "ccw" : "cw",
-            seed_branch_count_at(&tile, map, start_index),
-            max_tiles,
-            live_only);
-
     seed = calloc(1, sizeof(*seed));
     if (!seed || !make_seed_state(&tile, seed)) {
         fprintf(stderr, "failed to build central-hat seed\n");

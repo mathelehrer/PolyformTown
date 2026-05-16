@@ -337,7 +337,10 @@ int main(void) {
     }
 
     fprintf(stderr,
-            "rl2 generate source_record=%d source_center_p=%+d source_opposite=%d reflected=yes forced_tiles=%d hidden=%d closure_steps=%d unresolved=%d children=%zu output=%s supertile=%s\n",
+            "rl2 generate source_record=%d source_center_p=%+d source_opposite=%d reflected=yes\n"
+            "  forced_tiles=%d hidden=%d closure_steps=%d unresolved=%d children=%zu\n"
+            "  output=%s\n"
+            "  supertile=%s\n",
             source_record,
             source_center_p,
             source_opp,
