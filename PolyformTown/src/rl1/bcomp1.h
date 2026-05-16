@@ -15,7 +15,6 @@ typedef struct {
     Poly poly;
     Cycle tiles[ATTACH0_MAX_TILES];
     int tile_count;
-    Coord hidden[BCOMP1_MAX_COORDS];
     int hidden_count;
 } BComp1State;
 

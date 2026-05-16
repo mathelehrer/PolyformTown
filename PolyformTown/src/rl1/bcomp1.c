@@ -370,6 +370,8 @@ static int coord_on_boundary(Coord q, const Poly *p) {
     return 0;
 }
 
+static int coord_on_tiles(Coord q, const Cycle *tiles, int tile_count);
+
 static int collect_tile_vertices(const Cycle *tiles, int tile_count, Coord *verts) {
     int n = 0;
     for (int t = 0; t < tile_count; t++) {
@@ -395,10 +397,11 @@ static int rebuild_hidden(const Poly *p, const Cycle *tiles, int tile_count, Coo
     for (int i = 0; i < ac; i++) {
         if (!coord_in_list(boundary, bc, all[i])) {
             if (hc >= BCOMP1_MAX_COORDS) { free(boundary); free(all); return -1; }
-            hidden[hc++] = all[i];
+            if (hidden) hidden[hc] = all[i];
+            hc++;
         }
     }
-    if (hc > 1) qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
+    if (hidden && hc > 1) qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
     free(boundary);
     free(all);
     return hc;
@@ -499,7 +502,7 @@ static int make_seed_state(const Tile *tile, BComp1State *s) {
     s->poly.cycles[0] = tile->base;
     s->tile_count = 1;
     s->tiles[0] = tile->base;
-    s->hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, s->hidden);
+    s->hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, NULL);
     return s->hidden_count >= 0;
 }
 
@@ -510,7 +513,7 @@ static int state_from_record(const BComp1Record *r, BComp1State *s) {
     s->tile_count = r->tiles_count;
     if (s->tile_count < 0 || s->tile_count > ATTACH0_MAX_TILES) return 0;
     for (int i = 0; i < s->tile_count; i++) s->tiles[i] = r->tiles[i];
-    s->hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, s->hidden);
+    s->hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, NULL);
     return s->hidden_count >= 0;
 }
 
@@ -532,17 +535,47 @@ static int nonempty_choice_count(const RL0FMArc *values, int value_count) {
     return n;
 }
 
-static int completed_hidden_vertices_are_legal(const Tile *tile,
-                                               const RL0ForgetMap *map,
-                                               const BComp1State *before,
-                                               const BComp1State *after) {
-    for (int i = 0; i < after->hidden_count; i++) {
-        RL0FMArc complete;
-        if (coord_in_list(before->hidden, before->hidden_count, after->hidden[i])) continue;
-        if (!boundary0_build_vertex_arc(tile, after->tiles, after->tile_count, after->hidden[i], &complete)) {
-            return 0;
+static int push_coord_unique(Coord *items, int *count, Coord q) {
+    if (coord_in_list(items, *count, q)) return 1;
+    if (*count >= BCOMP1_MAX_COORDS) return 0;
+    items[(*count)++] = q;
+    return 1;
+}
+
+static int check_touched_after_attachment(B1Search *search,
+                                          const BComp1State *before,
+                                          const BComp1State *after,
+                                          const Cycle *added_tiles,
+                                          int added_count) {
+    Coord touched[BCOMP1_MAX_COORDS];
+    int touched_count = 0;
+    for (int t = 0; t < added_count; t++) {
+        for (int i = 0; i < added_tiles[t].n; i++) {
+            if (!push_coord_unique(touched, &touched_count, added_tiles[t].v[i])) return 0;
         }
-        if (!rl0_fm_contains_complete(map, &complete)) return 0;
+    }
+    for (int c = 0; c < before->poly.cycle_count; c++) {
+        const Cycle *cycle = &before->poly.cycles[c];
+        for (int i = 0; i < cycle->n; i++) {
+            Coord q = cycle->v[i];
+            if (!coord_on_boundary(q, &after->poly) && coord_on_tiles(q, after->tiles, after->tile_count)) {
+                if (!push_coord_unique(touched, &touched_count, q)) return 0;
+            }
+        }
+    }
+    for (int i = 0; i < touched_count; i++) {
+        RL0FMArc complete;
+        Coord q = touched[i];
+        if (coord_on_boundary(q, &after->poly)) continue;
+        if (!coord_on_tiles(q, after->tiles, after->tile_count)) continue;
+        if (!boundary0_build_vertex_arc(search->tile, after->tiles, after->tile_count, q, &complete)) return -1;
+        if (!rl0_fm_contains_complete(search->map, &complete)) return -1;
+    }
+    if (!search->live_only) return 1;
+    for (int i = 0; i < touched_count; i++) {
+        Coord q = touched[i];
+        if (!coord_on_boundary(q, &after->poly)) continue;
+        if (!boundary0_vertex_has_dictionary_completion(search->tile, after->tiles, after->tile_count, q, search->map)) return -2;
     }
     return 1;
 }
@@ -555,9 +588,10 @@ static int state_after_choice(B1Search *search,
     Cycle grown_tiles[ATTACH0_MAX_TILES];
     int grown_tile_count = 0;
     Attach0Stats astats;
-    Boundary0Stats bstats;
+    const Cycle *added_tiles;
+    int added_count;
     attach0_stats_init(&astats);
-    *out = *s;
+    out->hidden_count = s->hidden_count;
     if (!attach0_try_attach_arc(&s->poly,
                                 search->tile,
                                 s->tiles,
@@ -580,25 +614,10 @@ static int state_after_choice(B1Search *search,
     }
     out->tile_count = grown_tile_count;
     for (int i = 0; i < grown_tile_count; i++) out->tiles[i] = grown_tiles[i];
-    out->hidden_count = rebuild_hidden(&out->poly, out->tiles, out->tile_count, out->hidden);
-    if (out->hidden_count < 0) {
-        search->stats.hidden_rebuild_fail++;
-        return 0;
-    }
     stats_observe_state(search, out);
-    if (!completed_hidden_vertices_are_legal(search->tile, search->map, s, out)) return -1;
-    if (search->live_only) {
-        boundary0_stats_init(&bstats);
-        if (!boundary0_poly_has_live_boundary(&out->poly,
-                                              search->tile,
-                                              out->tiles,
-                                              out->tile_count,
-                                              search->map,
-                                              &bstats)) {
-            return -2;
-        }
-    }
-    return 1;
+    added_tiles = out->tiles + s->tile_count;
+    added_count = out->tile_count - s->tile_count;
+    return check_touched_after_attachment(search, s, out, added_tiles, added_count);
 }
 
 
@@ -689,8 +708,13 @@ static void debug_emit_exception(B1Search *search,
     fprintf(fp, "Tiles\n");
     for (int i = 0; i < after->tile_count; i++) debug_print_cycle_shape(fp, search->tile, &after->tiles[i]);
     fprintf(fp, "Hidden\n");
-    for (int i = 0; i < after->hidden_count; i++) {
-        fprintf(fp, "(%d,%d,%d)\n", after->hidden[i].v, after->hidden[i].x, after->hidden[i].y);
+    {
+        Coord *hidden = malloc(sizeof(*hidden) * BCOMP1_MAX_COORDS);
+        int hidden_count = hidden ? rebuild_hidden(&after->poly, after->tiles, after->tile_count, hidden) : -1;
+        for (int i = 0; i < hidden_count; i++) {
+            fprintf(fp, "(%d,%d,%d)\n", hidden[i].v, hidden[i].x, hidden[i].y);
+        }
+        free(hidden);
     }
     fprintf(fp, "Candidates\n");
     for (int i = 0; i < candidate_count; i++) {
@@ -847,11 +871,13 @@ static void choose_schedule_start(const Tile *tile,
 
 static int final_record_from_state(const BComp1State *s,
                                    const Cycle *center,
+                                   const Coord *hidden,
+                                   int hidden_count,
                                    int start,
                                    int dir,
                                    BComp1Record *r) {
     memset(r, 0, sizeof(*r));
-    r->level = s->hidden_count;
+    r->level = hidden_count;
     r->tile_count = s->tile_count;
     r->start_index = start;
     r->dir = dir;
@@ -861,9 +887,9 @@ static int final_record_from_state(const BComp1State *s,
     r->have_tiles = 1;
     r->center = *center;
     r->boundary = s->poly;
-    r->hidden_count = s->hidden_count;
+    r->hidden_count = hidden_count;
     r->tiles_count = s->tile_count;
-    for (int i = 0; i < s->hidden_count; i++) r->hidden[i] = s->hidden[i];
+    for (int i = 0; i < hidden_count; i++) r->hidden[i] = hidden[i];
     for (int i = 0; i < s->tile_count; i++) r->tiles[i] = s->tiles[i];
     return 1;
 }
@@ -873,19 +899,34 @@ static int emit_final(B1Search *search,
                       const Cycle *center,
                       int start,
                       int dir) {
+    Coord *hidden = malloc(sizeof(*hidden) * BCOMP1_MAX_COORDS);
+    int hidden_count;
     Poly canonical;
+    if (!hidden) return 0;
+    hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, hidden);
+    if (hidden_count < 0) {
+        free(hidden);
+        search->stats.hidden_rebuild_fail++;
+        return 1;
+    }
+    if ((size_t)hidden_count > search->stats.max_hidden_count_seen)
+        search->stats.max_hidden_count_seen = (size_t)hidden_count;
     poly_hash_key_lattice(&s->poly, search->tile->lattice, &canonical);
     if (!hash_insert(&search->seen, &canonical)) {
+        free(hidden);
         search->stats.duplicates++;
         return 1;
     }
     search->stats.outputs++;
     if (search->stop_after_output) search->stop_requested = 1;
     if (search->print_records) {
-        BComp1Record rec;
-        if (!final_record_from_state(s, center, start, dir, &rec)) return 0;
-        if (!records_push(&search->finals, &rec)) return 0;
+        BComp1Record *rec = malloc(sizeof(*rec));
+        if (!rec) { free(hidden); return 0; }
+        if (!final_record_from_state(s, center, hidden, hidden_count, start, dir, rec)) { free(rec); free(hidden); return 0; }
+        if (!records_push(&search->finals, rec)) { free(rec); free(hidden); return 0; }
+        free(rec);
     }
+    free(hidden);
     return 1;
 }
 

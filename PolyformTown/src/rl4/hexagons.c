@@ -531,7 +531,11 @@ static void print_full_header(void){
 
 
 int main(int argc,char **argv){
-    const char *data="data/rl1/completions.dat";
+    const char *prog = strrchr(argv[0], '/');
+    prog = prog ? prog + 1 : argv[0];
+    const char *data = strstr(prog, "rl5_hexagons") ?
+        "data/rl4/rl1_filtered.dat" :
+        "data/rl1/completions.dat";
     int selected=0,n=0,gn=0,kept=0,dropped=0;
     Rec *recs=calloc(MAX_REC,sizeof(*recs));
     Info *infos=calloc(MAX_REC,sizeof(*infos));
@@ -544,7 +548,7 @@ int main(int argc,char **argv){
 
     if(argc>1) data=argv[1];
     if(argc>2) selected=atoi(argv[2]);
-    if(argc>3){ fprintf(stderr,"usage: %s [data/rl1/completions.dat] [record_index]\n",argv[0]); return 1;}
+    if(argc>3){ fprintf(stderr,"usage: %s [data_path] [record_index]\n",argv[0]); return 1;}
     if(!recs||!infos||!groups||!hex_items||!edge_rules){fprintf(stderr,"alloc fail\n"); return 1;}
     if(!tile_load("tiles/hat.tile",&tile)){fprintf(stderr,"failed to load tiles/hat.tile\n"); return 1;}
     if(!load_recs(data,recs,&n)){fprintf(stderr,"failed to load %s\n",data); return 1;}

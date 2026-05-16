@@ -93,16 +93,22 @@ static int rebuild_hidden(const Poly *p, const Cycle *tiles, int tile_count, Coo
     for (int i = 0; i < ac; i++) {
         if (!coord_in_list_local(boundary, bc, all[i])) {
             if (hc >= BCOMP1_MAX_COORDS) return -1;
-            hidden[hc++] = all[i];
+            if (hidden) hidden[hc] = all[i];
+            hc++;
         }
     }
-    qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
+    if (hidden && hc > 1) qsort(hidden, (size_t)hc, sizeof(Coord), coord_cmp_local);
     return hc;
 }
 
 static int make_record_from_state(const BComp1State *s, const Cycle *center, BComp1Record *r) {
+    Coord *hidden = malloc(sizeof(*hidden) * BCOMP1_MAX_COORDS);
+    int hidden_count;
+    if (!hidden) return 0;
+    hidden_count = rebuild_hidden(&s->poly, s->tiles, s->tile_count, hidden);
+    if (hidden_count < 0) { free(hidden); return 0; }
     memset(r, 0, sizeof(*r));
-    r->level = s->hidden_count;
+    r->level = hidden_count;
     r->tile_count = s->tile_count;
     r->start_index = 0;
     r->dir = 1;
@@ -112,10 +118,11 @@ static int make_record_from_state(const BComp1State *s, const Cycle *center, BCo
     r->have_tiles = 1;
     r->center = *center;
     r->boundary = s->poly;
-    r->hidden_count = s->hidden_count;
+    r->hidden_count = hidden_count;
     r->tiles_count = s->tile_count;
-    for (int i = 0; i < s->hidden_count; i++) r->hidden[i] = s->hidden[i];
+    for (int i = 0; i < hidden_count; i++) r->hidden[i] = hidden[i];
     for (int i = 0; i < s->tile_count; i++) r->tiles[i] = s->tiles[i];
+    free(hidden);
     return 1;
 }
 
@@ -204,7 +211,7 @@ static int reflected_state_from_record(const BComp1Context *ctx,
     reflect_y_cycle_ccw(ctx->tile.lattice, &record->center, center);
     reflect_y_poly_ccw(ctx->tile.lattice, &state->poly, &state->poly);
     for (int i = 0; i < state->tile_count; i++) reflect_y_cycle_ccw(ctx->tile.lattice, &state->tiles[i], &state->tiles[i]);
-    state->hidden_count = rebuild_hidden(&state->poly, state->tiles, state->tile_count, state->hidden);
+    state->hidden_count = rebuild_hidden(&state->poly, state->tiles, state->tile_count, NULL);
     return state->hidden_count >= 0;
 }
 
@@ -232,7 +239,7 @@ static int force_state(const BComp1Context *ctx,
                 cstats->closure_steps);
         return 0;
     }
-    state->hidden_count = rebuild_hidden(&state->poly, state->tiles, state->tile_count, state->hidden);
+    state->hidden_count = rebuild_hidden(&state->poly, state->tiles, state->tile_count, NULL);
     return state->hidden_count >= 0;
 }
 

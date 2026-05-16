@@ -73,6 +73,7 @@ static void usage(const char *prog) {
             "options:\n"
             "  --limit N             emit at most N records\n"
             "  --data                print supertile hexagon data instead of imgtable\n"
+            "  --supertile PATH      default preferences/focus.supertile\n"
             "  --parents PATH        default data/rl4/rl2_filtered.dat\n"
             "  --remembrance PATH    default data/rl0/remembrance.dat\n"
             "  --deletions PATH      default data/rl0/deletions.dat\n"
@@ -102,6 +103,10 @@ static int parse_args(int argc, char **argv, Options *opt) {
         }
         if (strcmp(argv[i], "--verbose") == 0) {
             opt->verbose = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--supertile") == 0 && i + 1 < argc) {
+            opt->supertile_path = argv[++i];
             continue;
         }
         if (strcmp(argv[i], "--parents") == 0 && i + 1 < argc) {
