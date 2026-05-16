@@ -21,8 +21,8 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
-	rl3_generate rl4_generate rl4_supertile_candidates \
-	rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
+	rl3_generate rl4_generate rl4_refine \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -40,8 +40,8 @@ all: tools
 
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
-	rl3_generate rl4_generate rl4_supertile_candidates \
-	rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
+	rl3_generate rl4_generate rl4_refine \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -160,20 +160,13 @@ supertile_depict: $(BIN)/supertile_depict
 $(BIN)/supertile_depict: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
 
-rl4_supertile_candidates: $(BIN)/rl4_supertile_candidates
+rl4_refine: $(BIN)/rl4_supertile_candidates
 $(BIN)/rl4_supertile_candidates: $(SRC)/rl4/supertile_candidates.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/supertile_candidates.o
 
 rl5_refine: $(BIN)/rl5_refine
 $(BIN)/rl5_refine: $(SRC)/rl5/refine5.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/refine5.o
-
-RL4_RL1_FILTERED ?= data/rl4/rl1_filtered.dat
-RL4_RL3_FILTERED ?= data/rl4/rl3_filtered.dat
-
-RL5_HEXAGONS_DATA ?= data/rl5/hexagons.dat
-RL5_SUPERTILE_HEXAGONS_DATA ?= data/rl5/supertile_hexagons.dat
-RL5_OVERLAP_HEXAGONS_DATA ?= data/rl5/overlap_supertile_hexagons.dat
 
 rl5_hexagons: $(BIN)/rl5_hexagons
 $(BIN)/rl5_hexagons: $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -184,27 +177,6 @@ $(BIN)/rl5_supertile_hexagons: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SU
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
 
 rl5_generate: rl5_hexagons rl5_supertile_hexagons
-	@test -s $(RL4_RL1_FILTERED) || { \
-		echo "missing $(RL4_RL1_FILTERED); run: make boot_rl4" >&2; \
-		exit 1; \
-	}
-	@test -s $(RL4_RL3_FILTERED) || { \
-		echo "missing $(RL4_RL3_FILTERED); run: make boot_rl4" >&2; \
-		exit 1; \
-	}
-	@mkdir -p data/rl5
-	@$(BIN)/rl5_hexagons $(RL4_RL1_FILTERED) > $(RL5_HEXAGONS_DATA)
-	@$(BIN)/rl5_supertile_hexagons preferences/focus.tile $(RL4_RL3_FILTERED) preferences/focus.supertile --data > $(RL5_SUPERTILE_HEXAGONS_DATA)
-	@$(BIN)/rl5_supertile_hexagons preferences/focus.tile $(RL4_RL3_FILTERED) preferences/overlap.supertile --data > $(RL5_OVERLAP_HEXAGONS_DATA)
-	$(call announce,RL5 hexagon analysis data ready)
-	@echo $(RL5_HEXAGONS_DATA)
-	@echo $(RL5_SUPERTILE_HEXAGONS_DATA)
-	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
-
-rl5_refine_data: rl5_generate rl5_refine
-	@mkdir -p data/rl5
-	@$(BIN)/rl5_refine $(RL5_HEXAGONS_DATA) $(RL5_SUPERTILE_HEXAGONS_DATA) > data/rl5/equivalence_candidates.dat
-	@echo data/rl5/equivalence_candidates.dat
 
 
 # -----------------------------------------------------------------------------
@@ -272,13 +244,21 @@ boot_rl3: rl3_generate rl1_refine
 	$(call announce,RL3 refine deletions)
 	@$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
 
-boot_rl4: rl4_generate rl4_supertile_candidates
-	$(call announce,RL4 filter runlevel data)
+boot_rl4: rl4_generate rl4_refine
+	$(call announce,RL4 generate filtrations)
 	@$(BIN)/rl4_generate
-	$(call announce,RL4 write supertile candidates)
+	$(call announce,RL4 refine supertile candidates)
 	@$(BIN)/rl4_supertile_candidates
 
-boot_rl5: rl5_generate
+boot_rl5: rl5_generate rl5_refine
+	$(call announce,RL5 generate hexagon analysis)
+	@mkdir -p data/rl5
+	@$(BIN)/rl5_hexagons > data/rl5/hexagons.dat
+	@$(BIN)/rl5_supertile_hexagons --data > data/rl5/supertile_hexagons.dat
+	@$(BIN)/rl5_supertile_hexagons --data --supertile preferences/overlap.supertile > data/rl5/overlap_supertile_hexagons.dat
+	@printf "small hexagons\nsupertile hexagons\noverlap supertile hexagons\n"
+	$(call announce,RL5 refine reduced hexes)
+	@$(BIN)/rl5_refine
 
 rl0_data: rl0_generate
 	@$(BIN)/rl0_generate preferences/focus.tile
@@ -390,42 +370,35 @@ rl1_svg_naive: rl1_data_naive rl1_depict imgtable
 	$(BIN)/rl1_depict preferences/focus.tile data/rl1/naive_completions.dat --grouped | \
 		$(BIN)/imgtable > img/rl1_naive_completions.svg
 
-RL1_SURVIVORS ?= data/rl4/rl1_filtered.dat
-RL2_SURVIVORS ?= data/rl4/rl2_filtered.dat
-RL3_SURVIVORS ?= data/rl4/rl3_filtered.dat
-RL1_SURVIVORS_SVG ?= img/rl1_survivors.svg
-RL2_SURVIVORS_SVG ?= img/rl2_survivors.svg
-RL3_SURVIVORS_SVG ?= img/rl3_survivors.svg
-
 rl1_survivors_svg: rl1_depict imgtable
-	@test -s $(RL1_SURVIVORS) || { \
-		echo "missing $(RL1_SURVIVORS); run: make boot" >&2; \
+	@test -s data/rl4/rl1_filtered.dat || { \
+		echo "missing data/rl4/rl1_filtered.dat; run: make boot" >&2; \
 		exit 1; \
 	}
-	@mkdir -p $(dir $(RL1_SURVIVORS_SVG))
-	@$(BIN)/rl1_depict preferences/focus.tile $(RL1_SURVIVORS) --grouped | \
-		$(BIN)/imgtable > $(RL1_SURVIVORS_SVG)
-	@echo $(RL1_SURVIVORS_SVG)
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl1_filtered.dat --grouped | \
+		$(BIN)/imgtable > img/rl1_survivors.svg
+	@echo img/rl1_survivors.svg
 
 rl2_survivors_svg: rl1_depict imgtable
-	@test -s $(RL2_SURVIVORS) || { \
-		echo "missing $(RL2_SURVIVORS); run: make boot" >&2; \
+	@test -s data/rl4/rl2_filtered.dat || { \
+		echo "missing data/rl4/rl2_filtered.dat; run: make boot" >&2; \
 		exit 1; \
 	}
-	@mkdir -p $(dir $(RL2_SURVIVORS_SVG))
-	@$(BIN)/rl1_depict preferences/focus.tile $(RL2_SURVIVORS) --grouped | \
-		$(BIN)/imgtable > $(RL2_SURVIVORS_SVG)
-	@echo $(RL2_SURVIVORS_SVG)
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl2_filtered.dat --grouped | \
+		$(BIN)/imgtable > img/rl2_survivors.svg
+	@echo img/rl2_survivors.svg
 
 rl3_survivors_svg: rl1_depict imgtable
-	@test -s $(RL3_SURVIVORS) || { \
-		echo "missing $(RL3_SURVIVORS); run: make boot" >&2; \
+	@test -s data/rl4/rl3_filtered.dat || { \
+		echo "missing data/rl4/rl3_filtered.dat; run: make boot" >&2; \
 		exit 1; \
 	}
-	@mkdir -p $(dir $(RL3_SURVIVORS_SVG))
-	@$(BIN)/rl1_depict preferences/focus.tile $(RL3_SURVIVORS) --grouped | \
-		$(BIN)/imgtable > $(RL3_SURVIVORS_SVG)
-	@echo $(RL3_SURVIVORS_SVG)
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/rl4/rl3_filtered.dat --grouped | \
+		$(BIN)/imgtable > img/rl3_survivors.svg
+	@echo img/rl3_survivors.svg
 
 SUPERTILE_DEPICT_DATA ?= data/rl4/rl3_filtered.dat
 SUPERTILE_HEX_MODELS_SUPERTILE ?= preferences/focus.supertile
