@@ -53,6 +53,20 @@ typedef struct {
     char rhs[256];
 } EdgeRulePair;
 
+
+typedef struct {
+    int n;
+    DPoint p[MAX_VERTS + 1];
+} EdgePath;
+
+static int dpoint_close(DPoint a, DPoint b) {
+    return fabs(a.x - b.x) < 1e-6 && fabs(a.y - b.y) < 1e-6;
+}
+
+static DPoint dpoint_sub(DPoint a, DPoint b) {
+    return (DPoint){a.x - b.x, a.y - b.y};
+}
+
 #define RL4_MAX_HIDDEN (MAX_VERTS * MAX_CYCLES)
 #define RL4_MAX_CLUSTERS RL4_MAX_HIDDEN
 
@@ -767,28 +781,6 @@ static void print_hex_model(FILE *fp,
 
 
 
-static int find_matching_central_edge(const Poly *central,
-                                      Coord a,
-                                      Coord b,
-                                      int *out_i,
-                                      int *out_j) {
-    for (int c = 0; c < central->cycle_count; c++) {
-        const Cycle *cy = &central->cycles[c];
-        for (int i = 0; i < cy->n; i++) {
-            int j = (i + 1) % cy->n;
-            Coord u = cy->v[i];
-            Coord v = cy->v[j];
-            if ((coord_same(u, b) && coord_same(v, a)) ||
-                (coord_same(u, a) && coord_same(v, b))) {
-                *out_i = boundary_linear_index(central, c, i);
-                *out_j = boundary_linear_index(central, c, j);
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
 static int edge_rule_pair_seen(const EdgeRulePair *rules, int count, const char *lhs, const char *rhs) {
     for (int i = 0; i < count; i++) {
         if (strcmp(rules[i].lhs, lhs) == 0 && strcmp(rules[i].rhs, rhs) == 0) return 1;
@@ -913,25 +905,6 @@ static int central_projection_has_trusted_vertices(const Projection *proj,
     return owned.count == 6;
 }
 
-static int find_owned_segment_edge(const OwnedSuperCycle *owned,
-                                   const Projection *projection,
-                                   Coord a,
-                                   Coord b) {
-    for (int c = 0; c < projection->poly.cycle_count; c++) {
-        const Cycle *cy = &projection->poly.cycles[c];
-        for (int i = 0; i < cy->n; i++) {
-            Coord u = cy->v[i];
-            Coord v = cy->v[(i + 1) % cy->n];
-            if ((coord_same(u, a) && coord_same(v, b)) ||
-                (coord_same(u, b) && coord_same(v, a))) {
-                if (c < MAX_CYCLES && i < MAX_VERTS) return owned->edge_for_segment[c][i];
-                return -1;
-            }
-        }
-    }
-    return -1;
-}
-
 static void make_owned_edge_token(const OwnedSuperCycle *owned,
                                   int sign,
                                   int edge_index,
@@ -946,7 +919,44 @@ static void make_owned_edge_token(const OwnedSuperCycle *owned,
     snprintf(out, cap, "%ce(v%d,v%d)", sign >= 0 ? '+' : '-', a->first, b->last);
 }
 
-static void collect_projection_edge_rules(const Projection *proj,
+
+static int build_owned_edge_path_with_tile(const Tile *tile,
+                                           const Projection *projection,
+                                           const OwnedSuperCycle *owned,
+                                           int edge_index,
+                                           EdgePath *path) {
+    if (!projection || !owned || !path) return 0;
+    if (projection->poly.cycle_count != 1) return 0;
+    if (edge_index < 0 || edge_index >= owned->count) return 0;
+    const Cycle *cy = &projection->poly.cycles[0];
+    int start = owned->v[edge_index].pos;
+    int end = owned->v[(edge_index + 1) % owned->count].pos;
+    int i = start;
+    int guard = 0;
+    path->n = 0;
+    while (guard++ <= cy->n) {
+        if (path->n >= MAX_VERTS + 1) return 0;
+        path->p[path->n++] = coord_xy(tile, cy->v[i]);
+        if (i == end) return path->n >= 2;
+        i = (i + 1) % cy->n;
+    }
+    return 0;
+}
+
+static int edge_paths_opposite_match(const EdgePath *a, const EdgePath *b) {
+    if (!a || !b || a->n != b->n || a->n < 2) return 0;
+    DPoint abase = a->p[0];
+    DPoint bbase = b->p[b->n - 1];
+    for (int i = 0; i < a->n; i++) {
+        DPoint da = dpoint_sub(a->p[i], abase);
+        DPoint db = dpoint_sub(b->p[b->n - 1 - i], bbase);
+        if (!dpoint_close(da, db)) return 0;
+    }
+    return 1;
+}
+
+static void collect_projection_edge_rules(const Tile *tile,
+                                          const Projection *proj,
                                           int proj_count,
                                           const HiddenCluster *clusters,
                                           int cluster_count,
@@ -958,56 +968,64 @@ static void collect_projection_edge_rules(const Projection *proj,
 
     OwnedSuperCycle central_owned;
     if (!build_owned_super_cycle(&proj[0], clusters, cluster_count, &central_owned)) return;
-    const Poly *central = &proj[0].poly;
-    if (detail_fp) fprintf(detail_fp, "  edge_observations:");
+    if (detail_fp) fprintf(detail_fp, "  geometric_edge_observations:");
+
+    if (central_owned.count <= 0 || central_owned.count > RL4_MAX_CLUSTERS) return;
+
+    EdgePath *central_paths = calloc((size_t)central_owned.count, sizeof(*central_paths));
+    int *have_central = calloc((size_t)central_owned.count, sizeof(*have_central));
+    if (!central_paths || !have_central) {
+        free(central_paths);
+        free(have_central);
+        return;
+    }
+
+    for (int cedge = 0; cedge < central_owned.count; cedge++) {
+        have_central[cedge] = build_owned_edge_path_with_tile(tile, &proj[0], &central_owned, cedge,
+                                                              &central_paths[cedge]);
+    }
 
     for (int p = 1; p < proj_count; p++) {
         OwnedSuperCycle adjacent_owned;
         if (!build_owned_super_cycle(&proj[p], clusters, cluster_count, &adjacent_owned)) continue;
-        const Poly *adjacent = &proj[p].poly;
-        int seen_c[ATTACH0_MAX_TILES];
-        int seen_a[ATTACH0_MAX_TILES];
-        int seen_count = 0;
+        if (adjacent_owned.count <= 0 || adjacent_owned.count > RL4_MAX_CLUSTERS) continue;
 
-        for (int c = 0; c < adjacent->cycle_count; c++) {
-            const Cycle *cy = &adjacent->cycles[c];
-            for (int i = 0; i < cy->n; i++) {
-                int j = (i + 1) % cy->n;
-                Coord a = cy->v[i];
-                Coord b = cy->v[j];
-                int ci = -1;
-                int cj = -1;
-                if (!find_matching_central_edge(central, a, b, &ci, &cj)) continue;
+        EdgePath *adjacent_paths = calloc((size_t)adjacent_owned.count, sizeof(*adjacent_paths));
+        int *have_adjacent = calloc((size_t)adjacent_owned.count, sizeof(*have_adjacent));
+        if (!adjacent_paths || !have_adjacent) {
+            free(adjacent_paths);
+            free(have_adjacent);
+            continue;
+        }
 
-                int central_edge = find_owned_segment_edge(&central_owned, &proj[0], a, b);
-                int adjacent_edge = find_owned_segment_edge(&adjacent_owned, &proj[p], a, b);
-                if (central_edge < 0 || adjacent_edge < 0) continue;
-                int already_seen = 0;
-                for (int sp = 0; sp < seen_count; sp++) {
-                    if (seen_c[sp] == central_edge && seen_a[sp] == adjacent_edge) {
-                        already_seen = 1;
-                        break;
-                    }
-                }
-                if (already_seen) continue;
-                if (seen_count < ATTACH0_MAX_TILES) {
-                    seen_c[seen_count] = central_edge;
-                    seen_a[seen_count] = adjacent_edge;
-                    seen_count++;
-                }
+        for (int aedge = 0; aedge < adjacent_owned.count; aedge++) {
+            have_adjacent[aedge] = build_owned_edge_path_with_tile(tile, &proj[p], &adjacent_owned, aedge,
+                                                                   &adjacent_paths[aedge]);
+        }
+
+        for (int cedge = 0; cedge < central_owned.count; cedge++) {
+            if (!have_central[cedge]) continue;
+            for (int aedge = 0; aedge < adjacent_owned.count; aedge++) {
+                if (!have_adjacent[aedge]) continue;
+                if (!edge_paths_opposite_match(&central_paths[cedge], &adjacent_paths[aedge])) continue;
 
                 char lhs[256];
                 char rhs[256];
-                make_owned_edge_token(&central_owned, +1, central_edge, lhs, sizeof(lhs));
-                make_owned_edge_token(&adjacent_owned, -1, adjacent_edge, rhs, sizeof(rhs));
+                make_owned_edge_token(&central_owned, +1, cedge, lhs, sizeof(lhs));
+                make_owned_edge_token(&adjacent_owned, -1, aedge, rhs, sizeof(rhs));
                 add_edge_rule_pair(rules_io, rule_count, rule_cap, lhs, rhs);
                 if (detail_fp) {
                     fprintf(detail_fp, " t%d:c%d/a%d:%s=%s", proj[p].tile_index,
-                            central_edge, adjacent_edge, lhs, rhs);
+                            cedge, aedge, lhs, rhs);
                 }
             }
         }
+
+        free(adjacent_paths);
+        free(have_adjacent);
     }
+    free(central_paths);
+    free(have_central);
     if (detail_fp) fputc('\n', detail_fp);
 }
 
@@ -1170,7 +1188,7 @@ int main(int argc, char **argv) {
             row.clusters = cluster_count;
             snprintf(row.key, sizeof(row.key), "%s", hex_key);
             model_row_add(&rows, &row_count, &row_cap, &row);
-            collect_projection_edge_rules(proj, proj_count, clusters, cluster_count,
+            collect_projection_edge_rules(&ctx.tile, proj, proj_count, clusters, cluster_count,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, NULL);
         } else {
@@ -1179,7 +1197,7 @@ int main(int argc, char **argv) {
             if (opt.verbose) {
                 print_hex_model(stderr, emitted, ri + 1, clusters, cluster_count);
             }
-            collect_projection_edge_rules(proj, proj_count, clusters, cluster_count,
+            collect_projection_edge_rules(&ctx.tile, proj, proj_count, clusters, cluster_count,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, opt.verbose ? stderr : NULL);
         }

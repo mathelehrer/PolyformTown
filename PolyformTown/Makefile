@@ -22,7 +22,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_supertile_candidates \
-	rl5_hexagons rl5_supertile_hexagons supertile_depict \
+	rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -41,7 +41,7 @@ all: tools
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_supertile_candidates \
-	rl5_hexagons rl5_supertile_hexagons supertile_depict \
+	rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -58,7 +58,7 @@ $(BIN):
 clean:
 	$(call announce,clean compiled artifacts)
 	@rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
+		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl5/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
@@ -164,12 +164,9 @@ rl4_supertile_candidates: $(BIN)/rl4_supertile_candidates
 $(BIN)/rl4_supertile_candidates: $(SRC)/rl4/supertile_candidates.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/supertile_candidates.o
 
-# RL5 equivalence/index refinement is intentionally not implemented yet.
-# Keep this target out of `tools` and `boot`; wire it to a real source once the
-# final eliminations/index-map stage is specified.
-rl5_refine:
-	@echo "rl5_refine is not implemented yet" >&2
-	@exit 1
+rl5_refine: $(BIN)/rl5_refine
+$(BIN)/rl5_refine: $(SRC)/rl5/refine5.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/refine5.o
 
 RL4_RL1_FILTERED ?= data/rl4/rl1_filtered.dat
 RL4_RL3_FILTERED ?= data/rl4/rl3_filtered.dat
@@ -206,7 +203,7 @@ rl5_generate: rl5_hexagons rl5_supertile_hexagons
 
 rl5_refine_data: rl5_generate rl5_refine
 	@mkdir -p data/rl5
-	@$(BIN)/rl5_refine $(RL5_HEXAGONS_DATA) $(RL5_SUPERTILE_HEXAGONS_DATA) $(RL5_OVERLAP_HEXAGONS_DATA) > data/rl5/equivalence_candidates.dat
+	@$(BIN)/rl5_refine $(RL5_HEXAGONS_DATA) $(RL5_SUPERTILE_HEXAGONS_DATA) > data/rl5/equivalence_candidates.dat
 	@echo data/rl5/equivalence_candidates.dat
 
 
