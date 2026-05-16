@@ -428,7 +428,7 @@ rl3_survivors_svg: rl1_depict imgtable
 	@echo $(RL3_SURVIVORS_SVG)
 
 SUPERTILE_DEPICT_DATA ?= data/rl4/rl3_filtered.dat
-SUPERTILE_HEX_MODELS_SUPERTILE ?= $(RL4_SUPERTILE)
+SUPERTILE_HEX_MODELS_SUPERTILE ?= preferences/focus.supertile
 SUPERTILE_HEX_MODELS_SVG ?= img/rl4_refine.svg
 SUPERTILE_SVG ?= img/supertile.svg
 OVERLAP_SUPERTILE_SVG ?= img/overlap_supertile.svg
@@ -450,31 +450,23 @@ supertile_hex_models_svg: supertile_depict imgtable
 		$(BIN)/imgtable > $(SUPERTILE_HEX_MODELS_SVG)
 	@echo $(SUPERTILE_HEX_MODELS_SVG)
 
-supertile_svg: supertile_depict imgtable
-	@test -s $(SUPERTILE_DEPICT_DATA) || { \
-		echo "missing $(SUPERTILE_DEPICT_DATA); run: make boot" >&2; \
-		exit 1; \
-	}
+supertile_svg: rl1_depict imgtable
 	@test -s preferences/focus.supertile || { \
 		echo "missing preferences/focus.supertile" >&2; \
 		exit 1; \
 	}
 	@mkdir -p $(dir $(SUPERTILE_SVG))
-	@$(BIN)/supertile_depict preferences/focus.tile $(SUPERTILE_DEPICT_DATA) preferences/focus.supertile | \
+	@$(BIN)/rl1_depict preferences/focus.tile preferences/focus.supertile --grouped | \
 		$(BIN)/imgtable > $(SUPERTILE_SVG)
 	@echo $(SUPERTILE_SVG)
 
-overlap_supertile_svg: supertile_depict imgtable
-	@test -s $(SUPERTILE_DEPICT_DATA) || { \
-		echo "missing $(SUPERTILE_DEPICT_DATA); run: make boot" >&2; \
-		exit 1; \
-	}
+overlap_supertile_svg: rl1_depict imgtable
 	@test -s preferences/overlap.supertile || { \
 		echo "missing preferences/overlap.supertile" >&2; \
 		exit 1; \
 	}
 	@mkdir -p $(dir $(OVERLAP_SUPERTILE_SVG))
-	@$(BIN)/supertile_depict preferences/focus.tile $(SUPERTILE_DEPICT_DATA) preferences/overlap.supertile | \
+	@$(BIN)/rl1_depict preferences/focus.tile preferences/overlap.supertile --grouped | \
 		$(BIN)/imgtable > $(OVERLAP_SUPERTILE_SVG)
 	@echo $(OVERLAP_SUPERTILE_SVG)
 

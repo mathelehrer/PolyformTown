@@ -42,6 +42,10 @@ typedef struct {
     int hex[MAX_VERTS + 2];
 } HexItem;
 
+#define HEX_LABEL_A (-1001)
+#define HEX_LABEL_B (-1002)
+
+typedef struct { int n; int v[RL0_FM_MAX_ITEMS]; } NormFigure;
 typedef struct { int sign; int x; int y; } SignedEdge;
 typedef struct { SignedEdge a; SignedEdge b; } EdgeRule;
 typedef struct { SignedEdge token; int parent; } EdgeNode;
@@ -134,53 +138,139 @@ static int parse_pi_figure_cell(const char *cell, PIFigure *fig){
     return fig->n > 0;
 }
 
-static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
-    int neg_edge[MAX_VERTS];
-    h->hex_n = 0;
-    for(int k=0;k<MAX_VERTS;k++) neg_edge[k] = 0;
-    for(int k=0;k<h->fig_count;k++){
-        PIFigure *A = &h->fig[k];
-        PIFigure *B = &h->fig[(k + 1) % h->fig_count];
-        if(A->n < 2 || B->n < 2) continue;
-        PI left = B->pi[1];
-        PI right = A->pi[A->n - 1];
-        if(left.p == -1 && right.p == -1) neg_edge[k] = 1;
-    }
-    for(int k=0;k<h->fig_count;k++){
-        PIFigure *A = &h->fig[k];
-        h->hex[h->hex_n++] = A->pi[0].i;
-        if(h->fig_count == 5 && neg_edge[k]) h->hex[h->hex_n++] = -1;
-    }
-    for(int k=0;k<h->fig_count;k++){
-        PIFigure *A = &h->fig[k];
-        PIFigure *B = &h->fig[(k + 1) % h->fig_count];
-        if(A->n < 2 || B->n < 2) continue;
-        int x = A->pi[0].i;
-        int y = B->pi[0].i;
-        PI left = B->pi[1];
-        PI right = A->pi[A->n - 1];
-        int a = left.i;
-        int b = right.i;
-        int neg = (left.p == -1 && right.p == -1);
-        if(neg){
-            a = B->pi[B->n - 2].i;
-            b = A->pi[1].i;
+static int hex_label_from_negative(int idx){
+    if(idx == 7) return HEX_LABEL_A;
+    if(idx == 1) return HEX_LABEL_B;
+    return idx;
+}
+
+static int split_label_for_edge(int x, int y){
+    /* These are the two geometrically drawn split hexagon edges.
+       The label placement is independent of the exposed negative marker
+       used by lookup normalization. */
+    if(x == 7 && y == 11) return HEX_LABEL_A;
+    if(x == 1 && y == 5) return HEX_LABEL_B;
+    return 0;
+}
+
+static int normalize_dominant_figure(const PIFigure *fig, NormFigure *out){
+    int neg_pos = -1;
+    int neg_count = 0;
+    out->n = 0;
+    if(fig->n != 3 && fig->n != 4) return 0;
+
+    for(int i=0;i<fig->n;i++){
+        if(fig->pi[i].p < 0){
+            neg_pos = i;
+            neg_count++;
         }
-        if(h->fig_count == 5 && neg){
-            if(*rule_count + 2 < MAX_EDGE_RULES){
-                rules[*rule_count].a = (SignedEdge){+1, x, -1};
-                rules[*rule_count].b = (SignedEdge){-1, a, -1};
-                (*rule_count)++;
-                rules[*rule_count].a = (SignedEdge){+1, -1, y};
-                rules[*rule_count].b = (SignedEdge){-1, -1, b};
-                (*rule_count)++;
+    }
+    if(neg_count > 1) return 0;
+
+    if(fig->n == 4){
+        for(int i=0;i<fig->n;i++){
+            if(fig->pi[i].p < 0) continue;
+            if(out->n >= 3) return 0;
+            out->v[out->n++] = fig->pi[i].i;
+        }
+        return out->n == 3;
+    }
+
+    if(neg_count == 1){
+        int repl = hex_label_from_negative(fig->pi[neg_pos].i);
+        if(repl != HEX_LABEL_A && repl != HEX_LABEL_B) return 0;
+        out->v[out->n++] = repl;
+        for(int step=1; step<fig->n; step++){
+            int i = (neg_pos + step) % fig->n;
+            if(fig->pi[i].p < 0) return 0;
+            out->v[out->n++] = fig->pi[i].i;
+        }
+        return out->n == 3;
+    }
+
+    for(int i=0;i<fig->n;i++){
+        if(fig->pi[i].p != 1) return 0;
+        out->v[out->n++] = fig->pi[i].i;
+    }
+    return out->n == 3;
+}
+
+static void synthetic_norm_figure(int label, NormFigure *out){
+    out->n = 3;
+    out->v[0] = label;
+    if(label == HEX_LABEL_A){
+        out->v[1] = 1;
+        out->v[2] = 3;
+    } else {
+        out->v[1] = 7;
+        out->v[2] = 5;
+    }
+}
+
+static int norm_pos(const NormFigure *f, int label){
+    for(int i=0;i<f->n;i++) if(f->v[i] == label) return i;
+    return -1;
+}
+
+static int norm_next(const NormFigure *f, int label, int *out){
+    int p = norm_pos(f, label);
+    if(p < 0 || f->n <= 0) return 0;
+    *out = f->v[(p + 1) % f->n];
+    return 1;
+}
+
+static int norm_prev(const NormFigure *f, int label, int *out){
+    int p = norm_pos(f, label);
+    if(p < 0 || f->n <= 0) return 0;
+    *out = f->v[(p + f->n - 1) % f->n];
+    return 1;
+}
+
+static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
+    int labels[MAX_VERTS + 2];
+    NormFigure norms[MAX_VERTS + 2];
+    int rn = 0;
+
+    h->hex_n = 0;
+    for(int k=0;k<h->fig_count;k++){
+        PIFigure *A = &h->fig[k];
+        PIFigure *B = &h->fig[(k + 1) % h->fig_count];
+        NormFigure nf;
+        int x, y, split = 0;
+        if(A->n < 1) continue;
+        x = A->pi[0].i;
+        labels[rn] = x;
+        if(!normalize_dominant_figure(A, &nf)) continue;
+        norms[rn] = nf;
+        rn++;
+        if(rn >= MAX_VERTS + 2) break;
+
+        if(h->fig_count == 5 && B->n > 0){
+            y = B->pi[0].i;
+            split = split_label_for_edge(x, y);
+            if(split){
+                labels[rn] = split;
+                synthetic_norm_figure(split, &norms[rn]);
+                rn++;
+                if(rn >= MAX_VERTS + 2) break;
             }
-        } else {
-            if(*rule_count + 1 < MAX_EDGE_RULES){
-                rules[*rule_count].a = (SignedEdge){+1, x, y};
-                rules[*rule_count].b = (SignedEdge){-1, a, b};
-                (*rule_count)++;
-            }
+        }
+    }
+
+    h->hex_n = rn;
+    for(int i=0;i<rn;i++) h->hex[i] = labels[i];
+
+    for(int i=0;i<rn;i++){
+        int j = (i + 1) % rn;
+        int x = labels[i];
+        int y = labels[j];
+        int a = 0, b = 0;
+        if(!norm_next(&norms[j], y, &a)) continue;
+        if(!norm_prev(&norms[i], x, &b)) continue;
+        if(*rule_count + 1 < MAX_EDGE_RULES){
+            rules[*rule_count].a = (SignedEdge){+1, x, y};
+            rules[*rule_count].b = (SignedEdge){-1, a, b};
+            (*rule_count)++;
         }
     }
 }
@@ -239,8 +329,18 @@ static void edge_union(EdgeNode *nodes, int a, int b){
     if(ra != rb) nodes[rb].parent = ra;
 }
 
+static void print_label(int x){
+    if(x == HEX_LABEL_A) printf("a");
+    else if(x == HEX_LABEL_B) printf("b");
+    else printf("%d", x);
+}
+
 static void print_signed_edge(SignedEdge e){
-    printf("%ce(%d,%d)", e.sign >= 0 ? '+' : '-', e.x, e.y);
+    printf("%ce(", e.sign >= 0 ? '+' : '-');
+    print_label(e.x);
+    printf(",");
+    print_label(e.y);
+    printf(")");
 }
 
 static void print_unique_hexagons(const HexItem *items, int item_count){
@@ -252,7 +352,7 @@ static void print_unique_hexagons(const HexItem *items, int item_count){
         printf("  ");
         for(int k=0;k<items[i].hex_n;k++){
             if(k) printf(" ");
-            printf("%d", items[i].hex[k]);
+            print_label(items[i].hex[k]);
         }
         printf("  # records");
         for(int j=i;j<item_count;j++){
@@ -415,7 +515,7 @@ int main(int argc,char **argv){
 
     printf("\n#\n");
     printf("# Extraction to canonical vertex-label set\n");
-    printf("#     fixed with -1 hack\n");
+    printf("#     fixed with symbolic a/b exposed vertices and normalized lookup\n");
     printf("#     item labels are original record indices from data/rl1/completions.dat\n");
     printf("#\n\n");
 
@@ -431,7 +531,7 @@ int main(int argc,char **argv){
         for(int i=0;i<hex_item_count;i++){
             if(hex_items[i].group != g + 1) continue;
             printf("  %d:", hex_items[i].record);
-            for(int k=0;k<hex_items[i].hex_n;k++) printf(" %d", hex_items[i].hex[k]);
+            for(int k=0;k<hex_items[i].hex_n;k++){ printf(" "); print_label(hex_items[i].hex[k]); }
             printf("\n");
         }
         printf("\n");
