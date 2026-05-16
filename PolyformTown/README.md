@@ -484,3 +484,134 @@ found by sifting raw data generated on a personal computer.
 Future directions include memory and performance refinement as well as
 analysis of runlevels and their associated constellations. Proofs of
 interesting hat properties are close within reach.
+
+## RL4/RL5 hexagon workflow
+
+`make boot` rebuilds the runlevel data and, during `boot_rl4`, writes both
+supertile preference candidates:
+
+```bash
+make boot
+```
+
+The default smaller candidate is:
+
+```text
+preferences/focus.supertile
+```
+
+The maximal overlap candidate is:
+
+```text
+preferences/overlap.supertile
+```
+
+Regenerate RL4 hexagon analysis directly with:
+
+```bash
+make rl4_refine_data
+make rl4_refine_svg
+```
+
+Generate the RL5 hexagon data products with both supertile candidates:
+
+```bash
+make rl5_generate
+```
+
+This writes:
+
+```text
+data/rl5/hexagons.dat
+data/rl5/supertile_hexagons.dat
+data/rl5/overlap_supertile_hexagons.dat
+```
+
+Run the current agnostic equivalence scaffold with:
+
+```bash
+make rl5_refine_data
+```
+
+This writes:
+
+```text
+data/rl5/equivalence_candidates.dat
+```
+
+The RL5 equivalence scaffold is intentionally independent of any external
+comparison table.  Its minimum future acceptance criterion is that every item in
+the smaller hexagon set has at least one image in the larger set; extra items in
+the larger set are treated as unknown eliminations until proven otherwise.
+
+
+## Boot and RL4/RL5 hexagon workflow
+
+The normal deterministic boot now runs through RL5:
+
+```bash
+make boot
+```
+
+This purges generated `data/rl*/*`, regenerates RL0 through RL4, writes the
+RL4 supertile candidates, and generates RL5 hexagon-analysis data. The RL5
+data products are:
+
+```text
+data/rl5/hexagons.dat
+data/rl5/supertile_hexagons.dat
+data/rl5/overlap_supertile_hexagons.dat
+```
+
+The RL4 boot writes two supertile preference files:
+
+```text
+preferences/focus.supertile    # smaller default candidate
+preferences/overlap.supertile  # maximal / overlap candidate
+```
+
+The default RL4/RL5 supertile extractor uses `preferences/focus.supertile`.
+To run the same extraction with the maximal candidate, override the supertile:
+
+```bash
+make rl4_supertile_hexagons_data \
+  RL4_SUPERTILE=preferences/overlap.supertile \
+  RL4_SUPERTILE_HEXAGONS_DATA=data/rl4/overlap_supertile_hexagons.dat
+```
+
+The RL3 refinement depth defaults to `1`, which is the fast boot setting. To
+try the deeper RL3 elimination pass without editing the Makefile, override it
+during boot:
+
+```bash
+make boot RL3_REFINE_DEPTH=2
+```
+
+or run just the RL3 deletion step directly:
+
+```bash
+./bin/rl1_refine \
+  --input data/rl3/completions.dat \
+  --output data/rl3/deletions.dat \
+  --depth 2
+make boot_rl4
+make boot_rl5
+```
+
+For a visual check of the default supertile extraction, run:
+
+```bash
+make rl4_refine_svg
+```
+
+For RL5 equivalence-map scaffolding, run:
+
+```bash
+make rl5_refine_data
+less data/rl5/equivalence_candidates.dat
+```
+
+The current RL5 refine stage is intentionally agnostic: it does not encode
+external comparison data. Its first criterion is that every item in the smaller
+hexagon system should have at least one image in the larger system; extra items
+in the larger system are treated as unknown eliminations.

@@ -185,6 +185,19 @@ static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
     }
 }
 
+static void canonicalize_hex_cycle(HexItem *h){
+    if(h->hex_n <= 1) return;
+    int best = -1;
+    for(int i=0;i<h->hex_n;i++){
+        if(h->hex[i] < 0) continue;
+        if(best < 0 || h->hex[i] < h->hex[best]) best = i;
+    }
+    if(best <= 0) return;
+    int tmp[MAX_VERTS + 2];
+    for(int i=0;i<h->hex_n;i++) tmp[i] = h->hex[(best + i) % h->hex_n];
+    for(int i=0;i<h->hex_n;i++) h->hex[i] = tmp[i];
+}
+
 static int hex_same(const HexItem *a, const HexItem *b){
     if(a->hex_n != b->hex_n) return 0;
     for(int i=0;i<a->hex_n;i++) if(a->hex[i] != b->hex[i]) return 0;
@@ -393,6 +406,7 @@ int main(int argc,char **argv){
                     if(parse_pi_figure_cell(seq.cell[pos], &hi->fig[hi->fig_count])) hi->fig_count++;
                 }
                 derive_hex_and_rules(hi, edge_rules, &edge_rule_count);
+                canonicalize_hex_cycle(hi);
             }
         }
         if(!emitted) printf("\n");
