@@ -49,8 +49,10 @@ typedef struct {
 } HiddenCluster;
 
 typedef struct {
-    char lhs[256];
-    char rhs[256];
+    char lhs[512];
+    char rhs[512];
+    char hash[128];
+    int record;
 } EdgeRulePair;
 
 
@@ -58,14 +60,6 @@ typedef struct {
     int n;
     DPoint p[MAX_VERTS + 1];
 } EdgePath;
-
-static int dpoint_close(DPoint a, DPoint b) {
-    return fabs(a.x - b.x) < 1e-6 && fabs(a.y - b.y) < 1e-6;
-}
-
-static DPoint dpoint_sub(DPoint a, DPoint b) {
-    return (DPoint){a.x - b.x, a.y - b.y};
-}
 
 #define RL4_MAX_HIDDEN (MAX_VERTS * MAX_CYCLES)
 #define RL4_MAX_CLUSTERS RL4_MAX_HIDDEN
@@ -781,21 +775,87 @@ static void print_hex_model(FILE *fp,
 
 
 
-static int edge_rule_pair_seen(const EdgeRulePair *rules, int count, const char *lhs, const char *rhs) {
-    for (int i = 0; i < count; i++) {
-        if (strcmp(rules[i].lhs, lhs) == 0 && strcmp(rules[i].rhs, rhs) == 0) return 1;
-    }
-    return 0;
+static int parse_edge_token0(const char *tok, int *sign, char *x, size_t xcap, char *y, size_t ycap) {
+    const char *p = tok;
+    const char *comma;
+    const char *close;
+    size_t xn, yn;
+    if (!p || (*p != '+' && *p != '-')) return 0;
+    *sign = (*p == '+') ? 1 : -1;
+    p++;
+    if (p[0] != 'e' || p[1] != '(') return 0;
+    p += 2;
+    comma = strchr(p, ',');
+    if (!comma) return 0;
+    close = strchr(comma + 1, ')');
+    if (!close || close[1] != '\0') return 0;
+    xn = (size_t)(comma - p);
+    yn = (size_t)(close - (comma + 1));
+    if (xn + 1 > xcap || yn + 1 > ycap) return 0;
+    memcpy(x, p, xn);
+    x[xn] = '\0';
+    memcpy(y, comma + 1, yn);
+    y[yn] = '\0';
+    return 1;
 }
+
+static void edge_token_with_sign0(const char *tok, int flip, char *out, size_t cap) {
+    int sign = 1;
+    char x[64];
+    char y[64];
+    if (!parse_edge_token0(tok, &sign, x, sizeof(x), y, sizeof(y))) {
+        snprintf(out, cap, "%s", tok ? tok : ".");
+        return;
+    }
+    if (flip) sign = -sign;
+    snprintf(out, cap, "%ce(%s,%s)", sign >= 0 ? '+' : '-', x, y);
+}
+
+static void join_rule_buf0(char *out, size_t cap, const char *lhs, const char *rhs) {
+    if (cap == 0) return;
+    out[0] = '\0';
+    strncat(out, lhs, cap - 1);
+    size_t n = strlen(out);
+    if (n < cap - 1) strncat(out, " = ", cap - 1 - n);
+    n = strlen(out);
+    if (n < cap - 1) strncat(out, rhs, cap - 1 - n);
+}
+
+static void edge_rule_pair_variant_to_buf0(const EdgeRulePair *r, int flip, int swap, char *out, size_t cap) {
+    char lhs[256];
+    char rhs[256];
+    edge_token_with_sign0(r->lhs, flip, lhs, sizeof(lhs));
+    edge_token_with_sign0(r->rhs, flip, rhs, sizeof(rhs));
+    if (swap) join_rule_buf0(out, cap, rhs, lhs);
+    else join_rule_buf0(out, cap, lhs, rhs);
+}
+
+static void canonical_edge_rule_pair_to_buf(const EdgeRulePair *r, char *out, size_t cap) {
+    char best[1024];
+    char cur[1024];
+    int have = 0;
+    for (int flip = 0; flip < 2; flip++) {
+        for (int swap = 0; swap < 2; swap++) {
+            edge_rule_pair_variant_to_buf0(r, flip, swap, cur, sizeof(cur));
+            if (!have || strcmp(cur, best) < 0) {
+                snprintf(best, sizeof(best), "%s", cur);
+                have = 1;
+            }
+        }
+    }
+    snprintf(out, cap, "%s", have ? best : "");
+}
+
 
 static int add_edge_rule_pair(EdgeRulePair **rules_io,
                               int *count_io,
                               int *cap_io,
                               const char *lhs,
-                              const char *rhs) {
-    if (edge_rule_pair_seen(*rules_io, *count_io, lhs, rhs)) return 1;
+                              const char *rhs,
+                              const char *hash,
+                              int record) {
     if (*count_io >= *cap_io) {
-        int next_cap = *cap_io == 0 ? 64 : *cap_io * 2;
+        int next_cap = *cap_io ? *cap_io * 2 : 128;
         EdgeRulePair *next = realloc(*rules_io, (size_t)next_cap * sizeof(*next));
         if (!next) return 0;
         *rules_io = next;
@@ -803,16 +863,10 @@ static int add_edge_rule_pair(EdgeRulePair **rules_io,
     }
     snprintf((*rules_io)[*count_io].lhs, sizeof((*rules_io)[*count_io].lhs), "%s", lhs);
     snprintf((*rules_io)[*count_io].rhs, sizeof((*rules_io)[*count_io].rhs), "%s", rhs);
+    snprintf((*rules_io)[*count_io].hash, sizeof((*rules_io)[*count_io].hash), "%s", hash ? hash : ".");
+    (*rules_io)[*count_io].record = record;
     (*count_io)++;
     return 1;
-}
-
-static int edge_rule_pair_cmp(const void *A, const void *B) {
-    const EdgeRulePair *a = (const EdgeRulePair *)A;
-    const EdgeRulePair *b = (const EdgeRulePair *)B;
-    int k = strcmp(a->lhs, b->lhs);
-    if (k) return k;
-    return strcmp(a->rhs, b->rhs);
 }
 
 typedef struct {
@@ -943,23 +997,14 @@ static int build_owned_edge_path_with_tile(const Tile *tile,
     return 0;
 }
 
-static int edge_paths_opposite_match(const EdgePath *a, const EdgePath *b) {
-    if (!a || !b || a->n != b->n || a->n < 2) return 0;
-    DPoint abase = a->p[0];
-    DPoint bbase = b->p[b->n - 1];
-    for (int i = 0; i < a->n; i++) {
-        DPoint da = dpoint_sub(a->p[i], abase);
-        DPoint db = dpoint_sub(b->p[b->n - 1 - i], bbase);
-        if (!dpoint_close(da, db)) return 0;
-    }
-    return 1;
-}
-
 static void collect_projection_edge_rules(const Tile *tile,
                                           const Projection *proj,
                                           int proj_count,
                                           const HiddenCluster *clusters,
                                           int cluster_count,
+                                          int source_record,
+                                          int parent_id,
+                                          int unique_id,
                                           EdgeRulePair **rules_io,
                                           int *rule_count,
                                           int *rule_cap,
@@ -1007,16 +1052,22 @@ static void collect_projection_edge_rules(const Tile *tile,
             if (!have_central[cedge]) continue;
             for (int aedge = 0; aedge < adjacent_owned.count; aedge++) {
                 if (!have_adjacent[aedge]) continue;
-                if (!edge_paths_opposite_match(&central_paths[cedge], &adjacent_paths[aedge])) continue;
+                const OwnedSuperVertex *ca = &central_owned.v[cedge];
+                const OwnedSuperVertex *cb = &central_owned.v[(cedge + 1) % central_owned.count];
+                const OwnedSuperVertex *aa = &adjacent_owned.v[aedge];
+                const OwnedSuperVertex *ab = &adjacent_owned.v[(aedge + 1) % adjacent_owned.count];
+                if (!(ca->cluster == ab->cluster && cb->cluster == aa->cluster)) continue;
 
                 char lhs[256];
                 char rhs[256];
                 make_owned_edge_token(&central_owned, +1, cedge, lhs, sizeof(lhs));
                 make_owned_edge_token(&adjacent_owned, -1, aedge, rhs, sizeof(rhs));
-                add_edge_rule_pair(rules_io, rule_count, rule_cap, lhs, rhs);
+                char hash[128];
+                snprintf(hash, sizeof(hash), "rl5:%d:p%d:u%d:e%d:t%d:a%d",
+                         source_record, parent_id, unique_id, cedge, proj[p].tile_index, aedge);
+                add_edge_rule_pair(rules_io, rule_count, rule_cap, lhs, rhs, hash, source_record);
                 if (detail_fp) {
-                    fprintf(detail_fp, " t%d:c%d/a%d:%s=%s", proj[p].tile_index,
-                            cedge, aedge, lhs, rhs);
+                    fprintf(detail_fp, " %s:%s=%s", hash, lhs, rhs);
                 }
             }
         }
@@ -1029,11 +1080,75 @@ static void collect_projection_edge_rules(const Tile *tile,
     if (detail_fp) fputc('\n', detail_fp);
 }
 
-static void print_edge_rules(FILE *fp, EdgeRulePair *rules, int rule_count) {
-    qsort(rules, (size_t)rule_count, sizeof(rules[0]), edge_rule_pair_cmp);
+static int int_cmp0(const void *A, const void *B) {
+    int a = *(const int *)A;
+    int b = *(const int *)B;
+    return (a > b) - (a < b);
+}
+
+static int record_seen0(const int *records, int count, int record) {
+    for (int i = 0; i < count; i++) if (records[i] == record) return 1;
+    return 0;
+}
+
+typedef struct {
+    char row[1024];
+    int *records;
+    int record_count;
+    int obs;
+} CanonEdgeRulePairRow;
+
+static int canon_edge_rule_pair_row_cmp(const void *A, const void *B) {
+    const CanonEdgeRulePairRow *a = (const CanonEdgeRulePairRow *)A;
+    const CanonEdgeRulePairRow *b = (const CanonEdgeRulePairRow *)B;
+    return strcmp(a->row, b->row);
+}
+
+static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, int surround_count) {
+    CanonEdgeRulePairRow *rows = calloc((size_t)(rule_count > 0 ? rule_count : 1), sizeof(*rows));
+    int row_count = 0;
+    int width = 0;
+    if (!rows) return;
     for (int i = 0; i < rule_count; i++) {
-        fprintf(fp, "  %s = %s\n", rules[i].lhs, rules[i].rhs);
+        char row[1024];
+        int found = -1;
+        canonical_edge_rule_pair_to_buf(&rules[i], row, sizeof(row));
+        for (int j = 0; j < row_count; j++) {
+            if (strcmp(rows[j].row, row) == 0) { found = j; break; }
+        }
+        if (found < 0) {
+            found = row_count++;
+            snprintf(rows[found].row, sizeof(rows[found].row), "%s", row);
+            rows[found].records = calloc((size_t)(rule_count > 0 ? rule_count : 1), sizeof(*rows[found].records));
+            rows[found].record_count = 0;
+            rows[found].obs = 0;
+            if (!rows[found].records) {
+                for (int k = 0; k < row_count; k++) free(rows[k].records);
+                free(rows);
+                return;
+            }
+        }
+        rows[found].obs++;
+        if (!record_seen0(rows[found].records, rows[found].record_count, rules[i].record))
+            rows[found].records[rows[found].record_count++] = rules[i].record;
     }
+    qsort(rows, (size_t)row_count, sizeof(rows[0]), canon_edge_rule_pair_row_cmp);
+    for (int i = 0; i < row_count; i++) {
+        int len = (int)strlen(rows[i].row);
+        if (len > width) width = len;
+        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), int_cmp0);
+    }
+    for (int i = 0; i < row_count; i++) {
+        fprintf(fp, "  %-*s  # records", width, rows[i].row);
+        for (int k = 0; k < rows[i].record_count; k++) fprintf(fp, " %d", rows[i].records[k]);
+        if (rows[i].obs != rows[i].record_count) fprintf(fp, " ; observations %d", rows[i].obs);
+        fputc('\n', fp);
+    }
+    fprintf(fp, "  # observations=%d expected=%d unique_rows=%d status=%s\n",
+            rule_count, 6 * surround_count, row_count,
+            rule_count == 6 * surround_count ? "ok" : "count_mismatch");
+    for (int i = 0; i < row_count; i++) free(rows[i].records);
+    free(rows);
 }
 
 
@@ -1189,6 +1304,7 @@ int main(int argc, char **argv) {
             snprintf(row.key, sizeof(row.key), "%s", hex_key);
             model_row_add(&rows, &row_count, &row_cap, &row);
             collect_projection_edge_rules(&ctx.tile, proj, proj_count, clusters, cluster_count,
+                                          emitted, parent_id, unique_id,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, NULL);
         } else {
@@ -1198,6 +1314,7 @@ int main(int argc, char **argv) {
                 print_hex_model(stderr, emitted, ri + 1, clusters, cluster_count);
             }
             collect_projection_edge_rules(&ctx.tile, proj, proj_count, clusters, cluster_count,
+                                          emitted, parent_id, unique_id,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, opt.verbose ? stderr : NULL);
         }
@@ -1220,9 +1337,10 @@ int main(int argc, char **argv) {
         printf("  trusted_central_vertex_records=%d\n", trusted_vertex_records);
         printf("  status=%s\n", emitted > 0 && trusted_vertex_records == emitted ? "trusted_central_cycles" : "needs_review");
 
-        printf("\nDownmapped Super Hexagon Edge Rules\n");
-        print_edge_rules(stdout, edge_rules, edge_rule_count);
-        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_rules=%d\n",
+        printf("\nDownmapped Super Hexagon Edge Matches\n");
+        printf("# canonical rows; provenance lists source surround records\n");
+        print_edge_matches(stdout, edge_rules, edge_rule_count, emitted);
+        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_matches=%d\n",
                emitted, projected_total, hidden_total, unique_count, edge_rule_count);
     }
 

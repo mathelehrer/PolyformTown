@@ -47,7 +47,7 @@ typedef struct {
 
 typedef struct { int n; int v[RL0_FM_MAX_ITEMS]; } NormFigure;
 typedef struct { int sign; int x; int y; } SignedEdge;
-typedef struct { SignedEdge a; SignedEdge b; } EdgeRule;
+typedef struct { SignedEdge a; SignedEdge b; char hash[96]; int record; } EdgeRule;
 typedef struct { SignedEdge token; int parent; } EdgeNode;
 
 #define MAX_HEX_ITEMS 512
@@ -270,6 +270,9 @@ static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
         if(*rule_count + 1 < MAX_EDGE_RULES){
             rules[*rule_count].a = (SignedEdge){+1, x, y};
             rules[*rule_count].b = (SignedEdge){-1, a, b};
+            snprintf(rules[*rule_count].hash, sizeof(rules[*rule_count].hash),
+                     "rl1:%d:g%d:e%d", h->record, h->group, i);
+            rules[*rule_count].record = h->record;
             (*rule_count)++;
         }
     }
@@ -343,6 +346,62 @@ static void print_signed_edge(SignedEdge e){
     printf(")");
 }
 
+static void label_to_buf(int x, char *buf, size_t cap){
+    if(x == HEX_LABEL_A) snprintf(buf, cap, "a");
+    else if(x == HEX_LABEL_B) snprintf(buf, cap, "b");
+    else snprintf(buf, cap, "%d", x);
+}
+
+static void signed_edge_to_buf(SignedEdge e, char *buf, size_t cap){
+    char xb[32], yb[32];
+    label_to_buf(e.x, xb, sizeof(xb));
+    label_to_buf(e.y, yb, sizeof(yb));
+    snprintf(buf, cap, "%ce(%s,%s)", e.sign >= 0 ? '+' : '-', xb, yb);
+}
+
+static void join_rule_buf(char *buf, size_t cap, const char *lhs, const char *rhs){
+    if(cap == 0) return;
+    buf[0] = '\0';
+    strncat(buf, lhs, cap - 1);
+    size_t n = strlen(buf);
+    if(n < cap - 1) strncat(buf, " = ", cap - 1 - n);
+    n = strlen(buf);
+    if(n < cap - 1) strncat(buf, rhs, cap - 1 - n);
+}
+
+static void edge_rule_variant_to_buf(SignedEdge a, SignedEdge b, int flip, int swap, char *buf, size_t cap){
+    if(flip){
+        a.sign = -a.sign;
+        b.sign = -b.sign;
+    }
+    if(swap){
+        SignedEdge t = a;
+        a = b;
+        b = t;
+    }
+    char ta[96];
+    char tb[96];
+    signed_edge_to_buf(a, ta, sizeof(ta));
+    signed_edge_to_buf(b, tb, sizeof(tb));
+    join_rule_buf(buf, cap, ta, tb);
+}
+
+static void canonical_edge_rule_to_buf(SignedEdge a, SignedEdge b, char *buf, size_t cap){
+    char best[512];
+    char cur[512];
+    int have = 0;
+    for(int flip=0; flip<2; flip++){
+        for(int swap=0; swap<2; swap++){
+            edge_rule_variant_to_buf(a, b, flip, swap, cur, sizeof(cur));
+            if(!have || strcmp(cur, best) < 0){
+                snprintf(best, sizeof(best), "%s", cur);
+                have = 1;
+            }
+        }
+    }
+    snprintf(buf, cap, "%s", have ? best : "");
+}
+
 static void print_unique_hexagons(const HexItem *items, int item_count){
     int used[MAX_HEX_ITEMS];
     for(int i=0;i<item_count;i++) used[i]=0;
@@ -363,6 +422,77 @@ static void print_unique_hexagons(const HexItem *items, int item_count){
         }
         printf("\n");
     }
+}
+
+static int int_cmp0(const void *A, const void *B){
+    int a = *(const int *)A;
+    int b = *(const int *)B;
+    return (a > b) - (a < b);
+}
+
+static int record_seen(const int *records, int count, int record){
+    for(int i=0;i<count;i++) if(records[i] == record) return 1;
+    return 0;
+}
+
+typedef struct {
+    char row[512];
+    int *records;
+    int record_count;
+    int obs;
+} CanonEdgeRow;
+
+static int canon_edge_row_cmp(const void *A, const void *B){
+    const CanonEdgeRow *a = A;
+    const CanonEdgeRow *b = B;
+    return strcmp(a->row, b->row);
+}
+
+static void print_edge_matches(const EdgeRule *rules, int rule_count, int surround_count){
+    CanonEdgeRow *rows = calloc((size_t)(rule_count > 0 ? rule_count : 1), sizeof(*rows));
+    int row_count = 0;
+    int width = 0;
+    if(!rows) return;
+    for(int i=0;i<rule_count;i++){
+        char row[512];
+        int found = -1;
+        canonical_edge_rule_to_buf(rules[i].a, rules[i].b, row, sizeof(row));
+        for(int j=0;j<row_count;j++){
+            if(strcmp(rows[j].row, row) == 0){ found = j; break; }
+        }
+        if(found < 0){
+            found = row_count++;
+            snprintf(rows[found].row, sizeof(rows[found].row), "%s", row);
+            rows[found].records = calloc((size_t)(rule_count > 0 ? rule_count : 1), sizeof(*rows[found].records));
+            rows[found].record_count = 0;
+            rows[found].obs = 0;
+            if(!rows[found].records){
+                for(int k=0;k<row_count;k++) free(rows[k].records);
+                free(rows);
+                return;
+            }
+        }
+        rows[found].obs++;
+        if(!record_seen(rows[found].records, rows[found].record_count, rules[i].record))
+            rows[found].records[rows[found].record_count++] = rules[i].record;
+    }
+    qsort(rows, (size_t)row_count, sizeof(rows[0]), canon_edge_row_cmp);
+    for(int i=0;i<row_count;i++){
+        int len = (int)strlen(rows[i].row);
+        if(len > width) width = len;
+        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), int_cmp0);
+    }
+    for(int i=0;i<row_count;i++){
+        printf("  %-*s  # records", width, rows[i].row);
+        for(int k=0;k<rows[i].record_count;k++) printf(" %d", rows[i].records[k]);
+        if(rows[i].obs != rows[i].record_count) printf(" ; observations %d", rows[i].obs);
+        printf("\n");
+    }
+    printf("  # observations=%d expected=%d unique_rows=%d status=%s\n",
+           rule_count, 6 * surround_count, row_count,
+           rule_count == 6 * surround_count ? "ok" : "count_mismatch");
+    for(int i=0;i<row_count;i++) free(rows[i].records);
+    free(rows);
 }
 
 static void print_edge_classes(const EdgeRule *rules, int rule_count){
@@ -543,7 +673,13 @@ int main(int argc,char **argv){
     print_unique_hexagons(hex_items, hex_item_count);
 
     printf("\n#\n");
-    printf("# Edge Rules\n");
+    printf("# Edge Matches\n");
+    printf("#     canonical rows; provenance lists source surround records\n");
+    printf("#\n\n");
+    print_edge_matches(edge_rules, edge_rule_count, hex_item_count);
+
+    printf("\n#\n");
+    printf("# Edge Classes\n");
     printf("#\n\n");
     print_edge_classes(edge_rules, edge_rule_count);
 
