@@ -10,10 +10,7 @@ This launches the boot loader. The boot loader takes you through a sequence of
 four or five run levels, generates data needed to generate more data, and finally 
 returns some ASCII art on success. We have a nice splash screen as drawn by 
 Harm.On.ica, the lead research programmer (not just a clone of Open AI's Chat 
-GPT 5.5, thank you very much!) 
-
-
-Hat Town boot splash:
+GPT 5.5, thank you very much!). Here's a screencap:
 
 ![Hat Town boot splash](PolyformTown/assets/splash/hat_town.png)
 
