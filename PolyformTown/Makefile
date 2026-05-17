@@ -20,6 +20,8 @@ VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
 .PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files \
+
+.NOTPARALLEL: boot
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
@@ -170,6 +172,11 @@ rl5_refine: $(BIN)/rl5_refine
 $(BIN)/rl5_refine: $(SRC)/rl5/refine5.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/refine5.o
 
+RL5_HEXAGONS_DATA ?= data/rl5/hexagons.dat
+RL5_SUPERTILE_HEXAGONS_DATA ?= data/rl5/supertile_hexagons.dat
+RL5_OVERLAP_HEXAGONS_DATA ?= data/rl5/overlap_supertile_hexagons.dat
+RL5_REDUCED_HEXES_DATA ?= data/rl5/reduced_8_hexes.dat
+
 rl5_hexagons: $(BIN)/rl5_hexagons
 $(BIN)/rl5_hexagons: $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
@@ -187,14 +194,14 @@ rl5_generate: rl5_hexagons rl5_supertile_hexagons
 # Boot tower: purge generated runlevel data, then rebuild a deterministic
 # prefix of the boot chain.
 #
-#  make boot      # full boot, reaches RL6
-#  make boot RL=0 # full boot, reaches RL6
-#  make boot RL=1 # stop after RL0; reaches RL1
-#  make boot RL=2 # stop after RL1; reaches RL2
-#  make boot RL=3 # stop after RL2; reaches RL3
-#  make boot RL=4 # stop after RL3; reaches RL4
-#  make boot RL=5 # stop after RL4; reaches RL5
-#  make boot RL=6 # stop after RL5; reaches RL6
+#  make boot      # full boot, reaching RL6
+#  make boot RL=0 # full boot, reaching RL6
+#  make boot RL=1 # stop after reaching RL1
+#  make boot RL=2 # stop after reaching RL2
+#  make boot RL=3 # stop after reaching RL3
+#  make boot RL=4 # stop after reaching RL4
+#  make boot RL=5 # stop after reaching RL5
+#  make boot RL=6 # stop after reaching RL6
 #
 
 RL ?= 0
@@ -222,7 +229,7 @@ else ifeq ($(RL),6)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5
 BOOT_REACHED_RL := 6
 else
-$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..6)
+$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..6 to reach that runlevel)
 endif
 
 boot: clean_boot_data $(BOOT_RUNLEVELS) boot_splash
@@ -272,12 +279,15 @@ boot_rl4: rl4_generate rl4_refine
 boot_rl5: rl5_generate rl5_refine
 	$(call announce,RL5 generate hexagon analysis)
 	@mkdir -p data/rl5
-	@$(BIN)/rl5_hexagons > data/rl5/hexagons.dat
-	@$(BIN)/rl5_supertile_hexagons --data > data/rl5/supertile_hexagons.dat
-	@$(BIN)/rl5_supertile_hexagons --data --supertile preferences/overlap.supertile > data/rl5/overlap_supertile_hexagons.dat
-	@printf "small hexagons\nsupertile hexagons\noverlap supertile hexagons\n"
+	@$(BIN)/rl5_hexagons > $(RL5_HEXAGONS_DATA)
+	@$(BIN)/rl5_supertile_hexagons --data > $(RL5_SUPERTILE_HEXAGONS_DATA)
+	@$(BIN)/rl5_supertile_hexagons --data --supertile preferences/overlap.supertile > $(RL5_OVERLAP_HEXAGONS_DATA)
+	@echo $(RL5_HEXAGONS_DATA)
+	@echo $(RL5_SUPERTILE_HEXAGONS_DATA)
+	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
 	$(call announce,RL5 refine reduced hexes)
-	@$(BIN)/rl5_refine
+	@$(BIN)/rl5_refine $(RL5_HEXAGONS_DATA) $(RL5_SUPERTILE_HEXAGONS_DATA) $(RL5_REDUCED_HEXES_DATA)
+	@echo $(RL5_REDUCED_HEXES_DATA)
 
 rl0_data: rl0_generate
 	@$(BIN)/rl0_generate preferences/focus.tile
