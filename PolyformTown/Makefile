@@ -3,6 +3,8 @@ CC = $(Q)gcc
 CFLAGS = -O3 -Wall -Wextra -std=c11
 SRC = src
 BIN = bin
+SPLASH ?= assets/splash/hat_town.ans
+comma := ,
 
 define announce
 	@if [ -t 1 ]; then printf "\033[33m==> %s\033[0m\n" "$(1)"; else printf "==> %s\n" "$(1)"; fi
@@ -17,7 +19,7 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files \
+.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files \
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
@@ -185,13 +187,14 @@ rl5_generate: rl5_hexagons rl5_supertile_hexagons
 # Boot tower: purge generated runlevel data, then rebuild a deterministic
 # prefix of the boot chain.
 #
-#  make boot    # full boot, through RL5
-#  make boot RL=0 # full boot, through RL5
-#  make boot RL=1 # stop after RL0; do not start RL1 generation
-#  make boot RL=2 # stop after RL1; do not start RL2 generation
-#  make boot RL=3 # stop after RL2; do not start RL3 generation
-#  make boot RL=4 # stop after RL3; do not start RL4 generation
-#  make boot RL=5 # stop after RL4; do not start RL5 generation
+#  make boot      # full boot, reaches RL6
+#  make boot RL=0 # full boot, reaches RL6
+#  make boot RL=1 # stop after RL0; reaches RL1
+#  make boot RL=2 # stop after RL1; reaches RL2
+#  make boot RL=3 # stop after RL2; reaches RL3
+#  make boot RL=4 # stop after RL3; reaches RL4
+#  make boot RL=5 # stop after RL4; reaches RL5
+#  make boot RL=6 # stop after RL5; reaches RL6
 #
 
 RL ?= 0
@@ -199,21 +202,37 @@ RL3_REFINE_DEPTH ?= 1
 
 ifeq ($(RL),0)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5
+BOOT_REACHED_RL := 6
 else ifeq ($(RL),1)
 BOOT_RUNLEVELS := boot_rl0
+BOOT_REACHED_RL := 1
 else ifeq ($(RL),2)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1
+BOOT_REACHED_RL := 2
 else ifeq ($(RL),3)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2
+BOOT_REACHED_RL := 3
 else ifeq ($(RL),4)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3
+BOOT_REACHED_RL := 4
 else ifeq ($(RL),5)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4
+BOOT_REACHED_RL := 5
+else ifeq ($(RL),6)
+BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5
+BOOT_REACHED_RL := 6
 else
-$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..5 to stop before that runlevel)
+$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..6)
 endif
 
-boot: clean_boot_data $(BOOT_RUNLEVELS)
+boot: clean_boot_data $(BOOT_RUNLEVELS) boot_splash
+
+boot_splash:
+	$(call announce,boot successful$(comma) you've reached RL$(BOOT_REACHED_RL))
+	@cat $(SPLASH)
+
+splash:
+	@cat $(SPLASH)
 
 clean_boot_data:
 	$(call announce,purge data/rl*/*)
