@@ -1,7 +1,12 @@
 <h1>Instantiation</h1>
 
 If you're interested in visual data about the hat tiling, you've come to the 
-right place. In the PolyformTown/ directory type: 
+right place. Recently Harm.On.ica and I have laboriously searched through 
+mountains upon mountains of configuration data, finally obtaining some decent 
+results worth writing up. This is at least the second or third time these 
+calculations have been done, but it's still not entirely easy, even for us. 
+
+In the PolyformTown/ directory type: 
 
 ```bash
 make boot
