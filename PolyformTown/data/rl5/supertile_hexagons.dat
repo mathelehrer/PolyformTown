@@ -33,4 +33,213 @@ Downmapped Super Hexagon Edge Matches
   +e(v9,v21) = -e(v9,v21)    # records 26 27 28 29
   # observations=300 expected=300 unique_rows=14 status=ok
 
-Summary emitted=50 projected=350 hidden=300 unique=9 edge_matches=300
+#
+# Inner/Outer Edge Cycles
+#
+# inner and outer cycles are canonicalized by the same cyclic shift
+# each slot means inner_edge = -outer_edge
+#
+
+---[io:1]--- # records 11
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v31,v38), e(v15,v21), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:2]--- # records 46
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v31,v38), e(v35,v41), e(v38,v3), e(v38,v2), e(v10,v18)]
+
+---[io:3]--- # records 10
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v31,v38), e(v41,v5), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:4]--- # records 9
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v31,v38), e(v41,v5), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:5]--- # records 18
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v31,v38), e(v15,v21), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:6]--- # records 47
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v31,v38), e(v35,v41), e(v38,v3), e(v38,v2), e(v10,v18)]
+
+---[io:7]--- # records 17
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v31,v38), e(v41,v5), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:8]--- # records 16
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v31,v38), e(v41,v5), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:9]--- # records 36
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v31,v38), e(v15,v21), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:10]--- # records 49
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v31,v38), e(v35,v41), e(v38,v3), e(v9,v18), e(v26,v31)]
+
+---[io:11]--- # records 35
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v31,v38), e(v41,v5), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:12]--- # records 34
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v31,v38), e(v41,v5), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:13]--- # records 43
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v31,v38), e(v15,v21), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:14]--- # records 50
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v31,v38), e(v35,v41), e(v38,v3), e(v9,v18), e(v26,v31)]
+
+---[io:15]--- # records 42
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v31,v38), e(v41,v5), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:16]--- # records 41
+inner [e(v10,v18), e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v31,v38), e(v41,v5), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:17]--- # records 44
+inner [e(v10,v18), e(v18,v25), e(v25,v35), e(v35,v41), e(v41,v5), e(v5,v10)]
+outer [e(v18,v26), e(v31,v38), e(v3,v15), e(v25,v31), e(v25,v31), e(v26,v31)]
+
+---[io:18]--- # records 45
+inner [e(v10,v18), e(v18,v25), e(v25,v35), e(v35,v41), e(v41,v5), e(v5,v10)]
+outer [e(v2,v10), e(v31,v38), e(v3,v15), e(v25,v31), e(v25,v31), e(v26,v31)]
+
+---[io:19]--- # records 8
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v10,v18), e(v21,v26), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:20]--- # records 7
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v10,v18), e(v21,v26), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:21]--- # records 6
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v10,v18), e(v5,v10), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:22]--- # records 5
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v18,v26), e(v10,v18), e(v5,v10), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:23]--- # records 15
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v10,v18), e(v21,v26), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:24]--- # records 14
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v10,v18), e(v21,v26), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:25]--- # records 13
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v10,v18), e(v5,v10), e(v18,v25), e(v38,v2), e(v10,v18)]
+
+---[io:26]--- # records 12
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v10)]
+outer [e(v2,v10), e(v10,v18), e(v5,v10), e(v2,v9), e(v38,v2), e(v10,v18)]
+
+---[io:27]--- # records 33
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v10,v18), e(v21,v26), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:28]--- # records 32
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v10,v18), e(v21,v26), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:29]--- # records 31
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v10,v18), e(v5,v10), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:30]--- # records 30
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v18,v26), e(v10,v18), e(v5,v10), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:31]--- # records 40
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v10,v18), e(v21,v26), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:32]--- # records 39
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v10,v18), e(v21,v26), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:33]--- # records 38
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v10,v18), e(v5,v10), e(v18,v25), e(v9,v18), e(v26,v31)]
+
+---[io:34]--- # records 37
+inner [e(v10,v18), e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v5), e(v5,v10)]
+outer [e(v2,v10), e(v10,v18), e(v5,v10), e(v2,v9), e(v9,v18), e(v26,v31)]
+
+---[io:35]--- # records 4
+inner [e(v15,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v3), e(v3,v15)]
+outer [e(v25,v31), e(v26,v31), e(v21,v26), e(v18,v25), e(v31,v38), e(v25,v35)]
+
+---[io:36]--- # records 3
+inner [e(v15,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v3), e(v3,v15)]
+outer [e(v25,v31), e(v26,v31), e(v21,v26), e(v2,v9), e(v31,v38), e(v25,v35)]
+
+---[io:37]--- # records 2
+inner [e(v15,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v3), e(v3,v15)]
+outer [e(v25,v31), e(v26,v31), e(v5,v10), e(v18,v25), e(v31,v38), e(v25,v35)]
+
+---[io:38]--- # records 1
+inner [e(v15,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v3), e(v3,v15)]
+outer [e(v25,v31), e(v26,v31), e(v5,v10), e(v2,v9), e(v31,v38), e(v25,v35)]
+
+---[io:39]--- # records 25
+inner [e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v31,v38), e(v15,v21), e(v18,v25), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:40]--- # records 48
+inner [e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v31,v38), e(v35,v41), e(v38,v3), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:41]--- # records 24
+inner [e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v31,v38), e(v41,v5), e(v18,v25), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:42]--- # records 23
+inner [e(v18,v25), e(v25,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v31,v38), e(v41,v5), e(v2,v9), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:43]--- # records 22
+inner [e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v10,v18), e(v21,v26), e(v18,v25), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:44]--- # records 21
+inner [e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v10,v18), e(v21,v26), e(v2,v9), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:45]--- # records 20
+inner [e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v10,v18), e(v5,v10), e(v18,v25), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:46]--- # records 19
+inner [e(v18,v26), e(v26,v31), e(v31,v38), e(v38,v2), e(v2,v9), e(v9,v18)]
+outer [e(v10,v18), e(v5,v10), e(v2,v9), e(v38,v2), e(v31,v38), e(v38,v5)]
+
+---[io:47]--- # records 29
+inner [e(v2,v9), e(v9,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v2)]
+outer [e(v31,v38), e(v9,v21), e(v26,v31), e(v21,v26), e(v18,v25), e(v38,v2)]
+
+---[io:48]--- # records 28
+inner [e(v2,v9), e(v9,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v2)]
+outer [e(v31,v38), e(v9,v21), e(v26,v31), e(v21,v26), e(v2,v9), e(v38,v2)]
+
+---[io:49]--- # records 27
+inner [e(v2,v9), e(v9,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v2)]
+outer [e(v31,v38), e(v9,v21), e(v26,v31), e(v5,v10), e(v18,v25), e(v38,v2)]
+
+---[io:50]--- # records 26
+inner [e(v2,v9), e(v9,v21), e(v21,v26), e(v26,v31), e(v31,v38), e(v38,v2)]
+outer [e(v31,v38), e(v9,v21), e(v26,v31), e(v5,v10), e(v2,v9), e(v38,v2)]
+
+# inner_outer_cycles=50
+
+Summary emitted=50 projected=350 hidden=300 unique=9 edge_matches=300 inner_outer_cycles=50

@@ -54,6 +54,13 @@ typedef struct {
     int record;
 } EdgeRulePair;
 
+typedef struct {
+    char key[2048];
+    int *records;
+    int record_count;
+    int obs;
+} InnerOuterCycleRow;
+
 
 typedef struct {
     int n;
@@ -850,6 +857,165 @@ static void make_owned_edge_token(const OwnedSuperCycle *owned,
 }
 
 
+
+static void strip_edge_sign0(const char *tok, char *out, size_t cap) {
+    if (cap == 0) return;
+    if (!tok) tok = ".";
+    if (tok[0] == '+' || tok[0] == '-') tok++;
+    snprintf(out, cap, "%s", tok);
+}
+
+static void build_inner_outer_cycle_key0(char inner[6][128], char outer[6][128], char *out, size_t cap) {
+    char best[2048];
+    char cur[2048];
+    int have = 0;
+    for (int shift = 0; shift < 6; shift++) {
+        size_t off = 0;
+        off += (size_t)snprintf(cur + off, off < sizeof(cur) ? sizeof(cur) - off : 0, "inner [");
+        for (int i = 0; i < 6 && off < sizeof(cur); i++) {
+            int j = (i + shift) % 6;
+            off += (size_t)snprintf(cur + off, sizeof(cur) - off, "%s%s", i ? ", " : "", inner[j]);
+        }
+        off += (size_t)snprintf(cur + off, off < sizeof(cur) ? sizeof(cur) - off : 0, "]\nouter [");
+        for (int i = 0; i < 6 && off < sizeof(cur); i++) {
+            int j = (i + shift) % 6;
+            off += (size_t)snprintf(cur + off, sizeof(cur) - off, "%s%s", i ? ", " : "", outer[j]);
+        }
+        snprintf(cur + off, off < sizeof(cur) ? sizeof(cur) - off : 0, "]");
+        if (!have || strcmp(cur, best) < 0) {
+            snprintf(best, sizeof(best), "%s", cur);
+            have = 1;
+        }
+    }
+    snprintf(out, cap, "%s", have ? best : "");
+}
+
+static int inner_outer_record_seen0(const int *records, int count, int record) {
+    for (int i = 0; i < count; i++) if (records[i] == record) return 1;
+    return 0;
+}
+
+static int add_inner_outer_cycle0(InnerOuterCycleRow **rows_io,
+                                  int *count_io,
+                                  int *cap_io,
+                                  const char *key,
+                                  int record) {
+    for (int i = 0; i < *count_io; i++) {
+        if (strcmp((*rows_io)[i].key, key) == 0) {
+            (*rows_io)[i].obs++;
+            if (!inner_outer_record_seen0((*rows_io)[i].records, (*rows_io)[i].record_count, record)) {
+                int *nr = realloc((*rows_io)[i].records, (size_t)((*rows_io)[i].record_count + 1) * sizeof(int));
+                if (!nr) return 0;
+                (*rows_io)[i].records = nr;
+                (*rows_io)[i].records[(*rows_io)[i].record_count++] = record;
+            }
+            return 1;
+        }
+    }
+    if (*count_io >= *cap_io) {
+        int next_cap = *cap_io ? *cap_io * 2 : 32;
+        InnerOuterCycleRow *next = realloc(*rows_io, (size_t)next_cap * sizeof(*next));
+        if (!next) return 0;
+        *rows_io = next;
+        *cap_io = next_cap;
+    }
+    InnerOuterCycleRow *row = &(*rows_io)[(*count_io)++];
+    snprintf(row->key, sizeof(row->key), "%s", key);
+    row->records = malloc(sizeof(int));
+    if (!row->records) { row->record_count = 0; row->obs = 0; return 0; }
+    row->records[0] = record;
+    row->record_count = 1;
+    row->obs = 1;
+    return 1;
+}
+
+static int inner_outer_int_cmp0(const void *A, const void *B) {
+    int a = *(const int *)A;
+    int b = *(const int *)B;
+    return (a > b) - (a < b);
+}
+
+static int inner_outer_cycle_cmp0(const void *A, const void *B) {
+    const InnerOuterCycleRow *a = (const InnerOuterCycleRow *)A;
+    const InnerOuterCycleRow *b = (const InnerOuterCycleRow *)B;
+    return strcmp(a->key, b->key);
+}
+
+static void collect_projection_inner_outer_cycles(const Tile *tile,
+                                                  const Projection *proj,
+                                                  int proj_count,
+                                                  const HiddenCluster *clusters,
+                                                  int cluster_count,
+                                                  int source_record,
+                                                  InnerOuterCycleRow **rows_io,
+                                                  int *count_io,
+                                                  int *cap_io) {
+    (void)tile;
+    if (proj_count <= 1 || cluster_count <= 0) return;
+
+    OwnedSuperCycle central_owned;
+    if (!build_owned_super_cycle(&proj[0], clusters, cluster_count, &central_owned)) return;
+    if (central_owned.count != 6) return;
+
+    char inner[6][128];
+    char outer[6][128];
+    int have_outer[6] = {0,0,0,0,0,0};
+    for (int cedge = 0; cedge < 6; cedge++) {
+        char tok[128];
+        make_owned_edge_token(&central_owned, +1, cedge, tok, sizeof(tok));
+        strip_edge_sign0(tok, inner[cedge], sizeof(inner[cedge]));
+        snprintf(outer[cedge], sizeof(outer[cedge]), ".");
+    }
+
+    for (int p = 1; p < proj_count; p++) {
+        OwnedSuperCycle adjacent_owned;
+        if (!build_owned_super_cycle(&proj[p], clusters, cluster_count, &adjacent_owned)) continue;
+        if (adjacent_owned.count <= 0 || adjacent_owned.count > RL4_MAX_CLUSTERS) continue;
+        for (int cedge = 0; cedge < central_owned.count; cedge++) {
+            const OwnedSuperVertex *ca = &central_owned.v[cedge];
+            const OwnedSuperVertex *cb = &central_owned.v[(cedge + 1) % central_owned.count];
+            for (int aedge = 0; aedge < adjacent_owned.count; aedge++) {
+                const OwnedSuperVertex *aa = &adjacent_owned.v[aedge];
+                const OwnedSuperVertex *ab = &adjacent_owned.v[(aedge + 1) % adjacent_owned.count];
+                if (!(ca->cluster == ab->cluster && cb->cluster == aa->cluster)) continue;
+                char tok[128];
+                make_owned_edge_token(&adjacent_owned, +1, aedge, tok, sizeof(tok));
+                strip_edge_sign0(tok, outer[cedge], sizeof(outer[cedge]));
+                have_outer[cedge] = 1;
+            }
+        }
+    }
+
+    for (int i = 0; i < 6; i++) if (!have_outer[i]) return;
+    char key[2048];
+    build_inner_outer_cycle_key0(inner, outer, key, sizeof(key));
+    if (key[0]) add_inner_outer_cycle0(rows_io, count_io, cap_io, key, source_record);
+}
+
+static void print_inner_outer_cycles(FILE *fp, InnerOuterCycleRow *rows, int row_count) {
+    qsort(rows, (size_t)row_count, sizeof(rows[0]), inner_outer_cycle_cmp0);
+    fprintf(fp, "\n#\n");
+    fprintf(fp, "# Inner/Outer Edge Cycles\n");
+    fprintf(fp, "#\n");
+    fprintf(fp, "# inner and outer cycles are canonicalized by the same cyclic shift\n");
+    fprintf(fp, "# each slot means inner_edge = -outer_edge\n");
+    fprintf(fp, "#\n\n");
+    for (int i = 0; i < row_count; i++) {
+        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), inner_outer_int_cmp0);
+        fprintf(fp, "---[io:%d]--- # records", i + 1);
+        for (int r = 0; r < rows[i].record_count; r++) fprintf(fp, " %d", rows[i].records[r]);
+        if (rows[i].obs != rows[i].record_count) fprintf(fp, " ; observations %d", rows[i].obs);
+        fprintf(fp, "\n%s\n\n", rows[i].key);
+    }
+    fprintf(fp, "# inner_outer_cycles=%d\n", row_count);
+}
+
+static void free_inner_outer_cycles(InnerOuterCycleRow *rows, int row_count) {
+    if (!rows) return;
+    for (int i = 0; i < row_count; i++) free(rows[i].records);
+    free(rows);
+}
+
 static int build_owned_edge_path_with_tile(const Tile *tile,
                                            const Projection *projection,
                                            const OwnedSuperCycle *owned,
@@ -956,12 +1122,6 @@ static void collect_projection_edge_rules(const Tile *tile,
     if (detail_fp) fputc('\n', detail_fp);
 }
 
-static int int_cmp0(const void *A, const void *B) {
-    int a = *(const int *)A;
-    int b = *(const int *)B;
-    return (a > b) - (a < b);
-}
-
 static int record_seen0(const int *records, int count, int record) {
     for (int i = 0; i < count; i++) if (records[i] == record) return 1;
     return 0;
@@ -1000,8 +1160,7 @@ static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, in
             rows[found].obs = 0;
             if (!rows[found].records) {
                 for (int k = 0; k < row_count; k++) free(rows[k].records);
-                free(rows);
-                return;
+                            return;
             }
         }
         rows[found].obs++;
@@ -1012,7 +1171,7 @@ static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, in
     for (int i = 0; i < row_count; i++) {
         int len = (int)strlen(rows[i].row);
         if (len > width) width = len;
-        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), int_cmp0);
+        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), inner_outer_int_cmp0);
     }
     for (int i = 0; i < row_count; i++) {
         fprintf(fp, "  %-*s  # records", width, rows[i].row);
@@ -1024,8 +1183,8 @@ static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, in
             rule_count, 6 * surround_count, row_count,
             rule_count == 6 * surround_count ? "ok" : "count_mismatch");
     for (int i = 0; i < row_count; i++) free(rows[i].records);
-    free(rows);
 }
+
 
 
 
@@ -1071,6 +1230,9 @@ int main(int argc, char **argv) {
     EdgeRulePair *edge_rules = NULL;
     int edge_rule_count = 0;
     int edge_rule_cap = 0;
+    InnerOuterCycleRow *inner_outer_cycles = NULL;
+    int inner_outer_count = 0;
+    int inner_outer_cap = 0;
 
     if (!parse_args(argc, argv, &opt)) { usage(argv[0]); return 1; }
     if (!bcomp1_context_init(&ctx, opt.tile_path,
@@ -1157,6 +1319,11 @@ int main(int argc, char **argv) {
                                           emitted, parent_id, unique_id,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, NULL);
+            collect_projection_inner_outer_cycles(&ctx.tile, proj, proj_count,
+                                                   clusters, cluster_count, emitted,
+                                                   &inner_outer_cycles,
+                                                   &inner_outer_count,
+                                                   &inner_outer_cap);
         } else {
             emit_record(&ctx.tile, emitted, r, proj, proj_count,
                         hidden, hidden_count);
@@ -1183,8 +1350,9 @@ int main(int argc, char **argv) {
         printf("\nDownmapped Super Hexagon Edge Matches\n");
         printf("# canonical rows; provenance lists source surround records\n");
         print_edge_matches(stdout, edge_rules, edge_rule_count, emitted);
-        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_matches=%d\n",
-               emitted, projected_total, hidden_total, unique_count, edge_rule_count);
+        print_inner_outer_cycles(stdout, inner_outer_cycles, inner_outer_count);
+        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_matches=%d inner_outer_cycles=%d\n",
+               emitted, projected_total, hidden_total, unique_count, edge_rule_count, inner_outer_count);
     }
 
     if (opt.verbose) {
@@ -1194,6 +1362,7 @@ int main(int argc, char **argv) {
 
     free(unique_hexes);
     free(edge_rules);
+    free_inner_outer_cycles(inner_outer_cycles, inner_outer_count);
     free(proj);
     free(hidden);
     free(clusters);

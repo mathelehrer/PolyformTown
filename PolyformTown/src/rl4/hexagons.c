@@ -31,6 +31,7 @@ typedef struct { int n; int cidx[MAX_VERTS]; char cell[MAX_VERTS][256]; } Figure
 
 typedef struct { int p; int i; } PI;
 typedef struct { int n; PI pi[RL0_FM_MAX_ITEMS]; } PIFigure;
+typedef struct { int sign; int x; int y; } SignedEdge;
 typedef struct {
     int group;
     int mask_len;
@@ -40,13 +41,15 @@ typedef struct {
     PIFigure fig[MAX_VERTS];
     int hex_n;
     int hex[MAX_VERTS + 2];
+    int edge_n;
+    SignedEdge inner_edge[MAX_VERTS + 2];
+    SignedEdge outer_edge[MAX_VERTS + 2];
 } HexItem;
 
 #define HEX_LABEL_A (-1001)
 #define HEX_LABEL_B (-1002)
 
 typedef struct { int n; int v[RL0_FM_MAX_ITEMS]; } NormFigure;
-typedef struct { int sign; int x; int y; } SignedEdge;
 typedef struct { SignedEdge a; SignedEdge b; char hash[96]; int record; } EdgeRule;
 typedef struct { SignedEdge token; int parent; } EdgeNode;
 
@@ -258,6 +261,7 @@ static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
     }
 
     h->hex_n = rn;
+    h->edge_n = 0;
     for(int i=0;i<rn;i++) h->hex[i] = labels[i];
 
     for(int i=0;i<rn;i++){
@@ -267,9 +271,16 @@ static void derive_hex_and_rules(HexItem *h, EdgeRule *rules, int *rule_count){
         int a = 0, b = 0;
         if(!norm_next(&norms[j], y, &a)) continue;
         if(!norm_prev(&norms[i], x, &b)) continue;
+        SignedEdge inner = (SignedEdge){+1, x, y};
+        SignedEdge outer = (SignedEdge){-1, a, b};
+        if(h->edge_n < MAX_VERTS + 2){
+            h->inner_edge[h->edge_n] = inner;
+            h->outer_edge[h->edge_n] = outer;
+            h->edge_n++;
+        }
         if(*rule_count + 1 < MAX_EDGE_RULES){
-            rules[*rule_count].a = (SignedEdge){+1, x, y};
-            rules[*rule_count].b = (SignedEdge){-1, a, b};
+            rules[*rule_count].a = inner;
+            rules[*rule_count].b = outer;
             snprintf(rules[*rule_count].hash, sizeof(rules[*rule_count].hash),
                      "rl1:%d:g%d:e%d", h->record, h->group, i);
             rules[*rule_count].record = h->record;
@@ -495,6 +506,125 @@ static void print_edge_matches(const EdgeRule *rules, int rule_count, int surrou
     free(rows);
 }
 
+
+typedef struct {
+    char key[2048];
+    int *records;
+    int record_count;
+    int obs;
+} InnerOuterCycleRow;
+
+static void unsigned_edge_to_buf(SignedEdge e, char *buf, size_t cap){
+    e.sign = +1;
+    signed_edge_to_buf(e, buf, cap);
+    if(buf[0] == '+') memmove(buf, buf + 1, strlen(buf));
+}
+
+static void build_inner_outer_cycle_key(const HexItem *h, char *out, size_t cap){
+    char best[2048];
+    char cur[2048];
+    int have = 0;
+    out[0] = '\0';
+    if(h->edge_n <= 0) return;
+    for(int sh=0; sh<h->edge_n; sh++){
+        size_t off = 0;
+        off += (size_t)snprintf(cur + off, sizeof(cur) - off, "inner [");
+        for(int i=0; i<h->edge_n && off < sizeof(cur); i++){
+            char tok[96];
+            int k = (sh + i) % h->edge_n;
+            unsigned_edge_to_buf(h->inner_edge[k], tok, sizeof(tok));
+            off += (size_t)snprintf(cur + off, sizeof(cur) - off, "%s%s", i ? ", " : "", tok);
+        }
+        off += (size_t)snprintf(cur + off, sizeof(cur) - off, "]\nouter [");
+        for(int i=0; i<h->edge_n && off < sizeof(cur); i++){
+            char tok[96];
+            int k = (sh + i) % h->edge_n;
+            unsigned_edge_to_buf(h->outer_edge[k], tok, sizeof(tok));
+            off += (size_t)snprintf(cur + off, sizeof(cur) - off, "%s%s", i ? ", " : "", tok);
+        }
+        snprintf(cur + off, sizeof(cur) - off, "]");
+        if(!have || strcmp(cur, best) < 0){
+            snprintf(best, sizeof(best), "%s", cur);
+            have = 1;
+        }
+    }
+    snprintf(out, cap, "%s", have ? best : "");
+}
+
+static int inner_outer_cycle_cmp(const void *A, const void *B){
+    const InnerOuterCycleRow *a = A;
+    const InnerOuterCycleRow *b = B;
+    return strcmp(a->key, b->key);
+}
+
+static int add_inner_outer_cycle(InnerOuterCycleRow **rows_io, int *count_io, int *cap_io,
+                                 const char *key, int record){
+    if(!key || !key[0]) return 1;
+    for(int i=0; i<*count_io; i++){
+        if(strcmp((*rows_io)[i].key, key) == 0){
+            (*rows_io)[i].obs++;
+            if(!record_seen((*rows_io)[i].records, (*rows_io)[i].record_count, record)){
+                int *nr = realloc((*rows_io)[i].records,
+                                  (size_t)((*rows_io)[i].record_count + 1) * sizeof(int));
+                if(!nr) return 0;
+                (*rows_io)[i].records = nr;
+                (*rows_io)[i].records[(*rows_io)[i].record_count++] = record;
+            }
+            return 1;
+        }
+    }
+    if(*count_io >= *cap_io){
+        int nc = *cap_io ? *cap_io * 2 : 32;
+        InnerOuterCycleRow *nr = realloc(*rows_io, (size_t)nc * sizeof(*nr));
+        if(!nr) return 0;
+        *rows_io = nr;
+        *cap_io = nc;
+    }
+    InnerOuterCycleRow *row = &(*rows_io)[(*count_io)++];
+    snprintf(row->key, sizeof(row->key), "%s", key);
+    row->records = malloc(sizeof(int));
+    if(!row->records){ row->record_count = 0; row->obs = 0; return 0; }
+    row->records[0] = record;
+    row->record_count = 1;
+    row->obs = 1;
+    return 1;
+}
+
+static void collect_inner_outer_cycles(const HexItem *items, int item_count,
+                                       InnerOuterCycleRow **rows_io,
+                                       int *count_io,
+                                       int *cap_io){
+    for(int i=0; i<item_count; i++){
+        char key[2048];
+        build_inner_outer_cycle_key(&items[i], key, sizeof(key));
+        if(key[0]) add_inner_outer_cycle(rows_io, count_io, cap_io, key, items[i].record);
+    }
+}
+
+static void print_inner_outer_cycles(InnerOuterCycleRow *rows, int row_count){
+    qsort(rows, (size_t)row_count, sizeof(rows[0]), inner_outer_cycle_cmp);
+    printf("\n#\n");
+    printf("# Inner/Outer Edge Cycles\n");
+    printf("#\n");
+    printf("# inner and outer cycles are canonicalized by the same cyclic shift\n");
+    printf("# each slot means inner_edge = -outer_edge\n");
+    printf("#\n\n");
+    for(int i=0; i<row_count; i++){
+        qsort(rows[i].records, (size_t)rows[i].record_count, sizeof(rows[i].records[0]), int_cmp0);
+        printf("---[io:%d]--- # records", i + 1);
+        for(int r=0; r<rows[i].record_count; r++) printf(" %d", rows[i].records[r]);
+        if(rows[i].obs != rows[i].record_count) printf(" ; observations %d", rows[i].obs);
+        printf("\n%s\n\n", rows[i].key);
+    }
+    printf("# inner_outer_cycles=%d\n", row_count);
+}
+
+static void free_inner_outer_cycles(InnerOuterCycleRow *rows, int row_count){
+    if(!rows) return;
+    for(int i=0; i<row_count; i++) free(rows[i].records);
+    free(rows);
+}
+
 static void print_edge_classes(const EdgeRule *rules, int rule_count){
     EdgeNode nodes[MAX_EDGE_NODES];
     int node_count = 0;
@@ -521,6 +651,7 @@ static void print_edge_classes(const EdgeRule *rules, int rule_count){
 }
 
 
+
 static void print_full_header(void){
     printf("#\n");
     printf("# Hexagons as cyclic CCW lists of CCW vertex figures\n");
@@ -545,6 +676,9 @@ int main(int argc,char **argv){
     EdgeRule *edge_rules=calloc(MAX_EDGE_RULES,sizeof(*edge_rules));
     int hex_item_count = 0;
     int edge_rule_count = 0;
+    InnerOuterCycleRow *inner_outer_rows = NULL;
+    int inner_outer_count = 0;
+    int inner_outer_cap = 0;
     Tile tile;
 
     if(argc>1) data=argv[1];
@@ -682,10 +816,17 @@ int main(int argc,char **argv){
     printf("#     canonical rows; provenance lists source surround records\n");
     printf("#\n\n");
     print_edge_matches(edge_rules, edge_rule_count, hex_item_count);
+
+    collect_inner_outer_cycles(hex_items, hex_item_count,
+                               &inner_outer_rows, &inner_outer_count,
+                               &inner_outer_cap);
+    print_inner_outer_cycles(inner_outer_rows, inner_outer_count);
+
     printf("\n#\n");
     printf("# Edge Classes\n");
     printf("#\n\n");
     print_edge_classes(edge_rules, edge_rule_count);
 
+    free_inner_outer_cycles(inner_outer_rows, inner_outer_count);
     free(recs); free(infos); free(groups); free(hex_items); free(edge_rules); return 0;
 }
