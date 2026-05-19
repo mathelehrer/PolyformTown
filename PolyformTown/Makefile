@@ -26,7 +26,7 @@ RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -45,7 +45,7 @@ all: tools
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine supertile_depict \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats supertile_depict \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -69,7 +69,7 @@ clean:
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict $(BIN)/rl1_depict_naive \
 		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate $(BIN)/rl4_supertile_candidates \
-		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons $(BIN)/supertile_depict $(BIN)/rl5_refine \
+		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons $(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
 		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
@@ -184,6 +184,11 @@ $(BIN)/rl5_hexagons: $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFAC
 rl5_supertile_hexagons: $(BIN)/rl5_supertile_hexagons
 $(BIN)/rl5_supertile_hexagons: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+
+rl5_stats: $(BIN)/rl5_stats
+$(BIN)/rl5_stats: $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o
 
 rl5_generate: rl5_hexagons rl5_supertile_hexagons
 
