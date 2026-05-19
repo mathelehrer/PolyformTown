@@ -187,8 +187,8 @@ $(BIN)/rl5_supertile_hexagons: $(SRC)/rl4/refine4.o $(SRC)/rl1/bcomp1.o $(RL0_SU
 
 
 rl5_stats: $(BIN)/rl5_stats
-$(BIN)/rl5_stats: $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o
+$(BIN)/rl5_stats: $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o $(SRC)/rl5/boundary5.o $(SRC)/core/term_color.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o $(SRC)/rl5/boundary5.o $(SRC)/core/term_color.o
 
 rl5_generate: rl5_hexagons rl5_supertile_hexagons
 
