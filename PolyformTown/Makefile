@@ -19,14 +19,14 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files \
+.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 figures figures_files rl5_pathology_svg rl5_super6_sat_data rl5_super6_errata_placeholder rl5_super6_sat_check rl5_sat_solver_notice \
 
 .NOTPARALLEL: boot
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats supertile_depict \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -45,7 +45,7 @@ all: tools
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats supertile_depict \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -172,10 +172,22 @@ rl5_refine: $(BIN)/rl5_refine
 $(BIN)/rl5_refine: $(SRC)/rl5/refine5.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/refine5.o
 
+pathological_item6: $(BIN)/pathological_item6
+$(BIN)/pathological_item6: $(SRC)/usage/pathological_item6.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/pathological_item6.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE)
+
+rl5_sat: $(BIN)/rl5_sat
+$(BIN)/rl5_sat: $(SRC)/rl5/sat5.o $(SRC)/rl5/model5.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl5/sat5.o $(SRC)/rl5/model5.o
+
 RL5_HEXAGONS_DATA ?= data/rl5/hexagons.dat
 RL5_SUPERTILE_HEXAGONS_DATA ?= data/rl5/supertile_hexagons.dat
 RL5_OVERLAP_HEXAGONS_DATA ?= data/rl5/overlap_supertile_hexagons.dat
 RL5_REDUCED_HEXES_DATA ?= data/rl5/reduced_8_hexes.dat
+RL5_PATHOLOGY_DATA ?= data/rl5/pathological_item.dat
+RL5_SUPER6_D6_FIXED_CNF ?= data/rl5/super6_d6_fixed.cnf
+RL5_SUPER6_D6_FIXED_MAP ?= data/rl5/super6_d6_fixed.map
+RL5_ERRATA_DATA ?= data/rl5/errata.dat
 
 rl5_hexagons: $(BIN)/rl5_hexagons
 $(BIN)/rl5_hexagons: $(SRC)/rl4/hexagons.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
@@ -281,7 +293,7 @@ boot_rl4: rl4_generate rl4_refine
 	$(call announce,RL4 refine supertile candidates)
 	@$(BIN)/rl4_supertile_candidates
 
-boot_rl5: rl5_generate rl5_refine
+boot_rl5: rl5_generate pathological_item6 rl5_sat rl5_super6_errata_placeholder
 	$(call announce,RL5 generate hexagon analysis)
 	@mkdir -p data/rl5
 	@$(BIN)/rl5_hexagons > $(RL5_HEXAGONS_DATA)
@@ -290,9 +302,54 @@ boot_rl5: rl5_generate rl5_refine
 	@echo $(RL5_HEXAGONS_DATA)
 	@echo $(RL5_SUPERTILE_HEXAGONS_DATA)
 	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
-	$(call announce,RL5 refine reduced hexes)
-	@$(BIN)/rl5_refine $(RL5_HEXAGONS_DATA) $(RL5_SUPERTILE_HEXAGONS_DATA) $(RL5_REDUCED_HEXES_DATA)
-	@echo $(RL5_REDUCED_HEXES_DATA)
+	@$(BIN)/pathological_item6 --data $(RL5_PATHOLOGY_DATA) >/dev/null 2>/dev/null
+	@$(BIN)/rl5_sat --model super --record 6 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) >/dev/null 2>/dev/null
+	$(call announce,RL5 refine pathology)
+	@echo $(RL5_PATHOLOGY_DATA)
+	@echo $(RL5_SUPER6_D6_FIXED_CNF)
+	@echo $(RL5_SUPER6_D6_FIXED_MAP)
+	@$(MAKE) --no-print-directory rl5_super6_errata_placeholder
+	@$(MAKE) --no-print-directory rl5_sat_solver_notice
+	@echo $(RL5_ERRATA_DATA)
+
+rl5_super6_errata_placeholder:
+	@mkdir -p $(dir $(RL5_ERRATA_DATA))
+	@{ \
+		printf "dead: super 6\n\n"; \
+		printf "make rl5_super6_sat_check\n"; \
+		printf "\n"; \
+		printf "pending: Super 6 SAT check not run by boot.\n"; \
+	} > $(RL5_ERRATA_DATA)
+
+
+rl5_super6_sat_check:
+	@mkdir -p $(dir $(RL5_ERRATA_DATA))
+	@{ \
+		printf "dead: super 6\n\n"; \
+		printf "make rl5_super6_sat_check\n"; \
+		printf "Deleted: Super 6\n"; \
+		tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) --exists-only | \
+			awk '/^==> solve with PySAT/{keep=1} keep && !/^SAT$$/{print} /^SAT$$/{print "UNSAT"}'; \
+	} > $(RL5_ERRATA_DATA)
+	@echo $(RL5_ERRATA_DATA)
+
+rl5_sat_solver_notice:
+	@printf "\033[31mwarning:\033[0m Pathology analysis needs SAT solving.\n"
+	@printf "    solution:  make rl5_super6_sat_check\n    temporary: "
+	@if ! command -v python3 >/dev/null 2>&1; then \
+		printf "\033[31mwarning:\033[0m python3 missing; cannot run SAT check here.\n"; \
+	elif ! python3 -c 'import pysat' >/dev/null 2>&1; then \
+		printf "\033[31mwarning:\033[0m python-sat missing; install: python3 -m pip install python-sat\n"; \
+	elif [ ! -x tools/rl5_count_pysat.py ]; then \
+		printf "\033[31mwarning:\033[0m helper not executable; run: chmod +x tools/rl5_count_pysat.py\n"; \
+	fi
+
+rl5_super6_sat_data: rl5_sat
+	@mkdir -p data/rl5
+	@$(BIN)/rl5_sat --model super --record 6 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) >/dev/null 2>/dev/null
+	@$(MAKE) --no-print-directory rl5_sat_solver_notice
+	@echo $(RL5_SUPER6_D6_FIXED_CNF)
+	@echo $(RL5_SUPER6_D6_FIXED_MAP)
 
 rl0_data: rl0_generate
 	@$(BIN)/rl0_generate preferences/focus.tile
@@ -365,7 +422,7 @@ figures:
 	$(call announce,generate figures)
 	@$(MAKE) --no-print-directory figures_files
 
-figures_files: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg supertile_hex_models_svg supertile_svg overlap_supertile_svg
+figures_files: rl0_svg rl0_refine_svg rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg supertile_hex_models_svg supertile_svg overlap_supertile_svg rl5_pathology_svg
 
 # -----------------------------------------------------------------------------
 # DEPICT
@@ -439,6 +496,7 @@ SUPERTILE_HEX_MODELS_SUPERTILE ?= preferences/focus.supertile
 SUPERTILE_HEX_MODELS_SVG ?= img/rl4_refine.svg
 SUPERTILE_SVG ?= img/supertile.svg
 OVERLAP_SUPERTILE_SVG ?= img/overlap_supertile.svg
+RL5_PATHOLOGY_SVG ?= img/rl5_pathology.svg
 
 # Compatibility alias. The clearer name is supertile_hex_models_svg.
 : supertile_hex_models_svg
@@ -476,6 +534,19 @@ overlap_supertile_svg: rl1_depict imgtable
 	@$(BIN)/rl1_depict preferences/focus.tile preferences/overlap.supertile --grouped | \
 		$(BIN)/imgtable > $(OVERLAP_SUPERTILE_SVG)
 	@echo $(OVERLAP_SUPERTILE_SVG)
+
+
+rl5_pathology_svg: rl1_depict imgtable pathological_item6
+	@test -s $(RL5_PATHOLOGY_DATA) || { \
+		echo "missing $(RL5_PATHOLOGY_DATA); run: make boot RL=6" >&2; \
+		exit 1; \
+	}
+	@mkdir -p $(dir $(RL5_PATHOLOGY_SVG))
+	@tmp=$$(mktemp); \
+	$(BIN)/rl1_depict preferences/focus.tile $(RL5_PATHOLOGY_DATA) --grouped > $$tmp; \
+	awk 'BEGIN { agg=""; have=0 } /^Aggregate$$/ { print; if ((getline line) > 0) { agg=line; have=1; print line; } next } /^Hidden$$/ { if (have) { print "Highlights"; print agg; have=0; } print; next } { print } END { if (have) { print "Highlights"; print agg; } }' $$tmp | $(BIN)/imgtable > $(RL5_PATHOLOGY_SVG); \
+	rm -f $$tmp
+	@echo $(RL5_PATHOLOGY_SVG)
 
 imgtable: $(BIN)/imgtable
 $(BIN)/imgtable: $(SRC)/usage/imgtable.o | $(BIN)

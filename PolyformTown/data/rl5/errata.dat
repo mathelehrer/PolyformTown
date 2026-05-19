@@ -1,0 +1,5 @@
+dead: super 6
+
+make rl5_super6_sat_check
+
+pending: Super 6 SAT check not run by boot.
