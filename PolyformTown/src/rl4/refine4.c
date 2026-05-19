@@ -17,7 +17,6 @@ typedef struct {
     const char *supertile_path;
     const char *remembrance_path;
     const char *deletions_path;
-    const char *parents_path;
     int limit;
     int data_mode;
     int verbose;
@@ -74,7 +73,6 @@ static void usage(const char *prog) {
             "  --limit N             emit at most N records\n"
             "  --data                print supertile hexagon data instead of imgtable\n"
             "  --supertile PATH      default preferences/focus.supertile\n"
-            "  --parents PATH        default data/rl4/rl2_filtered.dat\n"
             "  --remembrance PATH    default data/rl0/remembrance.dat\n"
             "  --deletions PATH      default data/rl0/deletions.dat\n"
             "  --verbose             print per-record diagnostics to stderr\n",
@@ -88,7 +86,6 @@ static int parse_args(int argc, char **argv, Options *opt) {
     opt->supertile_path = "preferences/focus.supertile";
     opt->remembrance_path = "data/rl0/remembrance.dat";
     opt->deletions_path = "data/rl0/deletions.dat";
-    opt->parents_path = "data/rl4/rl2_filtered.dat";
     opt->limit = 0;
     opt->data_mode = 0;
     opt->verbose = 0;
@@ -107,10 +104,6 @@ static int parse_args(int argc, char **argv, Options *opt) {
         }
         if (strcmp(argv[i], "--supertile") == 0 && i + 1 < argc) {
             opt->supertile_path = argv[++i];
-            continue;
-        }
-        if (strcmp(argv[i], "--parents") == 0 && i + 1 < argc) {
-            opt->parents_path = argv[++i];
             continue;
         }
         if (strcmp(argv[i], "--remembrance") == 0 && i + 1 < argc) {
@@ -592,16 +585,6 @@ typedef struct {
     char records[1024];
 } UniqueHex;
 
-typedef struct {
-    int record;
-    int source;
-    int parent;
-    int unique_id;
-    int projected;
-    int hidden;
-    int clusters;
-    char key[2048];
-} ModelRow;
 
 static void build_hex_key(const HiddenCluster *clusters,
                           int cluster_count,
@@ -647,114 +630,6 @@ static int unique_hex_add(UniqueHex **items_io,
     return *count_io - 1;
 }
 
-
-static int model_row_cmp_parent(const void *A, const void *B) {
-    const ModelRow *a = (const ModelRow *)A;
-    const ModelRow *b = (const ModelRow *)B;
-    if (a->parent != b->parent) return a->parent - b->parent;
-    return a->record - b->record;
-}
-
-static int cycle_exact_same(const Cycle *a, const Cycle *b) {
-    if (a->n != b->n) return 0;
-    for (int i = 0; i < a->n; i++) {
-        if (!coord_same(a->v[i], b->v[i])) return 0;
-    }
-    return 1;
-}
-
-static int record_has_tile(const BComp1Record *r, const Cycle *tile_cycle) {
-    if (!r->have_tiles) return 0;
-    for (int i = 0; i < r->tiles_count; i++) {
-        if (cycle_exact_same(&r->tiles[i], tile_cycle)) return 1;
-    }
-    return 0;
-}
-
-static int record_contains_parent_tiles(const BComp1Record *child,
-                                        const BComp1Record *parent) {
-    if (!child->have_tiles || !parent->have_tiles) return 0;
-    for (int i = 0; i < parent->tiles_count; i++) {
-        if (!record_has_tile(child, &parent->tiles[i])) return 0;
-    }
-    return 1;
-}
-
-static int find_parent_record(const BComp1RecordVec *parents,
-                              const BComp1Record *child) {
-    int best = 0;
-    int best_tiles = -1;
-    if (!parents || !parents->items) return 0;
-    for (size_t i = 0; i < parents->count; i++) {
-        const BComp1Record *p = &parents->items[i];
-        if (!record_contains_parent_tiles(child, p)) continue;
-        if (p->tiles_count > best_tiles) {
-            best = (int)i + 1;
-            best_tiles = p->tiles_count;
-        }
-    }
-    return best;
-}
-
-static int model_row_add(ModelRow **rows_io,
-                         int *count_io,
-                         int *cap_io,
-                         const ModelRow *row) {
-    if (*count_io >= *cap_io) {
-        int next_cap = *cap_io == 0 ? 64 : *cap_io * 2;
-        ModelRow *next = realloc(*rows_io, (size_t)next_cap * sizeof(*next));
-        if (!next) return 0;
-        *rows_io = next;
-        *cap_io = next_cap;
-    }
-    (*rows_io)[(*count_io)++] = *row;
-    return 1;
-}
-
-static int parent_key_seen(const ModelRow *rows, int start, int end, const char *key) {
-    for (int i = start; i < end; i++) {
-        if (strcmp(rows[i].key, key) == 0) return 1;
-    }
-    return 0;
-}
-
-static void print_grouped_rows(FILE *fp, ModelRow *rows, int count, int parent_count) {
-    if (count <= 0) return;
-    qsort(rows, (size_t)count, sizeof(rows[0]), model_row_cmp_parent);
-
-    int max_parent = parent_count;
-    for (int i = 0; i < count; i++) {
-        if (rows[i].parent > max_parent) max_parent = rows[i].parent;
-    }
-    if (max_parent <= 0) max_parent = 20;
-
-    for (int parent = 1; parent <= max_parent; parent++) {
-        fprintf(fp, "\n---[rl2:%d]---\n", parent);
-        int parent_start = -1;
-        int parent_end = -1;
-        for (int i = 0; i < count; i++) {
-            if (rows[i].parent != parent) continue;
-            if (parent_start < 0) parent_start = i;
-            parent_end = i + 1;
-        }
-        if (parent_start < 0) continue;
-        for (int i = parent_start; i < parent_end; i++) {
-            if (parent_key_seen(rows, parent_start, i, rows[i].key)) continue;
-            fprintf(fp, "  %s\n", rows[i].key);
-        }
-    }
-
-    int printed_unknown = 0;
-    for (int i = 0; i < count; i++) {
-        if (rows[i].parent > 0) continue;
-        if (!printed_unknown) {
-            fprintf(fp, "\n---[rl2:unknown]---\n");
-            printed_unknown = 1;
-        }
-        if (parent_key_seen(rows, 0, i, rows[i].key)) continue;
-        fprintf(fp, "  %s\n", rows[i].key);
-    }
-}
 
 static void print_hex_model(FILE *fp,
                             int out_index,
@@ -809,7 +684,13 @@ static void edge_token_with_sign0(const char *tok, int flip, char *out, size_t c
     char x[64];
     char y[64];
     if (!parse_edge_token0(tok, &sign, x, sizeof(x), y, sizeof(y))) {
-        snprintf(out, cap, "%s", tok ? tok : ".");
+        const char *src = tok ? tok : ".";
+        if (cap > 0) {
+            size_t n = 0;
+            while (n + 1 < cap && src[n]) n++;
+            memcpy(out, src, n);
+            out[n] = '\0';
+        }
         return;
     }
     if (flip) sign = -sign;
@@ -952,16 +833,6 @@ static int build_owned_super_cycle(const Projection *projection,
         }
     }
     return 1;
-}
-
-static int central_projection_has_trusted_vertices(const Projection *proj,
-                                                   int proj_count,
-                                                   const HiddenCluster *clusters,
-                                                   int cluster_count) {
-    if (proj_count <= 0 || cluster_count != 6) return 0;
-    OwnedSuperCycle owned;
-    if (!build_owned_super_cycle(&proj[0], clusters, cluster_count, &owned)) return 0;
-    return owned.count == 6;
 }
 
 static void make_owned_edge_token(const OwnedSuperCycle *owned,
@@ -1129,8 +1000,7 @@ static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, in
             rows[found].obs = 0;
             if (!rows[found].records) {
                 for (int k = 0; k < row_count; k++) free(rows[k].records);
-                free(rows);
-                return;
+                            return;
             }
         }
         rows[found].obs++;
@@ -1153,9 +1023,344 @@ static void print_edge_matches(FILE *fp, EdgeRulePair *rules, int rule_count, in
             rule_count, 6 * surround_count, row_count,
             rule_count == 6 * surround_count ? "ok" : "count_mismatch");
     for (int i = 0; i < row_count; i++) free(rows[i].records);
-    free(rows);
 }
 
+
+
+
+typedef struct {
+    char text[1024];
+    int obs;
+} CanonVertexFigureRow;
+
+static void bare_edge_token0(const char *tok, char *out, size_t cap) {
+    if (!tok) {
+        snprintf(out, cap, ".");
+        return;
+    }
+    if (tok[0] == '+' || tok[0] == '-') snprintf(out, cap, "%s", tok + 1);
+    else snprintf(out, cap, "%s", tok);
+}
+
+static void positive_edge_token0(const char *tok, char *out, size_t cap) {
+    char bare[128];
+    bare_edge_token0(tok, bare, sizeof(bare));
+    if (cap > 0) {
+        out[0] = '+';
+        if (cap > 1) {
+            size_t n = 0;
+            while (n + 2 < cap && bare[n]) n++;
+            memcpy(out + 1, bare, n);
+            out[1 + n] = '\0';
+        }
+    }
+}
+
+static int edge_token_match0(const char *a, const char *b, const EdgeRulePair *rules, int rule_count) {
+    char pa[128];
+    char pb[128];
+    positive_edge_token0(a, pa, sizeof(pa));
+    positive_edge_token0(b, pb, sizeof(pb));
+    for (int i = 0; i < rule_count; i++) {
+        char lhs[128];
+        char rhs[128];
+        positive_edge_token0(rules[i].lhs, lhs, sizeof(lhs));
+        positive_edge_token0(rules[i].rhs, rhs, sizeof(rhs));
+        if ((strcmp(pa, lhs) == 0 && strcmp(pb, rhs) == 0) ||
+            (strcmp(pa, rhs) == 0 && strcmp(pb, lhs) == 0)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void vertex_figure_text0(const char e[3][2][128], int shift, char *out, size_t cap) {
+    char a[3][128];
+    char b[3][128];
+    size_t off = 0;
+    out[0] = '\0';
+    for (int r = 0; r < 3; r++) {
+        int k = (shift + r) % 3;
+        bare_edge_token0(e[k][0], a[r], sizeof(a[r]));
+        bare_edge_token0(e[k][1], b[r], sizeof(b[r]));
+    }
+    for (int r = 0; r < 3; r++) {
+        int n = snprintf(out + off, cap > off ? cap - off : 0,
+                         "[%s, %s]%s", a[r], b[r], r == 2 ? "" : "\n");
+        if (n < 0) return;
+        off += (size_t)n;
+        if (off >= cap) { out[cap ? cap - 1 : 0] = '\0'; return; }
+    }
+}
+
+static void canonical_vertex_figure_text0(const char e[3][2][128], char *out, size_t cap) {
+    char best[1024];
+    char cur[1024];
+    int have = 0;
+    for (int shift = 0; shift < 3; shift++) {
+        vertex_figure_text0(e, shift, cur, sizeof(cur));
+        if (!have || strcmp(cur, best) < 0) {
+            snprintf(best, sizeof(best), "%s", cur);
+            have = 1;
+        }
+    }
+    snprintf(out, cap, "%s", have ? best : "");
+}
+
+static int vertex_row_cmp0(const void *A, const void *B) {
+    const CanonVertexFigureRow *a = (const CanonVertexFigureRow *)A;
+    const CanonVertexFigureRow *b = (const CanonVertexFigureRow *)B;
+    return strcmp(a->text, b->text);
+}
+
+static int add_canon_vertex_row(CanonVertexFigureRow **rows_io,
+                                int *count_io,
+                                int *cap_io,
+                                const char *text) {
+    for (int i = 0; i < *count_io; i++) {
+        if (strcmp((*rows_io)[i].text, text) == 0) {
+            (*rows_io)[i].obs++;
+            return 1;
+        }
+    }
+    if (*count_io >= *cap_io) {
+        int next_cap = *cap_io ? *cap_io * 2 : 64;
+        CanonVertexFigureRow *next = realloc(*rows_io, (size_t)next_cap * sizeof(*next));
+        if (!next) return 0;
+        *rows_io = next;
+        *cap_io = next_cap;
+    }
+    snprintf((*rows_io)[*count_io].text, sizeof((*rows_io)[*count_io].text), "%s", text);
+    (*rows_io)[*count_io].obs = 1;
+    (*count_io)++;
+    return 1;
+}
+
+static int canonical_row_seen0(char rows[][1024], int count, const char *row) {
+    for (int i = 0; i < count; i++) if (strcmp(rows[i], row) == 0) return 1;
+    return 0;
+}
+
+static int collect_unique_edge_rows0(const EdgeRulePair *rules, int rule_count, char rows[][1024], int max_rows) {
+    int n = 0;
+    for (int i = 0; i < rule_count; i++) {
+        char row[1024];
+        canonical_edge_rule_pair_to_buf(&rules[i], row, sizeof(row));
+        if (canonical_row_seen0(rows, n, row)) continue;
+        if (n >= max_rows) break;
+        snprintf(rows[n++], 1024, "%s", row);
+    }
+    qsort(rows, (size_t)n, 1024, (int (*)(const void *, const void *))strcmp);
+    return n;
+}
+
+static int collect_induced_edge_rows0(const CanonVertexFigureRow *vrows,
+                                      int vrow_count,
+                                      char rows[][1024],
+                                      int max_rows) {
+    int n = 0;
+    for (int i = 0; i < vrow_count; i++) {
+        char edges[6][128];
+        int ec = 0;
+        const char *p = vrows[i].text;
+        while (*p && ec < 6) {
+            const char *e = strstr(p, "e(");
+            if (!e) break;
+            const char *close = strchr(e, ')');
+            if (!close) break;
+            size_t len = (size_t)(close - e + 1);
+            if (len >= sizeof(edges[ec])) len = sizeof(edges[ec]) - 1;
+            memcpy(edges[ec], e, len);
+            edges[ec][len] = '\0';
+            ec++;
+            p = close + 1;
+        }
+        if (ec != 6) continue;
+        const int pairs[3][2] = {{0,3},{2,5},{4,1}};
+        for (int k = 0; k < 3; k++) {
+            EdgeRulePair r;
+            snprintf(r.lhs, sizeof(r.lhs), "+%s", edges[pairs[k][0]]);
+            snprintf(r.rhs, sizeof(r.rhs), "-%s", edges[pairs[k][1]]);
+            r.hash[0] = '\0';
+            r.record = 0;
+            char row[1024];
+            canonical_edge_rule_pair_to_buf(&r, row, sizeof(row));
+            if (canonical_row_seen0(rows, n, row)) continue;
+            if (n >= max_rows) break;
+            snprintf(rows[n++], 1024, "%s", row);
+        }
+    }
+    qsort(rows, (size_t)n, 1024, (int (*)(const void *, const void *))strcmp);
+    return n;
+}
+
+static int row_set_missing_count0(char a[][1024], int an, char b[][1024], int bn) {
+    int missing = 0;
+    for (int i = 0; i < an; i++) if (!canonical_row_seen0(b, bn, a[i])) missing++;
+    return missing;
+}
+
+static void print_row_set_missing0(FILE *fp, const char *title, char a[][1024], int an, char b[][1024], int bn) {
+    int printed = 0;
+    for (int i = 0; i < an; i++) {
+        if (canonical_row_seen0(b, bn, a[i])) continue;
+        if (!printed) {
+            fprintf(fp, "# %s:\n", title);
+            printed = 1;
+        }
+        fprintf(fp, "#   %s\n", a[i][0] == '+' ? a[i] + 1 : a[i]);
+    }
+}
+
+
+typedef struct {
+    char a[128];
+    char b[128];
+    double angle;
+} VertexIncidentRow;
+
+
+static void copy_vertex_token0(char *dst, size_t cap, const char *src) {
+    if (cap == 0) return;
+    if (!src) src = "";
+    size_t n = 0;
+    while (n + 1 < cap && src[n]) {
+        dst[n] = src[n];
+        n++;
+    }
+    dst[n] = '\0';
+}
+
+static int vertex_incident_row_cmp_angle(const void *A, const void *B) {
+    const VertexIncidentRow *a = (const VertexIncidentRow *)A;
+    const VertexIncidentRow *b = (const VertexIncidentRow *)B;
+    return (a->angle > b->angle) - (a->angle < b->angle);
+}
+
+static int projection_center_xy(const Tile *tile, const Projection *projection, DPoint *out) {
+    if (!tile || !projection || !out || projection->poly.cycle_count < 1) return 0;
+    const Cycle *cy = &projection->poly.cycles[0];
+    if (cy->n <= 0) return 0;
+    out->x = 0.0;
+    out->y = 0.0;
+    for (int i = 0; i < cy->n; i++) {
+        DPoint p = coord_xy(tile, cy->v[i]);
+        out->x += p.x;
+        out->y += p.y;
+    }
+    out->x /= (double)cy->n;
+    out->y /= (double)cy->n;
+    return 1;
+}
+
+static void collect_projection_vertex_figures(const Tile *tile,
+                                              const Projection *proj,
+                                              int proj_count,
+                                              const HiddenCluster *clusters,
+                                              int cluster_count,
+                                              const EdgeRulePair *rules,
+                                              int rule_count,
+                                              CanonVertexFigureRow **rows_io,
+                                              int *count_io,
+                                              int *cap_io) {
+    if (!tile || !proj || proj_count <= 0 || !clusters || cluster_count <= 0) return;
+
+    OwnedSuperCycle central_owned;
+    if (!build_owned_super_cycle(&proj[0], clusters, cluster_count, &central_owned)) return;
+    if (central_owned.count != 6) return;
+
+    for (int ci = 0; ci < central_owned.count; ci++) {
+        int cluster = central_owned.v[ci].cluster;
+        VertexIncidentRow incident[8];
+        int incident_count = 0;
+
+        for (int p = 0; p < proj_count; p++) {
+            OwnedSuperCycle owned;
+            DPoint center;
+            if (!build_owned_super_cycle(&proj[p], clusters, cluster_count, &owned)) continue;
+            if (owned.count < 2) continue;
+            if (!projection_center_xy(tile, &proj[p], &center)) continue;
+
+            for (int vi = 0; vi < owned.count; vi++) {
+                if (owned.v[vi].cluster != cluster) continue;
+                if (incident_count >= (int)(sizeof(incident) / sizeof(incident[0]))) break;
+                int prev_edge = (vi + owned.count - 1) % owned.count;
+                int next_edge = vi;
+                make_owned_edge_token(&owned, +1, prev_edge,
+                                      incident[incident_count].a,
+                                      sizeof(incident[incident_count].a));
+                make_owned_edge_token(&owned, +1, next_edge,
+                                      incident[incident_count].b,
+                                      sizeof(incident[incident_count].b));
+                incident[incident_count].angle = atan2(center.y - clusters[cluster].y,
+                                                       center.x - clusters[cluster].x);
+                incident_count++;
+                break;
+            }
+        }
+
+        if (incident_count != 3) continue;
+        qsort(incident, (size_t)incident_count, sizeof(incident[0]), vertex_incident_row_cmp_angle);
+
+        int best_perm[3] = {0, 1, 2};
+        int found_perm = 0;
+        int perms[6][3] = {{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
+        for (int pi = 0; pi < 6 && !found_perm; pi++) {
+            VertexIncidentRow *r0 = &incident[perms[pi][0]];
+            VertexIncidentRow *r1 = &incident[perms[pi][1]];
+            VertexIncidentRow *r2 = &incident[perms[pi][2]];
+            if (edge_token_match0(r0->a, r1->b, rules, rule_count) &&
+                edge_token_match0(r1->a, r2->b, rules, rule_count) &&
+                edge_token_match0(r2->a, r0->b, rules, rule_count)) {
+                best_perm[0] = perms[pi][0];
+                best_perm[1] = perms[pi][1];
+                best_perm[2] = perms[pi][2];
+                found_perm = 1;
+            }
+        }
+
+        char e[3][2][128];
+        for (int r = 0; r < 3; r++) {
+            copy_vertex_token0(e[r][0], sizeof(e[r][0]), incident[best_perm[r]].a);
+            copy_vertex_token0(e[r][1], sizeof(e[r][1]), incident[best_perm[r]].b);
+        }
+        char text[1024];
+        canonical_vertex_figure_text0(e, text, sizeof(text));
+        add_canon_vertex_row(rows_io, count_io, cap_io, text);
+    }
+}
+
+static int print_vertex_figures(FILE *fp,
+                                CanonVertexFigureRow *vrows,
+                                int vrow_count,
+                                const EdgeRulePair *edge_rules,
+                                int edge_rule_count,
+                                int strict) {
+    char edge_set[512][1024];
+    char induced_set[512][1024];
+    int edge_n = collect_unique_edge_rows0(edge_rules, edge_rule_count, edge_set, 512);
+    int induced_n = collect_induced_edge_rows0(vrows, vrow_count, induced_set, 512);
+    int missing = row_set_missing_count0(edge_set, edge_n, induced_set, induced_n);
+    int extra = row_set_missing_count0(induced_set, induced_n, edge_set, edge_n);
+
+    qsort(vrows, (size_t)vrow_count, sizeof(vrows[0]), vertex_row_cmp0);
+    fprintf(fp, "\n#\n");
+    fprintf(fp, "# Vertex Figures\n");
+    fprintf(fp, "#\n");
+    if (missing || extra) {
+        fprintf(fp, "# status=%s edge_rows=%d induced_edge_rows=%d missing=%d extra=%d\n",
+                strict ? "ALERT" : "diagnostic", edge_n, induced_n, missing, extra);
+        print_row_set_missing0(fp, "missing_from_vertex_figures", edge_set, edge_n, induced_set, induced_n);
+        print_row_set_missing0(fp, "extra_from_vertex_figures", induced_set, induced_n, edge_set, edge_n);
+        fprintf(fp, "#\n");
+    }
+    fprintf(fp, "\n");
+    for (int i = 0; i < vrow_count; i++) {
+        fprintf(fp, "---[vf:%d]---\n", i + 1);
+        fprintf(fp, "%s\n\n", vrows[i].text);
+    }
+    return missing || extra;
+}
 
 static int emit_record(const Tile *tile,
                        int out_index,
@@ -1190,21 +1395,18 @@ int main(int argc, char **argv) {
     BComp1Context ctx;
     BComp1RecordVec records = {0};
     BComp1RecordVec super_records = {0};
-    BComp1RecordVec parents = {0};
     int emitted = 0;
     int projected_total = 0;
     int hidden_total = 0;
-    int six_cluster_records = 0;
-    int trusted_vertex_records = 0;
     UniqueHex *unique_hexes = NULL;
     int unique_count = 0;
     int unique_cap = 0;
     EdgeRulePair *edge_rules = NULL;
     int edge_rule_count = 0;
     int edge_rule_cap = 0;
-    ModelRow *rows = NULL;
-    int row_count = 0;
-    int row_cap = 0;
+    CanonVertexFigureRow *vertex_rows = NULL;
+    int vertex_row_count = 0;
+    int vertex_row_cap = 0;
 
     if (!parse_args(argc, argv, &opt)) { usage(argv[0]); return 1; }
     if (!bcomp1_context_init(&ctx, opt.tile_path,
@@ -1227,11 +1429,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (opt.data_mode) {
-        if (!bcomp1_load_records(opt.parents_path, &parents)) {
-            fprintf(stderr, "warning: failed to load RL2 parent records: %s\n", opt.parents_path);
-        }
-    }
 
     Projection *proj = calloc(ATTACH0_MAX_TILES, sizeof(*proj));
     Coord *hidden = calloc(RL4_MAX_HIDDEN, sizeof(*hidden));
@@ -1252,10 +1449,8 @@ int main(int argc, char **argv) {
         printf("# RL5 supertile hexagon extraction\n");
         printf("# input: %s\n", opt.data_path);
         printf("# supertile: %s\n", opt.supertile_path);
-        printf("# rl2_parents: %s\n\n", opt.parents_path);
         printf("# Supertile hexagons use cyclic CCW lists of clustered triple-intersection vertices.\n");
         printf("# Edge tokens use down(e(A,B)) = e(first(A),last(B)) on cyclic cluster edges.\n");
-        printf("# Each row records the RL3 item, inferred RL2 parent, and unique reduction.\n\n");
     }
     for (size_t ri = 0; ri < records.count; ri++) {
         const BComp1Record *r = &records.items[ri];
@@ -1282,36 +1477,28 @@ int main(int argc, char **argv) {
         int cluster_count = build_hidden_clusters(&ctx.tile, proj, proj_count,
                                                   hidden, hidden_count,
                                                   clusters, RL4_MAX_CLUSTERS);
-        int vertices_trusted = central_projection_has_trusted_vertices(proj, proj_count, clusters, cluster_count);
-        if (cluster_count == 6) six_cluster_records++;
-        if (vertices_trusted) trusted_vertex_records++;
         emitted++;
         projected_total += proj_count;
         hidden_total += hidden_count;
         char hex_key[2048];
         build_hex_key(clusters, cluster_count, hex_key, sizeof(hex_key));
         int unique_id = unique_hex_add(&unique_hexes, &unique_count, &unique_cap, hex_key, emitted) + 1;
-        int parent_id = opt.data_mode ? find_parent_record(&parents, r) : 0;
+        int parent_id = 0;
         if (opt.verbose && !opt.data_mode) {
             fprintf(stderr, "[%d] source=%zu parent=%d unique=%d reflected=%d hidden=%d clusters=%d\n",
                     emitted, ri + 1, parent_id, unique_id, proj_count, hidden_count, cluster_count);
         }
         if (opt.data_mode) {
-            ModelRow row;
-            memset(&row, 0, sizeof(row));
-            row.record = emitted;
-            row.source = (int)ri + 1;
-            row.parent = parent_id;
-            row.unique_id = unique_id;
-            row.projected = proj_count;
-            row.hidden = hidden_count;
-            row.clusters = cluster_count;
-            snprintf(row.key, sizeof(row.key), "%s", hex_key);
-            model_row_add(&rows, &row_count, &row_cap, &row);
             collect_projection_edge_rules(&ctx.tile, proj, proj_count, clusters, cluster_count,
                                           emitted, parent_id, unique_id,
                                           &edge_rules, &edge_rule_count,
                                           &edge_rule_cap, NULL);
+            collect_projection_vertex_figures(&ctx.tile, proj, proj_count,
+                                              clusters, cluster_count,
+                                              edge_rules, edge_rule_count,
+                                              &vertex_rows,
+                                              &vertex_row_count,
+                                              &vertex_row_cap);
         } else {
             emit_record(&ctx.tile, emitted, r, proj, proj_count,
                         hidden, hidden_count);
@@ -1327,8 +1514,6 @@ int main(int argc, char **argv) {
     }
 
     if (opt.data_mode) {
-        printf("\nSupertile Hexagons grouped by RL2 parent\n");
-        print_grouped_rows(stdout, rows, row_count, (int)parents.count);
         printf("\nUnique Supertile Hexagons\n");
         for (int i = 0; i < unique_count; i++) {
             printf("%2d  %-78s  # records %s\n",
@@ -1336,17 +1521,14 @@ int main(int argc, char **argv) {
                    unique_hexes[i].key,
                    unique_hexes[i].records);
         }
-        printf("\nVertex QA\n");
-        printf("  records=%d\n", emitted);
-        printf("  six_cluster_records=%d\n", six_cluster_records);
-        printf("  trusted_central_vertex_records=%d\n", trusted_vertex_records);
-        printf("  status=%s\n", emitted > 0 && trusted_vertex_records == emitted ? "trusted_central_cycles" : "needs_review");
 
         printf("\nDownmapped Super Hexagon Edge Matches\n");
         printf("# canonical rows; provenance lists source surround records\n");
         print_edge_matches(stdout, edge_rules, edge_rule_count, emitted);
-        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_matches=%d\n",
-               emitted, projected_total, hidden_total, unique_count, edge_rule_count);
+        print_vertex_figures(stdout, vertex_rows, vertex_row_count,
+                             edge_rules, edge_rule_count, 1);
+        printf("\nSummary emitted=%d projected=%d hidden=%d unique=%d edge_matches=%d vertex_figures=%d\n",
+               emitted, projected_total, hidden_total, unique_count, edge_rule_count, vertex_row_count);
     }
 
     if (opt.verbose) {
@@ -1356,13 +1538,12 @@ int main(int argc, char **argv) {
 
     free(unique_hexes);
     free(edge_rules);
-    free(rows);
+    free(vertex_rows);
     free(proj);
     free(hidden);
     free(clusters);
     bcomp1_free_records(&records);
     bcomp1_free_records(&super_records);
-    bcomp1_free_records(&parents);
     bcomp1_context_clear(&ctx);
     return 0;
 }

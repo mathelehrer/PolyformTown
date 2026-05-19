@@ -149,7 +149,8 @@ static int parse_big_rows(const char *text, BRow rows[], int cap){
         snprintf(tmp, sizeof(tmp), "%s", line);
         trim(tmp);
         if(strcmp(tmp, "Unique Supertile Hexagons") == 0){ in = 1; continue; }
-        if(in && strncmp(tmp, "Vertex QA", 9) == 0) break;
+        if(in && strncmp(tmp, "Downmapped Super Hexagon Edge Matches", 38) == 0) break;
+        if(in && strcmp(tmp, "# Vertex Figures") == 0) break;
         if(!in || !isdigit((unsigned char)tmp[0])) continue;
         if(n >= cap){ free(copy); return 0; }
         int id = atoi(tmp);

@@ -520,6 +520,110 @@ static void print_edge_classes(const EdgeRule *rules, int rule_count){
     }
 }
 
+
+
+typedef struct {
+    char text[512];
+    int obs;
+} CanonVertexFigureRow;
+
+static void little_vertex_text_from_inc(const Inc *inc, const int *sh, int n, char *out, size_t cap){
+    size_t off = 0;
+    out[0] = '\0';
+    for(int r=0; r<n; r++){
+        int idx = inc[sh[r]].item.i;
+        int prev = (idx + 13) % 14;
+        int next = (idx + 1) % 14;
+        int m = snprintf(out + off, cap > off ? cap - off : 0,
+                         "[e(%d,%d), e(%d,%d)]%s",
+                         prev, idx, idx, next, r == n - 1 ? "" : "\n");
+        if(m < 0) return;
+        off += (size_t)m;
+        if(off >= cap){ out[cap ? cap - 1 : 0] = '\0'; return; }
+    }
+}
+
+static void canon_vertex_shift_text(const char *text, char *out, size_t cap){
+    char rows[3][160];
+    int rn = 0;
+    const char *p = text;
+    while(*p && rn < 3){
+        const char *end = strchr(p, '\n');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        if(len >= sizeof(rows[rn])) len = sizeof(rows[rn]) - 1;
+        memcpy(rows[rn], p, len);
+        rows[rn][len] = '\0';
+        rn++;
+        if(!end) break;
+        p = end + 1;
+    }
+    if(rn != 3){ snprintf(out, cap, "%s", text); return; }
+    char best[512], cur[512];
+    int have = 0;
+    for(int sh=0; sh<3; sh++){
+        snprintf(cur, sizeof(cur), "%s\n%s\n%s", rows[sh], rows[(sh+1)%3], rows[(sh+2)%3]);
+        if(!have || strcmp(cur,best)<0){ snprintf(best,sizeof(best),"%s",cur); have=1; }
+    }
+    snprintf(out, cap, "%s", have ? best : text);
+}
+
+static int canon_vertex_cmp(const void *A, const void *B){
+    const CanonVertexFigureRow *a=A, *b=B;
+    return strcmp(a->text,b->text);
+}
+
+static int add_canon_vertex(CanonVertexFigureRow **rows_io, int *count_io, int *cap_io, const char *text){
+    char canon[512];
+    canon_vertex_shift_text(text, canon, sizeof(canon));
+    for(int i=0;i<*count_io;i++) if(strcmp((*rows_io)[i].text, canon)==0){ (*rows_io)[i].obs++; return 1; }
+    if(*count_io >= *cap_io){
+        int nc = *cap_io ? *cap_io * 2 : 32;
+        CanonVertexFigureRow *nr = realloc(*rows_io, (size_t)nc * sizeof(*nr));
+        if(!nr) return 0;
+        *rows_io = nr; *cap_io = nc;
+    }
+    snprintf((*rows_io)[*count_io].text, sizeof((*rows_io)[*count_io].text), "%s", canon);
+    (*rows_io)[*count_io].obs = 1;
+    (*count_io)++;
+    return 1;
+}
+
+static void collect_little_vertex_figures(const Tile *tile, const Rec *r, int cti,
+                                          CanonVertexFigureRow **rows_io,
+                                          int *count_io,
+                                          int *cap_io,
+                                          int *observations,
+                                          int *exceptions){
+    for(int ci=0; ci<r->center.n; ci++){
+        Inc inc[RL0_FM_MAX_ITEMS];
+        int cnt=0, ord[RL0_FM_MAX_ITEMS], on=0, sh[RL0_FM_MAX_ITEMS];
+        char text[512];
+        if(!collect_inc(tile,r,r->center.v[ci],inc,&cnt,cti)) continue;
+        if(cnt != 3){ if(cnt == 4) (*exceptions)++; continue; }
+        if(!order_inc(inc,cnt,ord,&on)) { (*exceptions)++; continue; }
+        if(!shift_central(inc,ord,on,sh)) { (*exceptions)++; continue; }
+        little_vertex_text_from_inc(inc, sh, on, text, sizeof(text));
+        if(add_canon_vertex(rows_io, count_io, cap_io, text)) (*observations)++;
+    }
+}
+
+static void print_little_vertex_figures(CanonVertexFigureRow *rows, int count, int observations, int exceptions){
+    (void)observations;
+    qsort(rows, (size_t)count, sizeof(rows[0]), canon_vertex_cmp);
+    printf("\n#\n");
+    printf("# Vertex Figures\n");
+    printf("#\n");
+    if(exceptions){
+        printf("# diagnostic: exceptions=%d\n", exceptions);
+        printf("#\n");
+    }
+    printf("\n");
+    for(int i=0;i<count;i++){
+        printf("---[vf:%d]---\n", i+1);
+        printf("%s\n\n", rows[i].text);
+    }
+}
+
 static void print_full_header(void){
     printf("#\n");
     printf("# Hexagons as cyclic CCW lists of CCW vertex figures\n");
@@ -544,6 +648,11 @@ int main(int argc,char **argv){
     EdgeRule *edge_rules=calloc(MAX_EDGE_RULES,sizeof(*edge_rules));
     int hex_item_count = 0;
     int edge_rule_count = 0;
+    CanonVertexFigureRow *vertex_rows = NULL;
+    int vertex_row_count = 0;
+    int vertex_row_cap = 0;
+    int vertex_observations = 0;
+    int vertex_exceptions = 0;
     Tile tile;
 
     if(argc>1) data=argv[1];
@@ -641,6 +750,10 @@ int main(int argc,char **argv){
                 }
                 derive_hex_and_rules(hi, edge_rules, &edge_rule_count);
                 canonicalize_hex_cycle(hi);
+                collect_little_vertex_figures(&tile, &recs[i], infos[i].center_tile,
+                                              &vertex_rows, &vertex_row_count,
+                                              &vertex_row_cap, &vertex_observations,
+                                              &vertex_exceptions);
             }
         }
         if(!emitted) printf("\n");
@@ -681,11 +794,13 @@ int main(int argc,char **argv){
     printf("#     canonical rows; provenance lists source surround records\n");
     printf("#\n\n");
     print_edge_matches(edge_rules, edge_rule_count, hex_item_count);
+    print_little_vertex_figures(vertex_rows, vertex_row_count,
+                                vertex_observations, vertex_exceptions);
 
     printf("\n#\n");
     printf("# Edge Classes\n");
     printf("#\n\n");
     print_edge_classes(edge_rules, edge_rule_count);
 
-    free(recs); free(infos); free(groups); free(hex_items); free(edge_rules); return 0;
+    free(recs); free(infos); free(groups); free(hex_items); free(edge_rules); free(vertex_rows); return 0;
 }
