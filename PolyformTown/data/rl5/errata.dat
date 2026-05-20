@@ -1,4 +1,11 @@
 dead: super 6 overlap 6 7 12 13
 
-make rl5_super6_sat_check
-make rl5_overlap671213_sat_check
+Generated SAT artifacts are intentionally not tracked.
+
+To regenerate:
+  make rl5_super6_sat_data
+  make rl5_overlap671213_sat_data
+
+To verify:
+  make rl5_super6_sat_check
+  make rl5_overlap671213_sat_check

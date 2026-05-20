@@ -12,3 +12,4 @@ PolyformTown/img/gpt-debug
 PolyformTown/*.dat
 PolyformTown/*.svg
 PolyformTown/src/rl1/debug
+PolyformTown/data/rl5/sat/

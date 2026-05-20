@@ -357,8 +357,13 @@ rl5_super6_errata_placeholder:
 	@mkdir -p $(dir $(RL5_ERRATA_DATA))
 	@{ \
 		printf "dead: super 6 overlap 6 7 12 13\n\n"; \
-		printf "make rl5_super6_sat_check\n"; \
-		printf "make rl5_overlap671213_sat_check\n"; \
+		printf "Generated SAT artifacts are intentionally not tracked.\n\n"; \
+		printf "To regenerate:\n"; \
+		printf "  make rl5_super6_sat_data\n"; \
+		printf "  make rl5_overlap671213_sat_data\n\n"; \
+		printf "To verify:\n"; \
+		printf "  make rl5_super6_sat_check\n"; \
+		printf "  make rl5_overlap671213_sat_check\n"; \
 	} > $(RL5_ERRATA_DATA)
 
 rl5_sat_data: rl5_super6_sat_data rl5_overlap671213_sat_data
