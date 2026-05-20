@@ -19,14 +19,14 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 boot_rl6 figures figures_files rl5_pathology_svg rl5_super6_sat_data rl5_super6_errata_placeholder rl5_super6_sat_check rl5_overlap671213_sat_check rl5_sat_solver_notice rl6_unified_data \
+.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 boot_rl6 figures figures_files rl5_pathology_svg rl5_super6_sat_data rl5_overlap671213_sat_data rl5_sat_data rl5_super6_errata_placeholder rl5_super6_sat_check rl5_overlap671213_sat_check rl5_sat_solver_notice rl6_unified_data rl6_refine_data \
 
 .NOTPARALLEL: boot
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_generate supertile_depict pathological_item6 \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -45,7 +45,7 @@ all: tools
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_generate supertile_depict pathological_item6 \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -71,7 +71,7 @@ clean:
 		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate $(BIN)/rl4_supertile_candidates \
 		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons \
 		$(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
-		$(BIN)/pathological_item6 $(BIN)/rl5_sat $(BIN)/rl6_reduce $(BIN)/rl6_generate \
+		$(BIN)/pathological_item6 $(BIN)/rl5_sat $(BIN)/rl6_reduce $(BIN)/rl6_refine $(BIN)/rl6_generate \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
 		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
@@ -187,8 +187,17 @@ RL5_SUPERTILE_HEXAGONS_DATA ?= data/rl5/supertile_hexagons.dat
 RL5_OVERLAP_HEXAGONS_DATA ?= data/rl5/overlap_supertile_hexagons.dat
 RL5_REDUCED_HEXES_DATA ?= data/rl5/reduced_8_hexes.dat
 RL5_PATHOLOGY_DATA ?= data/rl5/pathological_item.dat
-RL5_SUPER6_D6_FIXED_CNF ?= data/rl5/super6_d6_fixed.cnf
-RL5_SUPER6_D6_FIXED_MAP ?= data/rl5/super6_d6_fixed.map
+RL5_SAT_DIR ?= data/rl5/sat
+RL5_SUPER6_D6_FIXED_CNF ?= $(RL5_SAT_DIR)/super6_d6_fixed.cnf
+RL5_SUPER6_D6_FIXED_MAP ?= $(RL5_SAT_DIR)/super6_d6_fixed.map
+RL5_OVERLAP6_D6_FIXED_CNF ?= $(RL5_SAT_DIR)/overlap6_d6_fixed.cnf
+RL5_OVERLAP6_D6_FIXED_MAP ?= $(RL5_SAT_DIR)/overlap6_d6_fixed.map
+RL5_OVERLAP7_D6_FIXED_CNF ?= $(RL5_SAT_DIR)/overlap7_d6_fixed.cnf
+RL5_OVERLAP7_D6_FIXED_MAP ?= $(RL5_SAT_DIR)/overlap7_d6_fixed.map
+RL5_OVERLAP12_D6_FIXED_CNF ?= $(RL5_SAT_DIR)/overlap12_d6_fixed.cnf
+RL5_OVERLAP12_D6_FIXED_MAP ?= $(RL5_SAT_DIR)/overlap12_d6_fixed.map
+RL5_OVERLAP13_D6_FIXED_CNF ?= $(RL5_SAT_DIR)/overlap13_d6_fixed.cnf
+RL5_OVERLAP13_D6_FIXED_MAP ?= $(RL5_SAT_DIR)/overlap13_d6_fixed.map
 RL5_ERRATA_DATA ?= data/rl5/errata.dat
 
 rl5_hexagons: $(BIN)/rl5_hexagons
@@ -206,20 +215,30 @@ $(BIN)/rl5_stats: $(SRC)/rl5/stats5.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $
 
 rl5_generate: rl5_hexagons rl5_supertile_hexagons
 
+
 rl6_reduce: $(BIN)/rl6_reduce
 $(BIN)/rl6_reduce: $(SRC)/rl6/reduce6.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o $(SRC)/rl5/boundary5.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl6/reduce6.o $(SRC)/rl5/model5.o $(SRC)/rl5/attach5.o $(SRC)/rl5/vcomp5.o $(SRC)/rl5/bcomp5.o $(SRC)/rl5/boundary5.o
+
+rl6_refine: $(BIN)/rl6_refine
+$(BIN)/rl6_refine: $(BIN)/rl6_reduce | $(BIN)
+	@cp $(BIN)/rl6_reduce $@
 
 rl6_generate: $(BIN)/rl6_generate
 $(BIN)/rl6_generate: $(SRC)/rl6/generate6.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl6/generate6.o
 
 RL6_UNIFIED_DATA ?= data/rl6/unified_model.dat
+RL6_REFINED_DATA ?= data/rl6/refined_model.dat
+RL6_REFINE_CANCEL_DEPTH ?= 1
 
 rl6_unified_data: rl6_reduce rl6_generate
 	@mkdir -p data/rl6
 	@$(BIN)/rl6_generate $(RL6_UNIFIED_DATA)
 
+rl6_refine_data: rl6_refine rl6_unified_data
+	@mkdir -p data/rl6
+	@$(BIN)/rl6_refine --cancel-depth $(RL6_REFINE_CANCEL_DEPTH) --output $(RL6_REFINED_DATA)
 
 
 # -----------------------------------------------------------------------------
@@ -228,15 +247,14 @@ rl6_unified_data: rl6_reduce rl6_generate
 # Boot tower: purge generated runlevel data, then rebuild a deterministic
 # prefix of the boot chain.
 #
-#  make boot      # full boot, reaching RL7
-#  make boot RL=0 # full boot, reaching RL7
+#  make boot      # full boot, reaching RL6
+#  make boot RL=0 # full boot, reaching RL6
 #  make boot RL=1 # stop after reaching RL1
 #  make boot RL=2 # stop after reaching RL2
 #  make boot RL=3 # stop after reaching RL3
 #  make boot RL=4 # stop after reaching RL4
 #  make boot RL=5 # stop after reaching RL5
 #  make boot RL=6 # stop after reaching RL6
-#  make boot RL=7 # stop after reaching RL7
 #
 
 RL ?= 0
@@ -263,11 +281,8 @@ BOOT_REACHED_RL := 5
 else ifeq ($(RL),6)
 BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5
 BOOT_REACHED_RL := 6
-else ifeq ($(RL),7)
-BOOT_RUNLEVELS := boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 boot_rl6
-BOOT_REACHED_RL := 7
 else
-$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..7 to reach that runlevel)
+$(error Unknown RL=$(RL); use RL=0 for full boot or RL=1..6 to reach that runlevel)
 endif
 
 boot: clean_boot_data $(BOOT_RUNLEVELS) boot_splash
@@ -314,7 +329,7 @@ boot_rl4: rl4_generate rl4_refine
 	$(call announce,RL4 refine)
 	@$(BIN)/rl4_supertile_candidates
 
-boot_rl5: rl5_generate pathological_item6 rl5_sat rl5_super6_errata_placeholder
+boot_rl5: rl5_generate pathological_item6
 	$(call announce,RL5 hexagons)
 	@mkdir -p data/rl5
 	@$(BIN)/rl5_hexagons > $(RL5_HEXAGONS_DATA)
@@ -323,18 +338,20 @@ boot_rl5: rl5_generate pathological_item6 rl5_sat rl5_super6_errata_placeholder
 	@echo $(RL5_HEXAGONS_DATA)
 	@echo $(RL5_SUPERTILE_HEXAGONS_DATA)
 	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
-	@$(BIN)/pathological_item6 --data $(RL5_PATHOLOGY_DATA) >/dev/null 2>/dev/null
+	@$(BIN)/pathological_item6 --data $(RL5_PATHOLOGY_DATA) >/dev/null 2>/dev/null 2>/dev/null
+	@$(MAKE) --no-print-directory rl5_sat_data
 	$(call announce,RL5 pathology)
 	@echo $(RL5_PATHOLOGY_DATA)
 	@$(MAKE) --no-print-directory rl5_super6_errata_placeholder
-	@$(MAKE) --no-print-directory rl5_sat_solver_notice
 	@echo $(RL5_ERRATA_DATA)
 
 
-boot_rl6: rl6_reduce rl6_generate
-	$(call announce,RL6 generate)
-	@$(MAKE) --no-print-directory rl6_unified_data
+boot_rl6: rl6_refine rl6_unified_data
+	$(call announce,RL6 refine)
+	@mkdir -p data/rl6
+	@$(BIN)/rl6_refine --cancel-depth $(RL6_REFINE_CANCEL_DEPTH) --output $(RL6_REFINED_DATA)
 	@echo $(RL6_UNIFIED_DATA)
+	@echo $(RL6_REFINED_DATA)
 
 rl5_super6_errata_placeholder:
 	@mkdir -p $(dir $(RL5_ERRATA_DATA))
@@ -342,54 +359,35 @@ rl5_super6_errata_placeholder:
 		printf "dead: super 6 overlap 6 7 12 13\n\n"; \
 		printf "make rl5_super6_sat_check\n"; \
 		printf "make rl5_overlap671213_sat_check\n"; \
-		printf "\n"; \
-		printf "pending: SAT checks not run by boot.\n"; \
 	} > $(RL5_ERRATA_DATA)
 
+rl5_sat_data: rl5_super6_sat_data rl5_overlap671213_sat_data
 
-rl5_super6_sat_check:
-	@mkdir -p $(dir $(RL5_ERRATA_DATA))
-	@{ \
-		printf "dead: super 6 overlap 6 7 12 13\n\n"; \
-		printf "make rl5_super6_sat_check\n"; \
-		printf "make rl5_overlap671213_sat_check\n"; \
-		printf "Deleted: Super 6\n"; \
-		tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) --exists-only | \
-			awk '/^==> solve with PySAT/{keep=1} keep && !/^SAT$$/{print} /^SAT$$/{print "UNSAT"}'; \
-	} > $(RL5_ERRATA_DATA)
+rl5_super6_sat_data: rl5_sat
+	@mkdir -p $(RL5_SAT_DIR)
+	@$(BIN)/rl5_sat --model super --record 6 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) >/dev/null 2>/dev/null
+
+rl5_overlap671213_sat_data: rl5_sat
+	@mkdir -p $(RL5_SAT_DIR)
+	@$(BIN)/rl5_sat --model overlap --record 6 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_OVERLAP6_D6_FIXED_CNF) --map $(RL5_OVERLAP6_D6_FIXED_MAP) >/dev/null 2>/dev/null
+	@$(BIN)/rl5_sat --model overlap --record 7 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_OVERLAP7_D6_FIXED_CNF) --map $(RL5_OVERLAP7_D6_FIXED_MAP) >/dev/null 2>/dev/null
+	@$(BIN)/rl5_sat --model overlap --record 12 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_OVERLAP12_D6_FIXED_CNF) --map $(RL5_OVERLAP12_D6_FIXED_MAP) >/dev/null 2>/dev/null
+	@$(BIN)/rl5_sat --model overlap --record 13 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_OVERLAP13_D6_FIXED_CNF) --map $(RL5_OVERLAP13_D6_FIXED_MAP) >/dev/null 2>/dev/null
+
+rl5_super6_sat_check: rl5_super6_sat_data
+	@tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) --exists-only | \
+		awk '/^SAT$$/{bad=1} END{if(bad){print "super 6: SAT"; exit 1} print "super 6: UNSAT"}'
 	@echo $(RL5_ERRATA_DATA)
 
-rl5_overlap671213_sat_check: rl5_sat
-	@mkdir -p $(dir $(RL5_ERRATA_DATA))
-	@{ \
-		printf "dead: super 6 overlap 6 7 12 13\n\n"; \
-		printf "make rl5_super6_sat_check\n"; \
-		printf "make rl5_overlap671213_sat_check\n"; \
-		printf "Deleted: Overlap 6 7 12 13\n"; \
-		for r in 6 7 12 13; do \
-			$(BIN)/rl5_sat --model overlap --record $$r --boundary-depth 6 --fixed-center-orientation --cnf data/rl5/overlap$$r.cnf --map data/rl5/overlap$$r.map >/dev/null 2>/dev/null; \
-			printf "overlap $$r: "; \
-			tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf data/rl5/overlap$$r.cnf --map data/rl5/overlap$$r.map --exists-only | awk '/^SAT$$/{hit=1} END{print hit ? "SAT" : "UNSAT"}'; \
-		done; \
-	} > $(RL5_ERRATA_DATA)
+rl5_overlap671213_sat_check: rl5_overlap671213_sat_data
+	@tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_OVERLAP6_D6_FIXED_CNF) --map $(RL5_OVERLAP6_D6_FIXED_MAP) --exists-only | awk '/^SAT$$/{bad=1} END{if(bad){print "overlap 6: SAT"; exit 1} print "overlap 6: UNSAT"}'
+	@tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_OVERLAP7_D6_FIXED_CNF) --map $(RL5_OVERLAP7_D6_FIXED_MAP) --exists-only | awk '/^SAT$$/{bad=1} END{if(bad){print "overlap 7: SAT"; exit 1} print "overlap 7: UNSAT"}'
+	@tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_OVERLAP12_D6_FIXED_CNF) --map $(RL5_OVERLAP12_D6_FIXED_MAP) --exists-only | awk '/^SAT$$/{bad=1} END{if(bad){print "overlap 12: SAT"; exit 1} print "overlap 12: UNSAT"}'
+	@tools/rl5_count_pysat.py --boundary-depth 6 --skip-generate --cnf $(RL5_OVERLAP13_D6_FIXED_CNF) --map $(RL5_OVERLAP13_D6_FIXED_MAP) --exists-only | awk '/^SAT$$/{bad=1} END{if(bad){print "overlap 13: SAT"; exit 1} print "overlap 13: UNSAT"}'
 	@echo $(RL5_ERRATA_DATA)
 
 rl5_sat_solver_notice:
-	@printf "\033[31mwarning:\033[0m Pathology analysis needs SAT solving.\n"
-	@printf "    solution:  make rl5_super6_sat_check / make rl5_overlap671213_sat_check\n    temporary: "
-	@if ! command -v python3 >/dev/null 2>&1; then \
-		printf "\033[31mwarning:\033[0m python3 missing; cannot run SAT check here.\n"; \
-	elif ! python3 -c 'import pysat' >/dev/null 2>&1; then \
-		printf "\033[31mwarning:\033[0m python-sat missing; install: python3 -m pip install python-sat\n"; \
-	elif [ ! -x tools/rl5_count_pysat.py ]; then \
-		printf "\033[31mwarning:\033[0m helper not executable; run: chmod +x tools/rl5_count_pysat.py\n"; \
-	fi
-
-rl5_super6_sat_data: rl5_sat
-	@mkdir -p data/rl5
-	@$(MAKE) --no-print-directory rl5_sat_solver_notice
-	@echo $(RL5_SUPER6_D6_FIXED_CNF)
-	@echo $(RL5_SUPER6_D6_FIXED_MAP)
+	@printf "SAT verification uses: make rl5_super6_sat_check or make rl5_overlap671213_sat_check\n"
 
 rl0_data: rl0_generate
 	@$(BIN)/rl0_generate preferences/focus.tile

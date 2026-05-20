@@ -1,0 +1,66 @@
+# RL6 refined full-letter model
+# source: data/rl6/unified_model.dat
+# recovery: apply the binary projection path below to the source model.
+# cancel_depth=1
+# best_tiles=3
+# best_ties=1
+# dead_extra_hexes=3
+# path=A=B H=I C=D
+
+---[vertex equalities]---
+  A = B
+  H = I
+  C = D
+
+---[projection path]---
+A=B H=I C=D
+
+---[tiles]---
+A, F, G, H, C, E
+A, F, G, H, J, C
+A, K, F, H, C, E
+
+---[edge rules directed lex]---
+A,F = C,A
+C,A = A,F
+A,F = H,C
+H,C = A,F
+A,F = F,H
+F,H = A,F
+A,F = J,C
+J,C = A,F
+A,F = K,F
+K,F = A,F
+A,K = H,J
+H,J = A,K
+C,E = E,A
+E,A = C,E
+C,E = H,C
+H,C = C,E
+C,E = G,H
+G,H = C,E
+E,A = F,G
+F,G = E,A
+F,G = G,H
+G,H = F,G
+F,G = H,C
+H,C = F,G
+G,H = G,H
+
+---[valid vertex triples]---
+A, A, A
+A, A, C
+A, C, C
+A, F, C
+A, F, F
+A, F, H
+A, F, J
+C, C, C
+C, F, H
+E, E, E
+E, E, G
+E, G, G
+E, H, G
+F, K, H
+G, G, G
+G, G, H

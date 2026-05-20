@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #define MAX_FIGS HEX5_MAX_VFIGS
@@ -13,16 +14,36 @@ typedef struct { Merge6 m[MAX_MERGES]; int n; } MergeSet6;
 typedef struct { char s[MAX_LABELS][HEX5_TOK]; int n; } LabelSet6;
 typedef struct { char raw[HEX5_TOK]; char cluster[HEX5_TOK]; } EdgeMap6;
 typedef struct { EdgeMap6 m[4096]; int n; } EdgeMapSet6;
+typedef struct { char name[HEX5_TOK]; int parent; } DsuItem6;
+typedef struct { DsuItem6 item[MAX_LABELS]; int n; } Dsu6;
+
+static int is_refine_invocation6(const char *argv0){
+    return argv0 && strstr(argv0, "rl6_refine") != NULL;
+}
 
 static void usage(const char *argv0){
-    fprintf(stderr,
-            "usage: %s [--model basic|super|overlap] [--cluster-symbols] [--merge A,B[=X]] [--scan-pairs] [--dfs N] [--dfs-slots [N]] [--emit-state N] [--alignment] [--offset-map] [--print-missing N] [--print-inner N] [--probe-extra N] [--probe-dimer EDGE_A EDGE_B] [--probe-cycle-pair A B] [--probe-depth N] [--probe-states N]\n"
-            "\n"
-            "Build the ordinary RL5 vertex atlas, then build the closed-cycle\n"
-            "atlas by enumerating six-neighbor rings around each central tile.\n"
-            "Also canonicalize the six inner-meets-outer edge-pair cycles.\n"
-            "With --merge/--scan-pairs, collapse vertex labels and rebuild stats.\n",
-            argv0);
+    if(is_refine_invocation6(argv0)){
+        fprintf(stderr,
+                "usage: %s [--cancel-depth N] [--output PATH] [--certify-path 'A=B C=D'] [--emit-state N] [--print-inner N]\n"
+                "\n"
+                "Search exhaustive reversible reductions of the full RL6 letter model only.\n"
+                "DFS runs until the accepted frontier is exhausted; cancellation-depth is\n"
+                "the practical knob. A binary merge is accepted only when the 25\n"
+                "projected cycles remain injective/present, all extra rebuilt cycles\n"
+                "are killed by the cancellation-depth probe, and the slot matrix is\n"
+                "preserved through the recovery map. The model selector is intentionally\n"
+                "not public here.\n",
+                argv0);
+    } else {
+        fprintf(stderr,
+                "usage: %s [--model basic|super|overlap|unified] [--cluster-symbols] [--merge A,B[=X]] [--scan-pairs] [--dfs N] [--dfs-slots [N]] [--emit-state N] [--certify-path 'A=B C=D'] [--alignment] [--offset-map] [--print-missing N] [--print-inner N] [--probe-extra N] [--probe-dimer EDGE_A EDGE_B] [--probe-cycle-pair A B] [--probe-depth N] [--probe-states N]\n"
+                "\n"
+                "Build the ordinary RL5/RL6 vertex atlas, then build the closed-cycle\n"
+                "atlas by enumerating six-neighbor rings around each central tile.\n"
+                "Also canonicalize the six inner-meets-outer edge-pair cycles.\n"
+                "With --merge/--scan-pairs, collapse vertex labels and rebuild stats.\n",
+                argv0);
+    }
 }
 
 static int vfig_cmp_raw(const int a[3], const int b[3]){
@@ -437,10 +458,101 @@ static int apply_errata(Hex5Model *m, const char *model){
     return 1;
 }
 
+
+static int parse_unified_tile_line6(Hex5Model *m, const char *line){
+    char tmp[4096], *tok[HEX5_SIDES];
+    int n = 0;
+    Hex5 h;
+    snprintf(tmp, sizeof(tmp), "%s", line ? line : "");
+    trim6(tmp);
+    if(!*tmp || tmp[0] == '#') return 1;
+    for(char *p = strtok(tmp, ", \t\r\n"); p && n < HEX5_SIDES; p = strtok(NULL, ", \t\r\n")){
+        tok[n++] = p;
+    }
+    if(n != HEX5_SIDES) return 1;
+    for(int i=0;i<HEX5_SIDES;i++) edge_tok(h.e[i], tok[i], tok[(i+1)%HEX5_SIDES]);
+    return add_tile_unique(m, &h);
+}
+
+static int parse_unified_rule_line6(Hex5Model *m, const char *line){
+    char tmp[4096], left[HEX5_TOK], right[HEX5_TOK];
+    char la[HEX5_TOK], lb[HEX5_TOK], ra[HEX5_TOK], rb[HEX5_TOK];
+    char *eq;
+    snprintf(tmp, sizeof(tmp), "%s", line ? line : "");
+    trim6(tmp);
+    if(!*tmp || tmp[0] == '#') return 1;
+    eq = strchr(tmp, '=');
+    if(!eq) return 1;
+    *eq = '\0';
+    copy_tok(left, tmp);
+    copy_tok(right, eq + 1);
+    trim6(left);
+    trim6(right);
+    if(!split_edge(left, la, lb) || !split_edge(right, ra, rb)) return 1;
+    edge_tok(left, la, lb);
+    edge_tok(right, ra, rb);
+    m->nsource_rules++;
+    return add_rule_unique(m, left, right) && add_rule_unique(m, right, left);
+}
+
+static int load_unified_model6(const char *path, Hex5Model *m){
+    FILE *f = fopen(path, "r");
+    char line[4096];
+    int in_tiles = 0, in_rules = 0;
+    if(!f) return 0;
+    memset(m, 0, sizeof(*m));
+    while(fgets(line, sizeof(line), f)){
+        char tmp[4096];
+        snprintf(tmp, sizeof(tmp), "%s", line);
+        trim6(tmp);
+        if(strcmp(tmp, "---[tiles]---") == 0){ in_tiles = 1; in_rules = 0; continue; }
+        if(strcmp(tmp, "---[edge rules directed lex]---") == 0){ in_tiles = 0; in_rules = 1; continue; }
+        if(strncmp(tmp, "---[", 5) == 0){ in_tiles = 0; in_rules = 0; continue; }
+        if(in_tiles){ if(!parse_unified_tile_line6(m, tmp)){ fclose(f); return 0; } }
+        else if(in_rules){ if(!parse_unified_rule_line6(m, tmp)){ fclose(f); return 0; } }
+    }
+    fclose(f);
+    return hex5_model_finish(m);
+}
+
+
+static int load_unified_basic_merge6(const char *path, MergeSet6 *ms){
+    FILE *f = fopen(path, "r");
+    char line[4096];
+    int in_basic = 0;
+    if(!f) return 0;
+    ms->n = 0;
+    while(fgets(line, sizeof(line), f)){
+        char tmp[4096], lhs[HEX5_TOK];
+        char *colon, *rhs;
+        snprintf(tmp, sizeof(tmp), "%s", line);
+        trim6(tmp);
+        if(strcmp(tmp, "---[basic]---") == 0){ in_basic = 1; continue; }
+        if(strncmp(tmp, "---[", 5) == 0){ if(in_basic) break; else continue; }
+        if(!in_basic || !*tmp || tmp[0] == '#') continue;
+        colon = strchr(tmp, ':');
+        if(!colon) continue;
+        *colon = '\0';
+        copy_tok(lhs, tmp);
+        trim6(lhs);
+        rhs = colon + 1;
+        for(char *tok = strtok(rhs, ", \t\r\n"); tok; tok = strtok(NULL, ", \t\r\n")){
+            if(!*tok || strcmp(tok, lhs) == 0) continue;
+            if(ms->n >= MAX_MERGES){ fclose(f); return 0; }
+            copy_tok(ms->m[ms->n].from, tok);
+            copy_tok(ms->m[ms->n].to, lhs);
+            ms->n++;
+        }
+    }
+    fclose(f);
+    return 1;
+}
+
 static const char *model_path(const char *model){
     if(strcmp(model, "basic") == 0) return "data/rl5/hexagons.dat";
     if(strcmp(model, "super") == 0) return "data/rl5/supertile_hexagons.dat";
     if(strcmp(model, "overlap") == 0) return "data/rl5/overlap_supertile_hexagons.dat";
+    if(strcmp(model, "unified") == 0 || strcmp(model, "full") == 0 || strcmp(model, "letter") == 0) return "data/rl6/unified_model.dat";
     return NULL;
 }
 
@@ -597,6 +709,27 @@ static int map_one_inner6(const Inner5 *src, const MergeSet6 *ms, Inner5 *dst){
     }
     inner_canon6(&tmp, dst);
     return 1;
+}
+
+static int map_one_inner_offset6(const Inner5 *src, const MergeSet6 *ms,
+                                 Inner5 *dst, int *off_out){
+    Inner5 tmp, r;
+    for(int k=0;k<HEX5_SIDES;k++){
+        map_edge(ms, src->a[k], tmp.a[k]);
+        map_edge(ms, src->b[k], tmp.b[k]);
+    }
+    inner_canon6(&tmp, dst);
+    for(int off=0; off<HEX5_SIDES; off++){
+        for(int i=0;i<HEX5_SIDES;i++){
+            copy_tok(r.a[i], tmp.a[(i+off)%HEX5_SIDES]);
+            copy_tok(r.b[i], tmp.b[(i+off)%HEX5_SIDES]);
+        }
+        if(inner_equal6(&r, dst)){
+            if(off_out) *off_out = off;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int map_inner_set(const Inner5Set *src, const MergeSet6 *ms, Inner5Set *dst){
@@ -1035,7 +1168,7 @@ static void probe_extra_inner6(const Hex5Model *base, const Hex5Model *red,
         }
     }
 done:
-    printf("extra_probe_summary extra_cycles=%d extra_rings=%d extend_live=%d extend_dead=%d extend_escape=%d\n",
+    printf("extra_probe_summary extra_hexes=%d witnesses=%d extend_live=%d extend_dead=%d extend_escape=%d\n",
            extra_cycles, rings, extend_live, extend_dead, extend_escape);
     free(base_inner); free(image); free(b); free(a); free(v); free(seen);
 }
@@ -1250,8 +1383,11 @@ done:
 
 static int g_dfs_exact_inner = 0;
 static int g_dfs_probe_states = BOUNDARY5_MAX_STATES;
+static int g_dfs_cancel_depth = 1;
 static int g_dfs_emit_target = 0;
 static int g_dfs_emit_count = 0;
+static const char *g_refine_output_path = "data/rl6/refined_model.dat";
+static int g_refine_write_output = 0;
 
 typedef struct {
     char a[HEX5_TOK];
@@ -1269,9 +1405,71 @@ typedef struct {
     char path[DFS6_PATH];
     int depth;
     int tiles;
-    int extras_dead;
+    int dead_extra_hexes;
     int parent;
 } DfsState6;
+
+static SmallInner6 g_root_inner_override6;
+static int g_have_root_inner_override6 = 0;
+
+typedef uint64_t SmallMatrix6[DFS6_MAX_INNER][DFS6_MAX_INNER];
+
+static void small_slot_matrix6(const SmallInner6 *s, SmallMatrix6 m){
+    memset(m, 0, sizeof(SmallMatrix6));
+    for(int a=0; a<s->nrows; a++){
+        for(int i=0; i<HEX5_SIDES; i++){
+            for(int b=0; b<s->nrows; b++){
+                for(int j=0; j<HEX5_SIDES; j++){
+                    if(strcmp(s->rows[a].a[i], s->rows[b].b[j]) == 0 &&
+                       strcmp(s->rows[a].b[i], s->rows[b].a[j]) == 0){
+                        m[a][b] |= ((uint64_t)1) << (HEX5_SIDES * i + j);
+                    }
+                }
+            }
+        }
+    }
+}
+
+static uint64_t small_shift_mask6(uint64_t mask, int ro, int co){
+    uint64_t out = 0;
+    ro %= HEX5_SIDES; if(ro < 0) ro += HEX5_SIDES;
+    co %= HEX5_SIDES; if(co < 0) co += HEX5_SIDES;
+    for(int i=0;i<HEX5_SIDES;i++){
+        for(int j=0;j<HEX5_SIDES;j++){
+            int ti = (i + ro) % HEX5_SIDES;
+            int tj = (j + co) % HEX5_SIDES;
+            if(mask & (((uint64_t)1) << (HEX5_SIDES * ti + tj))){
+                out |= ((uint64_t)1) << (HEX5_SIDES * i + j);
+            }
+        }
+    }
+    return out;
+}
+
+static int matrix_equal_by_remember6(const SmallInner6 *root,
+                                     const SmallInner6 *cur,
+                                     const int root_of[DFS6_MAX_INNER],
+                                     const int off_to_root[DFS6_MAX_INNER],
+                                     int *first_a, int *first_b){
+    SmallMatrix6 rm, cm;
+    small_slot_matrix6(root, rm);
+    small_slot_matrix6(cur, cm);
+    for(int a=0; a<cur->nrows; a++){
+        for(int b=0; b<cur->nrows; b++){
+            int ra = root_of[a];
+            int rb = root_of[b];
+            uint64_t want;
+            if(ra < 0 || rb < 0 || ra >= root->nrows || rb >= root->nrows) return 0;
+            want = small_shift_mask6(rm[ra][rb], off_to_root[a], off_to_root[b]);
+            if(cm[a][b] != want){
+                if(first_a) *first_a = a;
+                if(first_b) *first_b = b;
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
 
 static void inner_rotate6(const Inner5 *in, int off, Inner5 *out){
     for(int i=0;i<HEX5_SIDES;i++){
@@ -1283,6 +1481,11 @@ static void inner_rotate6(const Inner5 *in, int off, Inner5 *out){
 static int small_contains_inner6(const SmallInner6 *s, const Inner5 *x){
     for(int i=0;i<s->nrows;i++) if(inner_equal6(&s->rows[i], x)) return 1;
     return 0;
+}
+
+static int small_index_inner6(const SmallInner6 *s, const Inner5 *x){
+    for(int i=0;i<s->nrows;i++) if(inner_equal6(&s->rows[i], x)) return i;
+    return -1;
 }
 
 static int small_add_inner6(SmallInner6 *s, const Inner5 *x){
@@ -1321,6 +1524,27 @@ static int map_small_inner6(const SmallInner6 *src, const MergeSet6 *ms, SmallIn
     return 1;
 }
 
+
+static int build_unified_survivor_inner6(SmallInner6 *out){
+    Hex5Model *basic = calloc(1, sizeof(*basic));
+    Inner5Set *base_full = calloc(1, sizeof(*base_full));
+    Inner5Set *mapped_full = calloc(1, sizeof(*mapped_full));
+    MergeSet6 ms;
+    int ok = 0;
+    if(!basic || !base_full || !mapped_full) goto done;
+    if(!hex5_parse_file("data/rl5/hexagons.dat", basic)) goto done;
+    if(!build_inner_set_for_model(basic, base_full)) goto done;
+    if(!load_unified_basic_merge6("data/rl6/unified_model.dat", &ms)) goto done;
+    if(!map_inner_set(base_full, &ms, mapped_full)) goto done;
+    if(!small_from_full_inner6(mapped_full, out)) goto done;
+    ok = 1;
+done:
+    free(basic);
+    free(base_full);
+    free(mapped_full);
+    return ok;
+}
+
 static int full_contains_small_image6(const Inner5Set *full, const SmallInner6 *image,
                                       int *missing){
     int miss = 0;
@@ -1329,10 +1553,10 @@ static int full_contains_small_image6(const Inner5Set *full, const SmallInner6 *
     return miss == 0;
 }
 
-static int count_extra_extension6(const Hex5Model *red, const SmallInner6 *image,
-                                  int *extra_cycles, int *extra_rings,
-                                  int *extend_live, int *extend_dead,
-                                  int *extend_escape){
+static int count_extra_extension_depth1_6(const Hex5Model *red, const SmallInner6 *image,
+                                         int *extra_cycles, int *extra_rings,
+                                         int *extend_live, int *extend_dead,
+                                         int *extend_escape){
     BComp5Result *b = calloc(1, sizeof(*b));
     Attach5Dict *a = calloc(1, sizeof(*a));
     VComp5Dict *v = calloc(1, sizeof(*v));
@@ -1350,17 +1574,16 @@ static int count_extra_extension6(const Hex5Model *red, const SmallInner6 *image
         if(small_contains_inner6(image, &in)) continue;
         er++;
         if(er > 96){ esc = 1; ok = 1; goto done; }
-        if(!small_contains_inner6(&seen, &in)){
-            if(!small_add_inner6(&seen, &in)) goto done;
-            ec++;
-        }
+        if(small_contains_inner6(&seen, &in)) continue;
+        if(!small_add_inner6(&seen, &in)) goto done;
+        ec++;
         if(!state_from_ring6(red, &b->rings[i], &s)){
             dead++;
             continue;
         }
         complete_one_layer6(red, v, &s, g_dfs_probe_states, &done_n, &dead_n, &esc_n);
-        if(done_n > 0) live++;
-        else if(esc_n > 0) esc++;
+        if(done_n > 0){ live++; ok = 1; goto done; }
+        else if(esc_n > 0){ esc++; ok = 1; goto done; }
         else dead++;
     }
     ok = 1;
@@ -1374,6 +1597,113 @@ done:
     return ok;
 }
 
+
+
+static int cancellation_probe_state6(const Hex5Model *m, const VComp5Dict *v,
+                                     const Boundary5State *seed,
+                                     int depth, int max_states,
+                                     int *live_out, int *dead_out, int *escape_out){
+    Boundary5State *cur = NULL;
+    int ncur = 0, cap = 0;
+    int live = 0, dead = 0, esc = 0;
+    if(depth <= 1){
+        int done = 0;
+        complete_one_layer6(m, v, seed, max_states, &done, &dead, &esc);
+        live = done > 0;
+        if(live_out) *live_out = live;
+        if(dead_out) *dead_out = live || esc ? 0 : 1;
+        if(escape_out) *escape_out = esc > 0;
+        return 1;
+    }
+    if(!boundary_vec_add_unique6(&cur, &ncur, &cap, seed, max_states)){
+        if(live_out) *live_out = 0;
+        if(dead_out) *dead_out = 0;
+        if(escape_out) *escape_out = 1;
+        return 1;
+    }
+    for(int d=1; d<=depth && ncur>0; d++){
+        Boundary5State *next = NULL;
+        int nnext = 0, next_cap = 0;
+        for(int i=0;i<ncur;i++){
+            Boundary5State work = cur[i];
+            Boundary5State *done_states = NULL;
+            int done_n = 0, dead_n = 0, esc_n = 0;
+            if(d > 1) boundary_begin_next_layer6(&work);
+            complete_one_layer_collect6(m, v, &work, max_states, &done_states, &done_n, &dead_n, &esc_n);
+            dead += dead_n;
+            esc += esc_n;
+            if(d == depth){
+                live += done_n;
+            } else {
+                for(int j=0;j<done_n;j++){
+                    if(!boundary_vec_add_unique6(&next, &nnext, &next_cap, &done_states[j], max_states)) esc++;
+                }
+            }
+            free(done_states);
+        }
+        free(cur);
+        cur = next;
+        ncur = nnext;
+        cap = next_cap;
+        if(esc) break;
+    }
+    free(cur);
+    if(live_out) *live_out = live > 0;
+    if(dead_out) *dead_out = (live == 0 && esc == 0) ? 1 : 0;
+    if(escape_out) *escape_out = esc > 0;
+    return 1;
+}
+
+static int count_extra_extension6(const Hex5Model *red, const SmallInner6 *image,
+                                  int *extra_cycles, int *extra_rings,
+                                  int *extend_live, int *extend_dead,
+                                  int *extend_escape){
+    BComp5Result *b = calloc(1, sizeof(*b));
+    Attach5Dict *a = calloc(1, sizeof(*a));
+    VComp5Dict *v = calloc(1, sizeof(*v));
+    SmallInner6 seen;
+    int ok = 0;
+    int ec = 0, er = 0, live = 0, dead = 0, esc = 0;
+    seen.nrows = 0;
+    if(g_dfs_cancel_depth <= 1){
+        ok = count_extra_extension_depth1_6(red, image, extra_cycles, extra_rings,
+                                            extend_live, extend_dead, extend_escape);
+        free(b); free(a); free(v);
+        return ok;
+    }
+    if(!b || !a || !v) goto done;
+    if(!build_standard(red, a, v, b)) goto done;
+    for(int i=0;i<b->nrings;i++){
+        Inner5 in;
+        Boundary5State s;
+        int l = 0, d = 0, e = 0;
+        if(!inner_from_ring6(red, &b->rings[i], &in)) continue;
+        if(small_contains_inner6(image, &in)) continue;
+        er++;
+        if(er > 96){ esc = 1; ok = 1; goto done; }
+        if(small_contains_inner6(&seen, &in)) continue;
+        if(!small_add_inner6(&seen, &in)) goto done;
+        ec++;
+        if(!state_from_ring6(red, &b->rings[i], &s)){
+            dead++;
+            continue;
+        }
+        if(!cancellation_probe_state6(red, v, &s, g_dfs_cancel_depth,
+                                      g_dfs_probe_states, &l, &d, &e)) goto done;
+        if(l){ live++; ok = 1; goto done; }
+        else if(e){ esc++; ok = 1; goto done; }
+        else dead++;
+    }
+    ok = 1;
+done:
+    if(extra_cycles) *extra_cycles = ec;
+    if(extra_rings) *extra_rings = er;
+    if(extend_live) *extend_live = live;
+    if(extend_dead) *extend_dead = dead;
+    if(extend_escape) *extend_escape = esc;
+    free(b); free(a); free(v);
+    return ok;
+}
 
 static int add_label_pair6(LabelPair6 *pairs, int *npairs, const char *a, const char *b){
     char aa[HEX5_TOK], bb[HEX5_TOK];
@@ -1493,13 +1823,28 @@ static int try_merge_state6(const DfsState6 *src, const char *la, const char *lb
     if(red->ntiles >= src->model.ntiles) goto done;
     if(!map_small_inner6(&src->inner, &ms, &image)) goto done;
     if(image.nrows != src->inner.nrows) goto done; /* fiber merge */
+    {
+        int root_of[DFS6_MAX_INNER];
+        int off_to_root[DFS6_MAX_INNER];
+        int matrix_a = -1, matrix_b = -1;
+        for(int i=0;i<DFS6_MAX_INNER;i++){ root_of[i] = -1; off_to_root[i] = 0; }
+        for(int i=0;i<src->inner.nrows;i++){
+            Inner5 mapped;
+            int off = 0, ci;
+            if(!map_one_inner_offset6(&src->inner.rows[i], &ms, &mapped, &off)) goto done;
+            ci = small_index_inner6(&image, &mapped);
+            if(ci < 0 || root_of[ci] >= 0) goto done;
+            root_of[ci] = i;
+            off_to_root[ci] = off;
+        }
+        if(!matrix_equal_by_remember6(&src->inner, &image, root_of, off_to_root, &matrix_a, &matrix_b)) goto done;
+    }
     if(!build_inner_set_for_model(red, red_full)) goto done;
     if(!full_contains_small_image6(red_full, &image, &missing)) goto done;
     for(int ri=0; ri<red_full->nrows; ri++){
         if(!small_contains_inner6(&image, &red_full->rows[ri])) cheap_extra++;
     }
     if(g_dfs_exact_inner && cheap_extra > 0) goto done;
-    if(cheap_extra > 4) goto done; /* keep deep slot DFS practical; small dead extras still allowed */
     if(cheap_extra > 0){
         int saved_probe_states = g_dfs_probe_states;
         if(!count_extra_extension6(red, &image, &ec, &er, &live, &dead, &esc)) goto done;
@@ -1528,7 +1873,7 @@ static int try_merge_state6(const DfsState6 *src, const char *la, const char *lb
     dst->inner = image;
     dst->depth = src->depth + 1;
     dst->tiles = red->ntiles;
-    dst->extras_dead = src->extras_dead + ec;
+    dst->dead_extra_hexes = src->dead_extra_hexes + ec;
     if(src->path[0]){
         snprintf(dst->path, sizeof(dst->path), "%s", src->path);
         strncat(dst->path, " ", sizeof(dst->path) - strlen(dst->path) - 1);
@@ -1560,16 +1905,534 @@ static int same_model_tiles6(const Hex5Model *a, const Hex5Model *b){
     return 1;
 }
 
+static int parse_path_step6(const char *tok, char a[HEX5_TOK], char b[HEX5_TOK]){
+    const char *eq = strchr(tok, '=');
+    size_t n;
+    if(!eq || eq == tok || !eq[1]) return 0;
+    n = (size_t)(eq - tok);
+    if(n >= HEX5_TOK) n = HEX5_TOK - 1;
+    memcpy(a, tok, n);
+    a[n] = '\0';
+    copy_tok(b, eq + 1);
+    return 1;
+}
+
+static void print_model_tiles6(const Hex5Model *m){
+    for(int t=0;t<m->ntiles;t++){
+        printf("  tile[%d]", t);
+        for(int k=0;k<HEX5_SIDES;k++) printf(" %s", m->tiles[t].e[k]);
+        printf("\n");
+    }
+}
+
+
+typedef struct {
+    char v[3][HEX5_TOK];
+} VTripleTok6;
+
+static int vtriple_cmp6(const void *va, const void *vb){
+    const VTripleTok6 *a = (const VTripleTok6 *)va;
+    const VTripleTok6 *b = (const VTripleTok6 *)vb;
+    for(int i=0;i<3;i++){
+        int c = strcmp(a->v[i], b->v[i]);
+        if(c) return c;
+    }
+    return 0;
+}
+
+static int vtriple_equal6(const VTripleTok6 *a, const VTripleTok6 *b){
+    return strcmp(a->v[0], b->v[0]) == 0 &&
+           strcmp(a->v[1], b->v[1]) == 0 &&
+           strcmp(a->v[2], b->v[2]) == 0;
+}
+
+static void vtriple_canon6(const char a[HEX5_TOK],
+                           const char b[HEX5_TOK],
+                           const char c[HEX5_TOK],
+                           VTripleTok6 *out){
+    VTripleTok6 cand[3];
+    copy_tok(cand[0].v[0], a); copy_tok(cand[0].v[1], b); copy_tok(cand[0].v[2], c);
+    copy_tok(cand[1].v[0], b); copy_tok(cand[1].v[1], c); copy_tok(cand[1].v[2], a);
+    copy_tok(cand[2].v[0], c); copy_tok(cand[2].v[1], a); copy_tok(cand[2].v[2], b);
+    int best = 0;
+    for(int i=1;i<3;i++) if(vtriple_cmp6(&cand[i], &cand[best]) < 0) best = i;
+    *out = cand[best];
+}
+
+static int oriented_vertex_label6(const Hex5Model *m, int idx, char out[HEX5_TOK]){
+    char a[HEX5_TOK], b[HEX5_TOK];
+    if(idx < 0 || idx >= m->noriented) return 0;
+    if(!split_edge(m->oriented[idx].e[0], a, b)) return 0;
+    /* attach5/vcomp5 represent the vertex between e[0] and e[1]; this is
+       the second endpoint of e[0], equivalently the first endpoint of e[1]. */
+    copy_tok(out, b);
+    return 1;
+}
+
+static int add_vtriple_unique6(VTripleTok6 *triples, int *ntriples, const VTripleTok6 *x){
+    for(int i=0;i<*ntriples;i++) if(vtriple_equal6(&triples[i], x)) return 1;
+    if(*ntriples >= MAX_FIGS) return 0;
+    triples[(*ntriples)++] = *x;
+    return 1;
+}
+
+static int collect_valid_vertex_triples6(const Hex5Model *m,
+                                         VTripleTok6 *triples,
+                                         int *ntriples){
+    Attach5Dict *a = calloc(1, sizeof(*a));
+    VComp5Dict *v = calloc(1, sizeof(*v));
+    int ok = 0;
+    *ntriples = 0;
+    if(!a || !v) goto done;
+    if(!attach5_build(m, a) || !vcomp5_build(a, v)) goto done;
+    for(int i=0;i<v->nfigs;i++){
+        char x[3][HEX5_TOK];
+        VTripleTok6 t;
+        if(!oriented_vertex_label6(m, v->figs[i].h[0], x[0]) ||
+           !oriented_vertex_label6(m, v->figs[i].h[1], x[1]) ||
+           !oriented_vertex_label6(m, v->figs[i].h[2], x[2])) goto done;
+        vtriple_canon6(x[0], x[1], x[2], &t);
+        if(!add_vtriple_unique6(triples, ntriples, &t)) goto done;
+    }
+    qsort(triples, (size_t)*ntriples, sizeof(triples[0]), vtriple_cmp6);
+    ok = 1;
+done:
+    free(a);
+    free(v);
+    return ok;
+}
+
+static void fprint_valid_vertex_triples6(FILE *out, const Hex5Model *m){
+    VTripleTok6 *triples = calloc(MAX_FIGS, sizeof(*triples));
+    int ntriples = 0;
+    fprintf(out, "---[valid vertex triples]---\n");
+    if(!triples || !collect_valid_vertex_triples6(m, triples, &ntriples)){
+        fprintf(out, "# failed to build valid vertex triples\n");
+        free(triples);
+        return;
+    }
+    for(int i=0;i<ntriples;i++){
+        fprintf(out, "%s, %s, %s\n", triples[i].v[0], triples[i].v[1], triples[i].v[2]);
+    }
+    free(triples);
+}
+
+static void print_valid_vertex_triples6(const Hex5Model *m){
+    fprint_valid_vertex_triples6(stdout, m);
+}
+
+static void print_model_tile_words6(const Hex5Model *m){
+    printf("---[tiles]---\n");
+    for(int t=0;t<m->ntiles;t++){
+        for(int k=0;k<HEX5_SIDES;k++){
+            char a[HEX5_TOK], b[HEX5_TOK];
+            (void)b;
+            if(k) printf(", ");
+            if(split_edge(m->tiles[t].e[k], a, b)) printf("%s", a);
+            else printf("%s", m->tiles[t].e[k]);
+        }
+        printf("\n");
+    }
+}
+
+static void print_model_rule_words6(const Hex5Model *m){
+    printf("---[edge rules directed lex]---\n");
+    for(int r=0;r<m->nrules;r++) printf("%s = %s\n", m->rule_a[r], m->rule_b[r]);
+}
+
+static void print_model_letter_file6(const Hex5Model *m){
+    print_model_tile_words6(m);
+    printf("\n");
+    print_model_rule_words6(m);
+    printf("\n");
+    print_valid_vertex_triples6(m);
+}
+
+static void fprint_model_tile_words6(FILE *out, const Hex5Model *m){
+    fprintf(out, "---[tiles]---\n");
+    for(int t=0;t<m->ntiles;t++){
+        for(int k=0;k<HEX5_SIDES;k++){
+            char a[HEX5_TOK], b[HEX5_TOK];
+            (void)b;
+            if(k) fprintf(out, ", ");
+            if(split_edge(m->tiles[t].e[k], a, b)) fprintf(out, "%s", a);
+            else fprintf(out, "%s", m->tiles[t].e[k]);
+        }
+        fprintf(out, "\n");
+    }
+}
+
+static void fprint_model_rule_words6(FILE *out, const Hex5Model *m){
+    fprintf(out, "---[edge rules directed lex]---\n");
+    for(int r=0;r<m->nrules;r++) fprintf(out, "%s = %s\n", m->rule_a[r], m->rule_b[r]);
+}
+
+static void fprint_model_letter_file6(FILE *out, const Hex5Model *m){
+    fprint_model_tile_words6(out, m);
+    fprintf(out, "\n");
+    fprint_model_rule_words6(out, m);
+    fprintf(out, "\n");
+    fprint_valid_vertex_triples6(out, m);
+}
+
+static void print_dsu_classes_from_path6(const char *path){
+    Dsu6 d;
+    char buf[DFS6_PATH];
+    int printed = 0;
+    d.n = 0;
+    snprintf(buf, sizeof(buf), "%s", path ? path : "");
+    for(char *tok=strtok(buf, " \t,"); tok; tok=strtok(NULL, " \t,")){
+        char a[HEX5_TOK], b[HEX5_TOK];
+        int ia=-1, ib=-1, ra, rb;
+        if(!parse_path_step6(tok, a, b)) continue;
+        for(int i=0;i<d.n;i++){
+            if(strcmp(d.item[i].name,a)==0) ia=i;
+            if(strcmp(d.item[i].name,b)==0) ib=i;
+        }
+        if(ia<0 && d.n<MAX_LABELS){ ia=d.n; copy_tok(d.item[d.n].name,a); d.item[d.n].parent=d.n; d.n++; }
+        if(ib<0 && d.n<MAX_LABELS){ ib=d.n; copy_tok(d.item[d.n].name,b); d.item[d.n].parent=d.n; d.n++; }
+        ra=ia; while(d.item[ra].parent!=ra) ra=d.item[ra].parent;
+        rb=ib; while(d.item[rb].parent!=rb) rb=d.item[rb].parent;
+        if(ra!=rb){ if(strcmp(d.item[rb].name,d.item[ra].name)<0){ int t=ra; ra=rb; rb=t; } d.item[rb].parent=ra; }
+    }
+    printf("vertex_equalities\n");
+    for(int i=0;i<d.n;i++){
+        int r = i;
+        while(d.item[r].parent!=r) r=d.item[r].parent;
+        if(r != i) continue;
+        int n = 0;
+        for(int j=0;j<d.n;j++){ int x=j; while(d.item[x].parent!=x) x=d.item[x].parent; if(x == r) n++; }
+        if(n <= 1) continue;
+        printf("  ");
+        for(int j=0;j<d.n;j++){ int x=j; while(d.item[x].parent!=x) x=d.item[x].parent; if(x == r){
+            printf("%s%s", printed && 0 ? "" : "", n ? d.item[j].name : d.item[j].name);
+            n--;
+            if(n) printf(" = ");
+        }}
+        printf("\n");
+        printed++;
+    }
+    if(!printed) printf("  none\n");
+}
+
+
+static void fprint_dsu_classes_from_path6(FILE *out, const char *path){
+    Dsu6 d;
+    char buf[DFS6_PATH];
+    int printed = 0;
+    d.n = 0;
+    snprintf(buf, sizeof(buf), "%s", path ? path : "");
+    for(char *tok=strtok(buf, " \t,"); tok; tok=strtok(NULL, " \t,")){
+        char a[HEX5_TOK], b[HEX5_TOK];
+        int ia=-1, ib=-1, ra, rb;
+        if(!parse_path_step6(tok, a, b)) continue;
+        for(int i=0;i<d.n;i++){
+            if(strcmp(d.item[i].name,a)==0) ia=i;
+            if(strcmp(d.item[i].name,b)==0) ib=i;
+        }
+        if(ia<0 && d.n<MAX_LABELS){ ia=d.n; copy_tok(d.item[d.n].name,a); d.item[d.n].parent=d.n; d.n++; }
+        if(ib<0 && d.n<MAX_LABELS){ ib=d.n; copy_tok(d.item[d.n].name,b); d.item[d.n].parent=d.n; d.n++; }
+        ra=ia; while(d.item[ra].parent!=ra) ra=d.item[ra].parent;
+        rb=ib; while(d.item[rb].parent!=rb) rb=d.item[rb].parent;
+        if(ra!=rb){ if(strcmp(d.item[rb].name,d.item[ra].name)<0){ int t=ra; ra=rb; rb=t; } d.item[rb].parent=ra; }
+    }
+    fprintf(out, "---[vertex equalities]---\n");
+    for(int i=0;i<d.n;i++){
+        int r = i;
+        while(d.item[r].parent!=r) r=d.item[r].parent;
+        if(r != i) continue;
+        int n = 0;
+        for(int j=0;j<d.n;j++){ int x=j; while(d.item[x].parent!=x) x=d.item[x].parent; if(x == r) n++; }
+        if(n <= 1) continue;
+        fprintf(out, "  ");
+        for(int j=0;j<d.n;j++){ int x=j; while(d.item[x].parent!=x) x=d.item[x].parent; if(x == r){
+            fprintf(out, "%s", d.item[j].name);
+            n--;
+            if(n) fprintf(out, " = ");
+        }}
+        fprintf(out, "\n");
+        printed++;
+    }
+    if(!printed) fprintf(out, "  none\n");
+}
+
+static int rebuild_path_state6(const Hex5Model *base, const char *path,
+                               DfsState6 *out,
+                               int root_of[DFS6_MAX_INNER],
+                               int off_to_root[DFS6_MAX_INNER]){
+    DfsState6 cur;
+    char buf[DFS6_PATH];
+    memset(&cur, 0, sizeof(cur));
+    cur.model = *base;
+    cur.tiles = base->ntiles;
+    cur.parent = -1;
+    cur.path[0] = '\0';
+    if(g_have_root_inner_override6) cur.inner = g_root_inner_override6;
+    else if(!build_small_inner_for_model6(base, &cur.inner)) return 0;
+    for(int i=0;i<DFS6_MAX_INNER;i++){ root_of[i] = -1; off_to_root[i] = 0; }
+    for(int i=0;i<cur.inner.nrows;i++){ root_of[i] = i; off_to_root[i] = 0; }
+
+    snprintf(buf, sizeof(buf), "%s", path ? path : "");
+    for(char *tok=strtok(buf, " \t"); tok; tok=strtok(NULL, " \t")){
+        char la[HEX5_TOK], lb[HEX5_TOK];
+        MergeSet6 ms;
+        Hex5Model red;
+        SmallInner6 image;
+        int new_root[DFS6_MAX_INNER], new_off[DFS6_MAX_INNER];
+        if(!parse_path_step6(tok, la, lb)) return 0;
+        pair_merge(la, lb, &ms);
+        memset(&red, 0, sizeof(red));
+        if(!transform_model(&cur.model, &ms, &red)) return 0;
+        if(!map_small_inner6(&cur.inner, &ms, &image)) return 0;
+        if(image.nrows != cur.inner.nrows) return 0;
+        for(int i=0;i<DFS6_MAX_INNER;i++){ new_root[i] = -1; new_off[i] = 0; }
+        for(int i=0;i<cur.inner.nrows;i++){
+            Inner5 mapped;
+            int off = 0, ci;
+            if(!map_one_inner_offset6(&cur.inner.rows[i], &ms, &mapped, &off)) return 0;
+            ci = small_index_inner6(&image, &mapped);
+            if(ci < 0 || new_root[ci] >= 0) return 0;
+            new_root[ci] = root_of[i];
+            new_off[ci] = (off_to_root[i] + off) % HEX5_SIDES;
+        }
+        cur.model = red;
+        cur.inner = image;
+        cur.tiles = red.ntiles;
+        cur.depth++;
+        if(cur.path[0]){
+            char next_path[DFS6_PATH];
+            snprintf(next_path, sizeof(next_path), "%.900s %.100s", cur.path, tok);
+            snprintf(cur.path, sizeof(cur.path), "%s", next_path);
+        } else {
+            snprintf(cur.path, sizeof(cur.path), "%.100s", tok);
+        }
+        for(int i=0;i<DFS6_MAX_INNER;i++){ root_of[i] = new_root[i]; off_to_root[i] = new_off[i]; }
+    }
+    *out = cur;
+    return 1;
+}
+
+static int write_refined_output6(const char *path, const Hex5Model *base,
+                                 const DfsState6 *best,
+                                 int nbest, int cancel_depth){
+    FILE *out;
+    DfsState6 rebuilt;
+    int root_of[DFS6_MAX_INNER], off_to_root[DFS6_MAX_INNER];
+    int matrix_a = -1, matrix_b = -1;
+    SmallInner6 root;
+    int root_ok;
+    if(!path || !*path) return 1;
+    out = fopen(path, "w");
+    if(!out){
+        fprintf(stderr, "rl6_refine: failed to open output %s\n", path);
+        return 0;
+    }
+    if(!rebuild_path_state6(base, best->path, &rebuilt, root_of, off_to_root)){
+        fprintf(stderr, "rl6_refine: failed to rebuild best path for output\n");
+        fclose(out);
+        return 0;
+    }
+    root_ok = g_have_root_inner_override6 ? (root = g_root_inner_override6, 1)
+                                          : build_small_inner_for_model6(base, &root);
+    fprintf(out, "# RL6 refined full-letter model\n");
+    fprintf(out, "# source: data/rl6/unified_model.dat\n");
+    fprintf(out, "# recovery: apply the binary projection path below to the source model.\n");
+    fprintf(out, "# cancel_depth=%d\n", cancel_depth);
+    fprintf(out, "# best_tiles=%d\n", best->tiles);
+    fprintf(out, "# best_ties=%d\n", nbest);
+    fprintf(out, "# dead_extra_hexes=%d\n", best->dead_extra_hexes);
+    fprintf(out, "# path=%s\n\n", best->path[0] ? best->path : "root");
+    fprint_dsu_classes_from_path6(out, best->path);
+    fprintf(out, "\n---[projection path]---\n%s\n\n", best->path[0] ? best->path : "root");
+    fprint_model_letter_file6(out, &best->model);
+    (void)root_ok;
+    (void)root;
+    (void)matrix_a;
+    (void)matrix_b;
+    fclose(out);
+    return 1;
+}
+
+static int certify_path6(const Hex5Model *base, const char *model, const char *path){
+    DfsState6 cur, next;
+    int root_of[DFS6_MAX_INNER], off_to_root[DFS6_MAX_INNER];
+    int step = 0;
+    char buf[DFS6_PATH];
+    int ok = 1;
+
+    memset(&cur, 0, sizeof(cur));
+    cur.model = *base;
+    cur.tiles = base->ntiles;
+    cur.parent = -1;
+    if(g_have_root_inner_override6){
+        cur.inner = g_root_inner_override6;
+    } else if(!build_small_inner_for_model6(base, &cur.inner)){
+        fprintf(stderr, "rl6_refine: failed to build root inner set\n");
+        return 0;
+    }
+    for(int i=0;i<cur.inner.nrows;i++){ root_of[i] = i; off_to_root[i] = 0; }
+
+    printf("RL6 refine certificate (%s)\n", model);
+    printf("root tiles=%d inner=%d\n", cur.tiles, cur.inner.nrows);
+    printf("projection path: %s\n", path && *path ? path : "root");
+    printf("criterion: image of 25 cycles must be injective and present; extras must die in one-layer extension; final slot matrix must equal root through recovery map.\n");
+
+    snprintf(buf, sizeof(buf), "%s", path ? path : "");
+    for(char *tok=strtok(buf, " \t"); tok; tok=strtok(NULL, " \t")){
+        char la[HEX5_TOK], lb[HEX5_TOK];
+        MergeSet6 ms;
+        Hex5Model red;
+        Inner5Set *red_full = calloc(1, sizeof(*red_full));
+        SmallInner6 image;
+        int new_root[DFS6_MAX_INNER], new_off[DFS6_MAX_INNER];
+        int missing = 0, ec = 0, er = 0, live = 0, dead = 0, esc = 0;
+        int fibers[DFS6_MAX_INNER];
+        int max_fiber = 0, merged_fibers = 0;
+        int matrix_a = -1, matrix_b = -1;
+
+        if(!parse_path_step6(tok, la, lb)){
+            fprintf(stderr, "rl6_refine: bad path token [%s]\n", tok);
+            ok = 0;
+            break;
+        }
+        pair_merge(la, lb, &ms);
+        memset(&red, 0, sizeof(red));
+        if(!transform_model(&cur.model, &ms, &red) || !red_full){
+            fprintf(stderr, "rl6_refine: failed transform at %s\n", tok);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        image.nrows = 0;
+        memset(fibers, 0, sizeof(fibers));
+        for(int i=0;i<cur.inner.nrows;i++){
+            Inner5 mapped;
+            int off = 0, ci;
+            if(!map_one_inner_offset6(&cur.inner.rows[i], &ms, &mapped, &off)){
+                ok = 0;
+                break;
+            }
+            if(!small_add_inner6(&image, &mapped)){
+                ok = 0;
+                break;
+            }
+            ci = small_index_inner6(&image, &mapped);
+            if(ci < 0){ ok = 0; break; }
+            fibers[ci]++;
+        }
+        if(!ok){ free(red_full); break; }
+        for(int i=0;i<image.nrows;i++){
+            if(fibers[i] > max_fiber) max_fiber = fibers[i];
+            if(fibers[i] > 1) merged_fibers++;
+        }
+        if(image.nrows != cur.inner.nrows || merged_fibers != 0){
+            printf("step %d merge=%s REJECT fiber_merge image=%d parent_inner=%d merged_fibers=%d max_fiber=%d\n",
+                   step + 1, tok, image.nrows, cur.inner.nrows, merged_fibers, max_fiber);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        for(int i=0;i<DFS6_MAX_INNER;i++){ new_root[i] = -1; new_off[i] = 0; }
+        for(int i=0;i<cur.inner.nrows;i++){
+            Inner5 mapped;
+            int off = 0, ci;
+            map_one_inner_offset6(&cur.inner.rows[i], &ms, &mapped, &off);
+            ci = small_index_inner6(&image, &mapped);
+            if(ci < 0){ ok = 0; break; }
+            new_root[ci] = root_of[i];
+            new_off[ci] = (off_to_root[i] + off) % HEX5_SIDES;
+        }
+        if(!ok){ free(red_full); break; }
+        if(!build_inner_set_for_model(&red, red_full)){
+            fprintf(stderr, "rl6_refine: failed to rebuild inner set at %s\n", tok);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        if(!full_contains_small_image6(red_full, &image, &missing) || missing){
+            printf("step %d merge=%s REJECT missing_image=%d\n", step + 1, tok, missing);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        if(!count_extra_extension6(&red, &image, &ec, &er, &live, &dead, &esc)){
+            fprintf(stderr, "rl6_refine: failed extra probe at %s\n", tok);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        if(live || esc){
+            printf("step %d merge=%s REJECT extras_not_dead extra_hexes=%d witnesses=%d live=%d dead=%d escape=%d\n",
+                   step + 1, tok, ec, er, live, dead, esc);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        next.model = red;
+        next.inner = image;
+        next.tiles = red.ntiles;
+        next.depth = cur.depth + 1;
+        next.dead_extra_hexes = cur.dead_extra_hexes + ec;
+        next.parent = -1;
+        if(cur.path[0]){
+            snprintf(next.path, sizeof(next.path), "%.900s %.100s", cur.path, tok);
+        } else {
+            snprintf(next.path, sizeof(next.path), "%.100s", tok);
+        }
+
+        printf("step %d merge=%s ACCEPT tiles %d->%d inner=%d raw_inner=%d extra_hexes=%d witnesses=%d dead_extensions=%d remember=unique\n",
+               step + 1, tok, cur.tiles, next.tiles, next.inner.nrows, red_full->nrows, ec, er, dead);
+        if(!matrix_equal_by_remember6(&cur.inner, &next.inner, new_root, new_off, &matrix_a, &matrix_b)){
+            printf("step %d merge=%s REJECT matrix_mismatch block=%d,%d\n", step + 1, tok, matrix_a, matrix_b);
+            free(red_full);
+            ok = 0;
+            break;
+        }
+        printf("  matrix_check=preserved_through_recovery_map\n");
+
+        cur = next;
+        for(int i=0;i<cur.inner.nrows;i++){ root_of[i] = new_root[i]; off_to_root[i] = new_off[i]; }
+        free(red_full);
+        step++;
+    }
+
+    if(ok){
+        int matrix_a = -1, matrix_b = -1;
+        printf("final tiles=%d inner=%d dead_extra_hexes=%d steps=%d\n", cur.tiles, cur.inner.nrows, cur.dead_extra_hexes, step);
+        /* Rebuild the root matrix from the saved root rows in a separate root state. */
+        {
+            SmallInner6 root;
+            int root_ok = 1;
+            if(g_have_root_inner_override6) root = g_root_inner_override6;
+            else root_ok = build_small_inner_for_model6(base, &root);
+            if(!root_ok ||
+               !matrix_equal_by_remember6(&root, &cur.inner, root_of, off_to_root, &matrix_a, &matrix_b)){
+                printf("final_matrix_check=FAIL block=%d,%d\n", matrix_a, matrix_b);
+                ok = 0;
+            } else {
+                printf("final_matrix_check=PASS unique_remember_rows=25\n");
+            }
+        }
+        print_dsu_classes_from_path6(path);
+        printf("final_tiles_edges\n");
+        print_model_tiles6(&cur.model);
+        printf("final_model_comparable_to_unified_input\n");
+        print_model_letter_file6(&cur.model);
+    }
+    return ok;
+}
+
 
 static void emit_state6(const char *model, int idx, const DfsState6 *s){
-    printf("RL6_STATE model=%s idx=%d parent=%d depth=%d tiles=%d inner=%d extras_dead=%d map=%s\n",
-           model, idx, s->parent, s->depth, s->tiles, s->inner.nrows, s->extras_dead,
+    printf("RL6_STATE model=%s idx=%d parent=%d depth=%d tiles=%d inner=%d dead_extra_hexes=%d map=%s\n",
+           model, idx, s->parent, s->depth, s->tiles, s->inner.nrows, s->dead_extra_hexes,
            s->path[0] ? s->path : "root");
     for(int t=0;t<s->model.ntiles;t++){
         printf("TILE");
         for(int k=0;k<HEX5_SIDES;k++) printf(" %s", s->model.tiles[t].e[k]);
         printf("\n");
     }
+    print_model_tile_words6(&s->model);
     for(int r=0;r<s->model.nrules;r++){
         printf("RULE %s %s\n", s->model.rule_a[r], s->model.rule_b[r]);
     }
@@ -1592,19 +2455,23 @@ static void emit_ancestry6(const char *model, const DfsState6 *states, int nstat
     printf("ANCESTRY model=%s idx=%d length=%d\n", model, idx, n);
     for(int i=n-1;i>=0;i--){
         const DfsState6 *s = &states[chain[i]];
-        printf("  idx=%d parent=%d depth=%d tiles=%d extras_dead=%d map=%s\n",
-               chain[i], s->parent, s->depth, s->tiles, s->extras_dead,
+        printf("  idx=%d parent=%d depth=%d tiles=%d dead_extra_hexes=%d map=%s\n",
+               chain[i], s->parent, s->depth, s->tiles, s->dead_extra_hexes,
                s->path[0] ? s->path : "root");
     }
 }
 
 static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, int slot_only){
+    int exhaustive = max_depth < 0;
+    if(exhaustive) max_depth = MAX_MERGES;
     DfsState6 *states = calloc(DFS6_MAX_STATES, sizeof(*states));
     int nstates = 1;
     int best_tiles;
     if(!states){ fprintf(stderr, "out of memory\n"); return; }
     states[0].model = *base;
-    if(!build_small_inner_for_model6(base, &states[0].inner)){
+    if(g_have_root_inner_override6){
+        states[0].inner = g_root_inner_override6;
+    } else if(!build_small_inner_for_model6(base, &states[0].inner)){
         fprintf(stderr, "failed to build root inner set\n");
         free(states);
         return;
@@ -1617,10 +2484,16 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
 
     printf("RL6 DFS reductions (%s)\n", model);
     g_dfs_exact_inner = 0;
-    printf("candidate_pairs=%s max_depth=%d extra_policy=%s\n", slot_only ? "model_tile_slot" : "all", max_depth, "dead_extra_ok");
+    printf("pairs=%s search=%s cancel_depth=%d\n",
+           slot_only ? "tile-slot" : "all",
+           exhaustive ? "frontier" : "depth-limited",
+           g_dfs_cancel_depth);
+    printf("policy: extras must die; recovery checked each step\n");
+    if(!exhaustive) printf("search_depth=%d\n", max_depth);
     printf("root tiles=%d inner=%d\n", states[0].tiles, states[0].inner.nrows);
-    printf("%-5s %-5s %-5s %-7s %-7s %s\n", "idx", "depth", "tiles", "xcycles", "xrings", "map");
-    printf("%-5d %-5d %-5d %-7d %-7d %s\n", 0, 0, states[0].tiles, 0, 0, "root");
+    printf("%-4s %-3s %-5s %-5s %-4s %s\n",
+           "idx", "dep", "tiles", "extra", "wit", "map");
+    printf("%-4d %-3d %-5d %-5d %-4d %s\n", 0, 0, states[0].tiles, 0, 0, "root");
     if(g_dfs_emit_target > 0 && states[0].tiles == g_dfs_emit_target){
         emit_state6(model, 0, &states[0]);
         emit_ancestry6(model, states, nstates, 0);
@@ -1655,7 +2528,7 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
             int dup = 0;
             attempts++;
             memset(cand, 0, sizeof(*cand));
-            g_dfs_probe_states = (s->depth == 0) ? BOUNDARY5_MAX_STATES : 256;
+            g_dfs_probe_states = BOUNDARY5_MAX_STATES;
             if(!try_merge_state6(s, pairs[pi].a, pairs[pi].b, cand, &ec, &er, &ed)) continue;
             cand->parent = idx;
             accepted++;
@@ -1673,7 +2546,7 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
             }
             states[nstates] = *cand;
             if(cand->tiles < best_tiles) best_tiles = cand->tiles;
-            printf("%-5d %-5d %-5d %-7d %-7d %s\n",
+            printf("%-4d %-3d %-5d %-5d %-4d %s\n",
                    nstates, cand->depth, cand->tiles, ec, er, cand->path);
             if(g_dfs_emit_target > 0 && cand->tiles == g_dfs_emit_target){
                 emit_state6(model, nstates, cand);
@@ -1685,13 +2558,20 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
         }
         free(labels); free(pairs); free(cand);
         if(attempts > 0){
-            printf("state_done idx=%d depth=%d tiles=%d attempts=%ld accepted=%ld total_states=%d best=%d\n",
+            printf("done idx=%d dep=%d tiles=%d tries=%ld ok=%ld states=%d best=%d\n",
                    idx, s->depth, s->tiles, attempts, accepted, nstates, best_tiles);
         }
     }
-    printf("dfs_summary states=%d best_tiles=%d kept_partials=yes cap=%d candidate_pairs=%s emit_target=%d emit_count=%d\n", nstates, best_tiles, DFS6_MAX_STATES, slot_only ? "model_tile_slot" : "all", g_dfs_emit_target, g_dfs_emit_count);
+    int max_seen_depth = 0;
+    for(int i=0;i<nstates;i++) if(states[i].depth > max_seen_depth) max_seen_depth = states[i].depth;
+    printf("dfs_summary states=%d best_tiles=%d cap=%d\n",
+           nstates, best_tiles, DFS6_MAX_STATES);
+    printf("  pairs=%s search=%s cancel_depth=%d emit=%d/%d\n",
+           slot_only ? "tile-slot" : "all",
+           exhaustive ? "frontier" : "depth-limited",
+           g_dfs_cancel_depth, g_dfs_emit_count, g_dfs_emit_target);
     printf("best_by_depth\n");
-    for(int d=0; d<=max_depth; d++){
+    for(int d=0; d<=max_seen_depth; d++){
         int best_d = 999999, count_d = 0;
         for(int i=0;i<nstates;i++){
             if(states[i].depth != d) continue;
@@ -1701,11 +2581,26 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
         if(count_d) printf("  depth=%d states=%d best_tiles=%d\n", d, count_d, best_d);
     }
     printf("best_states\n");
+    int first_best = -1, nbest = 0;
     for(int i=0;i<nstates;i++){
         if(states[i].tiles == best_tiles){
-            printf("  idx=%d parent=%d depth=%d tiles=%d inner=%d extras_dead=%d map=%s\n",
-                   i, states[i].parent, states[i].depth, states[i].tiles, states[i].inner.nrows,
-                   states[i].extras_dead, states[i].path[0] ? states[i].path : "root");
+            if(first_best < 0) first_best = i;
+            nbest++;
+            printf("  idx=%d parent=%d dep=%d tiles=%d inner=%d dead_extra=%d\n",
+                   i, states[i].parent, states[i].depth, states[i].tiles,
+                   states[i].inner.nrows, states[i].dead_extra_hexes);
+            printf("  map=%s\n", states[i].path[0] ? states[i].path : "root");
+            printf("  comparable_tiles idx=%d\n", i);
+            print_model_tile_words6(&states[i].model);
+        }
+    }
+    if(g_refine_write_output && first_best >= 0){
+        if(write_refined_output6(g_refine_output_path, base, &states[first_best], nbest, g_dfs_cancel_depth)){
+            printf("wrote_best_output=%s\n", g_refine_output_path);
+            printf("  idx=%d tiles=%d ties=%d\n",
+                   first_best, states[first_best].tiles, nbest);
+        } else {
+            printf("output_escape path=%s reason=write_failed\n", g_refine_output_path ? g_refine_output_path : "(null)");
         }
     }
     free(states);
@@ -1714,6 +2609,9 @@ static void run_dfs6(const Hex5Model *base, const char *model, int max_depth, in
 static int load_model6(const char *model, Hex5Model *m){
     const char *path = model_path(model);
     if(!path) return 0;
+    if(strcmp(model, "unified") == 0 || strcmp(model, "full") == 0 || strcmp(model, "letter") == 0){
+        return load_unified_model6(path, m);
+    }
     if(!hex5_parse_file(path, m)) return 0;
     return apply_errata(m, model);
 }
@@ -1771,7 +2669,8 @@ static void print_fig(const Hex5Model *m, const VFig5 *f){
 }
 
 int main(int argc, char **argv){
-    const char *model = "super";
+    int public_refine = is_refine_invocation6(argv[0]);
+    const char *model = public_refine ? "unified" : "super";
     const char *path;
     int print_missing = 0;
     int print_inner = 0;
@@ -1788,6 +2687,7 @@ int main(int argc, char **argv){
     int offset_map = 0;
     int alignment = 0;
     int emit_target = 0;
+    const char *certify_path = NULL;
     int cluster_symbols = 0;
     int have_merge = 0;
     MergeSet6 merge;
@@ -1803,9 +2703,31 @@ int main(int argc, char **argv){
     int missing = 0;
     int extra = 0;
 
+    if(public_refine){
+        dfs_slots = 1;
+        dfs_depth = -1;
+        g_dfs_cancel_depth = 1;
+        g_refine_write_output = 1;
+    }
+
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i], "--model") == 0 && i + 1 < argc){
+            if(public_refine){
+                fprintf(stderr, "rl6_refine always uses the full RL6 letter model; --model is not a public option.\n");
+                return 2;
+            }
             model = argv[++i];
+        } else if(strcmp(argv[i], "--search-depth") == 0 && i + 1 < argc){
+            dfs_depth = atoi(argv[++i]);
+            if(dfs_depth < 0) dfs_depth = 0;
+            dfs_slots = 1;
+        } else if(strcmp(argv[i], "--cancel-depth") == 0 && i + 1 < argc){
+            g_dfs_cancel_depth = atoi(argv[++i]);
+            if(g_dfs_cancel_depth < 1) g_dfs_cancel_depth = 1;
+            if(g_dfs_cancel_depth > 4) g_dfs_cancel_depth = 4;
+        } else if(strcmp(argv[i], "--output") == 0 && i + 1 < argc){
+            g_refine_output_path = argv[++i];
+            g_refine_write_output = 1;
         } else if(strcmp(argv[i], "--cluster-symbols") == 0){
             cluster_symbols = 1;
         } else if(strcmp(argv[i], "--merge") == 0 && i + 1 < argc){
@@ -1826,6 +2748,8 @@ int main(int argc, char **argv){
         } else if(strcmp(argv[i], "--emit-state") == 0 && i + 1 < argc){
             emit_target = atoi(argv[++i]);
             if(emit_target < 0) emit_target = 0;
+        } else if(strcmp(argv[i], "--certify-path") == 0 && i + 1 < argc){
+            certify_path = argv[++i];
         } else if(strcmp(argv[i], "--alignment") == 0){
             alignment = 1;
         } else if(strcmp(argv[i], "--offset-map") == 0){
@@ -1874,7 +2798,16 @@ int main(int argc, char **argv){
     inner = calloc(1, sizeof(*inner));
     if(!m || !a || !v || !b || !cycle || !inner){ fprintf(stderr, "out of memory\n"); return 1; }
 
-    if(cluster_symbols && strcmp(model, "overlap") == 0){
+    if(strcmp(model, "unified") == 0 || strcmp(model, "full") == 0 || strcmp(model, "letter") == 0){
+        if(!load_unified_model6(path, m)){ fprintf(stderr, "failed to parse unified letter model %s\n", path); return 1; }
+        if(public_refine){
+            if(!build_unified_survivor_inner6(&g_root_inner_override6)){
+                fprintf(stderr, "failed to build full-letter survivor cycle set from RL6 unified map\n");
+                return 1;
+            }
+            g_have_root_inner_override6 = 1;
+        }
+    } else if(cluster_symbols && strcmp(model, "overlap") == 0){
         if(!load_overlap_cluster_model6(path, m)){ fprintf(stderr, "failed to parse cluster model %s\n", path); return 1; }
     } else {
         if(!hex5_parse_file(path, m)){ fprintf(stderr, "failed to parse %s\n", path); return 1; }
@@ -1905,6 +2838,12 @@ int main(int argc, char **argv){
         return 0;
     }
 
+    if(certify_path){
+        int ok = certify_path6(m, model, certify_path);
+        free(cycle); free(inner); free(b); free(v); free(a); free(m);
+        return ok ? 0 : 1;
+    }
+
     if(emit_target > 0 && dfs_depth <= 0){
         DfsState6 *root = calloc(1, sizeof(*root));
         if(!root){
@@ -1917,7 +2856,9 @@ int main(int argc, char **argv){
         root->depth = 0;
         root->parent = -1;
         root->path[0] = '\0';
-        if(!build_small_inner_for_model6(m, &root->inner)){
+        if(g_have_root_inner_override6){
+            root->inner = g_root_inner_override6;
+        } else if(!build_small_inner_for_model6(m, &root->inner)){
             fprintf(stderr, "failed to build root inner set\n");
             free(root);
             free(cycle); free(inner); free(b); free(v); free(a); free(m);
@@ -1936,7 +2877,7 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    if(dfs_depth > 0){
+    if(dfs_depth != 0){
         g_dfs_emit_target = emit_target;
         g_dfs_emit_count = 0;
         run_dfs6(m, model, dfs_depth, dfs_slots);
