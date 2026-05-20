@@ -1,5 +1,6 @@
-dead: super 6
+dead: super 6 overlap 6 7 12 13
 
 make rl5_super6_sat_check
+make rl5_overlap671213_sat_check
 
-pending: Super 6 SAT check not run by boot.
+pending: SAT checks not run by boot.
