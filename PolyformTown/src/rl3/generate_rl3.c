@@ -182,19 +182,16 @@ int main(void) {
         return 1;
     }
 
-    fprintf(stderr,
-            "rl3 generate input=%zu deleted=%zu candidates=%zu skipped_deleted=%zu children_raw=%zu written=%zu duplicates=%zu dfs=%zu attempts=%zu successes=%zu output=%s\n",
-            input.count,
-            deleted_count,
-            candidates,
-            skipped_deleted,
-            children_total,
-            output.count,
-            duplicates,
-            dfs_total,
-            attempts_total,
-            success_total,
-            output_path);
+    (void)input;
+    (void)deleted_count;
+    (void)candidates;
+    (void)skipped_deleted;
+    (void)children_total;
+    (void)duplicates;
+    (void)dfs_total;
+    (void)attempts_total;
+    (void)success_total;
+    fprintf(stderr, "%s\n", output_path);
 
     bcomp1_free_records(&output);
     bcomp1_free_records(&input);

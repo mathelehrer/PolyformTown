@@ -69,7 +69,9 @@ clean:
 		$(BIN)/rl0_generate $(BIN)/rl0_depict \
 		$(BIN)/rl1_generate $(BIN)/rl1_generate_naive $(BIN)/rl1_depict $(BIN)/rl1_depict_naive \
 		$(BIN)/rl2_generate $(BIN)/rl3_generate $(BIN)/rl4_generate $(BIN)/rl4_supertile_candidates \
-		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons $(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
+		$(BIN)/rl5_hexagons $(BIN)/rl5_supertile_hexagons \
+		$(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
+		$(BIN)/pathological_item6 $(BIN)/rl5_sat \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
 		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
@@ -269,32 +271,32 @@ boot_rl0: rl0_generate rl0_refine
 	@$(BIN)/rl0_refine
 
 boot_rl1: rl1_generate rl1_refine
-	$(call announce,RL1 generate completions)
+	$(call announce,RL1 generate)
 	@mkdir -p data/rl1
 	@$(BIN)/rl1_generate preferences/focus.tile data/rl1/completions.dat 20 --live-only
-	$(call announce,RL1 refine deletions)
+	$(call announce,RL1 refine)
 	@$(BIN)/rl1_refine
 
 boot_rl2: rl2_generate rl1_refine
-	$(call announce,RL2 generate weird children)
+	$(call announce,RL2 generate)
 	@$(BIN)/rl2_generate
-	$(call announce,RL2 refine deletions)
+	$(call announce,RL2 refine)
 	@$(BIN)/rl1_refine --input data/rl2/completions.dat --output data/rl2/deletions.dat --depth 2
 
 boot_rl3: rl3_generate rl1_refine
-	$(call announce,RL3 generate next ring)
+	$(call announce,RL3 generate)
 	@$(BIN)/rl3_generate
-	$(call announce,RL3 refine deletions)
+	$(call announce,RL3 refine)
 	@$(BIN)/rl1_refine --input data/rl3/completions.dat --output data/rl3/deletions.dat --depth $(RL3_REFINE_DEPTH)
 
 boot_rl4: rl4_generate rl4_refine
-	$(call announce,RL4 generate filtrations)
+	$(call announce,RL4 filter)
 	@$(BIN)/rl4_generate
-	$(call announce,RL4 refine supertile candidates)
+	$(call announce,RL4 refine)
 	@$(BIN)/rl4_supertile_candidates
 
 boot_rl5: rl5_generate pathological_item6 rl5_sat rl5_super6_errata_placeholder
-	$(call announce,RL5 generate hexagon analysis)
+	$(call announce,RL5 hexagons)
 	@mkdir -p data/rl5
 	@$(BIN)/rl5_hexagons > $(RL5_HEXAGONS_DATA)
 	@$(BIN)/rl5_supertile_hexagons --data > $(RL5_SUPERTILE_HEXAGONS_DATA)
@@ -304,7 +306,7 @@ boot_rl5: rl5_generate pathological_item6 rl5_sat rl5_super6_errata_placeholder
 	@echo $(RL5_OVERLAP_HEXAGONS_DATA)
 	@$(BIN)/pathological_item6 --data $(RL5_PATHOLOGY_DATA) >/dev/null 2>/dev/null
 	@$(BIN)/rl5_sat --model super --record 6 --boundary-depth 6 --fixed-center-orientation --cnf $(RL5_SUPER6_D6_FIXED_CNF) --map $(RL5_SUPER6_D6_FIXED_MAP) >/dev/null 2>/dev/null
-	$(call announce,RL5 refine pathology)
+	$(call announce,RL5 pathology)
 	@echo $(RL5_PATHOLOGY_DATA)
 	@echo $(RL5_SUPER6_D6_FIXED_CNF)
 	@echo $(RL5_SUPER6_D6_FIXED_MAP)

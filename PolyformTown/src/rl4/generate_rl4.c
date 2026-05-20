@@ -109,14 +109,10 @@ static int filter_one_level(const FilterSpec *spec) {
         return 0;
     }
 
-    fprintf(stderr,
-            "rl4 filter %s input=%zu deleted=%zu skipped=%zu written=%zu output=%s\n",
-            spec->level_name,
-            records.count,
-            dead_count,
-            skipped_deleted,
-            written,
-            spec->output_path);
+    (void)dead_count;
+    (void)skipped_deleted;
+    (void)written;
+    fprintf(stderr, "%s\n", spec->output_path);
 
     bcomp1_free_records(&records);
     return 1;

@@ -59,34 +59,22 @@ static int boundary_has_escape(const Boundary5DepthCounts *c){
 }
 
 static void boundary_print_header(void){
-    printf("%6s  %-7s %8s %9s %9s %10s %8s %8s %8s %10s %7s %8s %9s %10s %10s %10s\n",
-           "record", "status", "outputs", "attempts", "success", "duplicates",
-           "dead", "illegal", "no_dict", "dfs", "trunc", "escapes",
-           "max_tiles", "max_hidden", "max_bverts", "max_cverts");
+    printf("%6s  %-7s %10s %7s %9s %10s %10s\n",
+           "record", "status", "dfs", "esc",
+           "max_tiles", "max_hidden", "max_bverts");
 }
 
 static void boundary_print_row(size_t record, const Boundary5DepthCounts *c){
     const char *status = boundary_status_name(c);
-    long duplicates = c->completed - c->live;
-    if(duplicates < 0) duplicates = 0;
-    printf("%6zu  %s%-7s%s %8d %9ld %9ld %10ld %8d %8d %8d %10ld %7d %8d %9d %10d %10d %10d\n",
+    printf("%6zu  %s%-7s%s %10ld %7d %9d %10d %10d\n",
            record,
            term_color_word(stdout, status),
            status,
            term_color_reset_for_word(stdout, status),
-           c->live,
-           c->branches,
-           c->accepted,
-           duplicates,
-           c->dead,
-           0,
-           0,
            c->processed,
-           0,
            boundary_has_escape(c),
            c->max_cells,
            c->max_frontier,
-           c->max_cycle,
            c->max_cycle);
 }
 
@@ -295,15 +283,15 @@ static int run_one(const Job *j, const Stats5Options *opts){
                 memset(&err, 0, sizeof(err));
                 err.escape = 1;
                 if(opts->print_table) boundary_print_row(record, &err);
-                else printf("record=%zu status=escaped outputs=0 escapes=1 dfs=0\n", record);
+                else printf("record=%zu status=escaped escapes=1 dfs=0\n", record);
                 continue;
             }
             Boundary5DepthCounts *c = &rep.depth[rep.max_depth];
             if(opts->print_table) boundary_print_row(record, c);
             else {
                 const char *status = boundary_status_name(c);
-                printf("record=%zu status=%s outputs=%d escapes=%d dfs=%ld\n",
-                       record, status, c->live, boundary_has_escape(c), c->processed);
+                printf("record=%zu status=%s escapes=%d dfs=%ld\n",
+                       record, status, boundary_has_escape(c), c->processed);
             }
         }
     }

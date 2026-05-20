@@ -785,12 +785,10 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,
             "wrote %zu records to %s\n"
-            "dfs_calls=%zu attach_attempts=%zu attach_successes=%zu complete=%zu duplicates=%zu\n",
+            "dfs_calls=%zu complete=%zu duplicates=%zu\n",
             ctx.record_count,
             output_path,
             search.dfs_calls,
-            search.attach_attempts,
-            search.attach_successes,
             search.complete_count,
             search.duplicate_count);
 

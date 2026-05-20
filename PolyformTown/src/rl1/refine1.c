@@ -101,33 +101,39 @@ static int parse_selection_token(Selection *sel, const char *arg) {
 }
 
 static void print_header(void) {
-    printf("%6s  %-7s %8s %9s %9s %10s %8s %8s %8s %10s %7s %8s %9s %10s %10s %10s\n",
-           "record", "status", "outputs", "attempts", "success", "duplicates",
-           "dead", "illegal", "no_dict", "dfs", "trunc", "escapes",
-           "max_tiles", "max_hidden", "max_bverts", "max_cverts");
+    printf("%6s  %-7s %10s %7s %9s %10s %10s\n",
+           "record", "status", "dfs", "esc",
+           "max_tiles", "max_hidden", "max_bverts");
 }
 
 static void print_row(size_t idx, R1Status st, const BComp1Stats *s) {
     const char *status = status_name(st);
-    printf("%6zu  %s%-7s%s %8zu %9zu %9zu %10zu %8zu %8zu %8zu %10zu %7zu %8zu %9zu %10zu %10zu %10zu\n",
+    printf("%6zu  %s%-7s%s %10zu %7zu %9zu %10zu %10zu\n",
            idx,
            term_color_word(stdout, status),
            status,
            term_color_reset_for_word(stdout, status),
-           s->outputs,
-           s->attach_attempts,
-           s->attach_successes,
-           s->duplicates,
-           s->filtered_dead,
-           s->filtered_illegal,
-           s->no_dictionary,
            s->dfs_calls,
-           s->truncated,
            (size_t)has_escape(s),
            s->max_tile_count_seen,
            s->max_hidden_count_seen,
-           s->max_boundary_vertices_seen,
-           s->max_cycle_vertices_seen);
+           s->max_boundary_vertices_seen);
+}
+
+static void print_wrapped_dead(const int *items, int count) {
+    const int width = 80;
+    int col = printf("dead:");
+    for (int i = 0; i < count; i++) {
+        char buf[32];
+        int n = snprintf(buf, sizeof(buf), " %d", items[i]);
+        if (col + n > width) {
+            printf("\n     ");
+            col = 5;
+        }
+        fputs(buf, stdout);
+        col += n;
+    }
+    printf("\n");
 }
 
 
@@ -227,10 +233,9 @@ int main(int argc, char **argv) {
         if (print_table) print_row(idx, st, &result.stats);
         else {
             const char *status = status_name(st);
-            printf("record=%zu status=%s outputs=%zu escapes=%zu dfs=%zu\n",
+            printf("record=%zu status=%s escapes=%zu dfs=%zu\n",
                    idx,
                    status,
-                   result.stats.outputs,
                    (size_t)has_escape(&result.stats),
                    result.stats.dfs_calls);
         }
@@ -240,9 +245,7 @@ int main(int argc, char **argv) {
 
     printf("summary depth=%d total=%zu living=%zu escaped=%zu dead=%zu unknown=%zu\n",
            opts.depth, total, living, escaped, dead, unknown);
-    printf("dead:");
-    for (int i = 0; i < dead_count; i++) printf(" %d", dead_records[i]);
-    printf("\n");
+    print_wrapped_dead(dead_records, dead_count);
 
     {
         FILE *out = fopen(output_path, "w");

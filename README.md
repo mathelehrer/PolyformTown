@@ -82,4 +82,18 @@ included below.
 
 <img src="./PolyformTown/img/rl3_survivors.svg" alt="RL3 surrounds" />
 
-<p><em>Figure: almost good enough for hexagon extraction?</em></p>
+<p><em>Figure: Good enough for hexagon extraction?</em></p>
+
+
+
+<h2>RL4 Extracting supertile hexagons</h2>
+
+<img src="./PolyformTown/img/rl4_refine.svg" alt="RL4 refine" />
+
+<p><em>Figure: Seems that way, but do you really trust it? </em></p>
+
+<h2>RL5 One last supertile pathology</h2>
+
+<img src="./PolyformTown/img/rl5_pathology.svg" alt="RL5 pathology" />
+
+<p><em>Figure: Needs depth=6 SAT solving. </em></p>
