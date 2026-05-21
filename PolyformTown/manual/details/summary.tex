@@ -18,6 +18,7 @@
 \usepackage{hyperref}
 \usepackage{enumitem}
 \setlist{noitemsep, topsep=2pt}
+\usepackage{needspace}
 
 %% minted — syntax highlighting (requires -shell-escape and pygments)
 \usepackage{minted}
@@ -67,8 +68,26 @@
 
 %% Section colours
 \usepackage{titlesec}
-\titleformat{\section}{\large\bfseries\color{titlecolor}}{}{0em}{}[\vspace{-2pt}\color{rulecolor}\hrule\vspace{4pt}]
+\titleformat{\section}{\large\bfseries\color{titlecolor}}{}{0em}{}[\nobreak\vspace{-2pt}\color{rulecolor}\hrule\nobreak\vspace{4pt}]
 \titleformat{\subsection}{\normalsize\bfseries\color{headercolor}}{}{0em}{}
+
+%% --- Keep headings attached to the content that follows them ---------
+%% A breakable tcolorbox forces a page-break opportunity right before
+%% itself (it does \@nobreakfalse\addpenalty0 internally), so if a
+%% heading lands too low the box jumps to the next page and the heading
+%% is stranded at the foot of the current one.  Two measures fix this:
+%%
+%% 1. \subsectionbreak = \nobreak  — forbids a break between a section
+%%    heading and an immediately following subsection (replaces the
+%%    default negative \@secpenalty that *rewards* such a break).
+%% 2. \needspace before every heading — if there isn't room for the
+%%    heading plus the start of its box, the whole unit is moved to the
+%%    next page instead of leaving the heading behind.
+\newcommand{\subsectionbreak}{\nobreak}
+\let\polysection\section
+\renewcommand\section{\needspace{0.16\textheight}\polysection}
+\let\polysubsection\subsection
+\renewcommand\subsection{\needspace{0.12\textheight}\polysubsection}
 
 %% Convenient macros
 \newcommand{\code}[1]{\texttt{\small #1}}
