@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
+#include <unistd.h>
 
 #define MAX_CELLS       81
 #define MAX_TILES       64
@@ -265,6 +267,8 @@ static void edge_slots(int side, int *a, int *b){ *a = side; *b = (side + 1) % 6
 
 static int cyclic_known_run_before_adds(const Cell *c, const Action *a, char *run, size_t runsz);
 static int cyclic_known_run_anywhere(const Cell *c, char *run, size_t runsz);
+static void describe_remember_action(const Cell *c, const Action *a,
+                                     char *out, size_t outsz);
 
 static void enum_tile_complete(const Model *m, const State *s, Action *acts, int *na){
     for(int ci=0;ci<s->ncell;ci++){
@@ -281,9 +285,10 @@ static void enum_tile_complete(const Model *m, const State *s, Action *acts, int
                 char anchor[128];
                 if(!cyclic_known_run_before_adds(c, &a, anchor, sizeof(anchor)) &&
                    !cyclic_known_run_anywhere(c, anchor, sizeof(anchor))) anchor[0]='\0';
-                if(anchor[0]) snprintf(a.title, sizeof(a.title), "Remember tile T%d r%d after %s at (%d,%d).", mt, mr, anchor, c->q, c->r);
-                else snprintf(a.title, sizeof(a.title), "Complete tile T%d r%d at (%d,%d).", mt, mr, c->q, c->r);
-                snprintf(a.status, sizeof(a.status), "OK: completed tile T%d r%d at (%d,%d).", mt, mr, c->q, c->r);
+                (void)anchor;
+                describe_remember_action(c, &a, a.title, sizeof(a.title));
+                snprintf(a.status, sizeof(a.status), "wrote %d letter%s",
+                         a.nadd, a.nadd == 1 ? "" : "s");
                 add_action(acts, na, &a);
             }
         }
@@ -313,7 +318,7 @@ static void enum_across_edge(const Model *m, const State *s, Action *acts, int *
                 Action a; memset(&a,0,sizeof(a));
                 snprintf(a.title,sizeof(a.title),"Reflect edge %s,%s across (%d,%d)->(%d,%d); add %s,%s.",
                          c->slot[as].s,c->slot[bs].s,c->q,c->r,ncell->q,ncell->r,C.s,D.s);
-                snprintf(a.status,sizeof(a.status),"OK: reflected edge to (%d,%d).",ncell->q,ncell->r);
+                snprintf(a.status,sizeof(a.status),"wrote %d letters", a.nadd);
                 if(tok_empty(&ncell->slot[cs])) action_add(&a,ni,cs,&C);
                 if(tok_empty(&ncell->slot[ds])) action_add(&a,ni,ds,&D);
                 add_action(acts,na,&a);
@@ -323,20 +328,25 @@ static void enum_across_edge(const Model *m, const State *s, Action *acts, int *
 }
 
 static void format_down_adds(char *out, size_t outsz,
-                             const Cell *c, int cslot, const Tok *csym,
-                             const Cell *nc, int nslot, const Tok *nsym,
+                             const Cell *c, const Tok *csym,
+                             const Cell *nc, const Tok *nsym,
                              int add_c, int add_n){
-    out[0] = '\0';
+    char syms[64] = "";
+    char coords[96] = "";
     if(add_c){
-        snprintf(out + strlen(out), outsz - strlen(out),
-                 "%s@(%d,%d).%d", csym->s, c->q, c->r, cslot);
+        snprintf(syms + strlen(syms), sizeof(syms) - strlen(syms),
+                 "%s", csym->s);
+        snprintf(coords + strlen(coords), sizeof(coords) - strlen(coords),
+                 "(%d,%d)", c->q, c->r);
     }
     if(add_n){
-        snprintf(out + strlen(out), outsz - strlen(out),
-                 "%s%s@(%d,%d).%d", out[0] ? ", " : "",
-                 nsym->s, nc->q, nc->r, nslot);
+        snprintf(syms + strlen(syms), sizeof(syms) - strlen(syms),
+                 "%s%s", syms[0] ? "," : "", nsym->s);
+        snprintf(coords + strlen(coords), sizeof(coords) - strlen(coords),
+                 "%s(%d,%d)", coords[0] ? "," : "", nc->q, nc->r);
     }
-    if(!out[0]) snprintf(out, outsz, "nothing");
+    if(!syms[0]) snprintf(out, outsz, "nothing");
+    else snprintf(out, outsz, "%s at %s", syms, coords);
 }
 
 static void enum_down_edge(const Model *m, const State *s, Action *acts, int *na){
@@ -363,39 +373,37 @@ static void enum_down_edge(const Model *m, const State *s, Action *acts, int *na
                     char adds[128];
                     int add_a = tok_empty(A);
                     int add_d = tok_empty(D);
-                    format_down_adds(adds, sizeof(adds), c, as, &A0, nc, ds, &D0, add_a, add_d);
+                    format_down_adds(adds, sizeof(adds), c, &A0, nc, &D0, add_a, add_d);
                     snprintf(a.title,sizeof(a.title),
-                             "Down edge (%d,%d).%d-%d to (%d,%d).%d-%d: _%s=%s_; add %s.",
-                             c->q,c->r,as,bs,nc->q,nc->r,cs,ds,B->s,C->s,adds);
-                    snprintf(a.status,sizeof(a.status),
-                             "OK: down-edge _%s=%s_ added %s.", B->s, C->s, adds);
+                             "Down edge _%s=%s_; add %s.",
+                             B->s,C->s,adds);
+                    snprintf(a.status,sizeof(a.status),"wrote %d letters", a.nadd);
                     if(add_a) action_add(&a,ci,as,&A0);
                     if(add_d) action_add(&a,ni,ds,&D0);
                     add_action(acts,na,&a);
                 }
             }
             if(!tok_empty(A) && !tok_empty(D) && (tok_empty(B) || tok_empty(C))){
-                int count=0; Tok B0,C0; tok_set(&B0,""); tok_set(&C0,"");
+                int count=0; Tok Bsym,Csym; tok_set(&Bsym,""); tok_set(&Csym,"");
                 for(int ri=0;ri<m->nrule;ri++){
                     const EdgeRule *er=&m->rules[ri];
                     if(!tok_eq(&er->a,A) || !tok_eq(&er->d,D)) continue;
                     if(!tok_empty(B) && !tok_eq(B,&er->b)) continue;
                     if(!tok_empty(C) && !tok_eq(C,&er->c)) continue;
-                    count++; B0=er->b; C0=er->c;
+                    count++; Bsym=er->b; Csym=er->c;
                 }
                 if(count == 1){
                     Action a; memset(&a,0,sizeof(a));
                     char adds[128];
                     int add_b = tok_empty(B);
                     int add_c = tok_empty(C);
-                    format_down_adds(adds, sizeof(adds), c, bs, &B0, nc, cs, &C0, add_b, add_c);
+                    format_down_adds(adds, sizeof(adds), c, &Bsym, nc, &Csym, add_b, add_c);
                     snprintf(a.title,sizeof(a.title),
-                             "Down edge (%d,%d).%d-%d to (%d,%d).%d-%d: %s_ = _%s; add %s.",
-                             c->q,c->r,as,bs,nc->q,nc->r,cs,ds,A->s,D->s,adds);
-                    snprintf(a.status,sizeof(a.status),
-                             "OK: down-edge %s_ = _%s added %s.", A->s, D->s, adds);
-                    if(add_b) action_add(&a,ci,bs,&B0);
-                    if(add_c) action_add(&a,ni,cs,&C0);
+                             "Down edge %s_ = _%s; add %s.",
+                             A->s,D->s,adds);
+                    snprintf(a.status,sizeof(a.status),"wrote %d letters", a.nadd);
+                    if(add_b) action_add(&a,ci,bs,&Bsym);
+                    if(add_c) action_add(&a,ni,cs,&Csym);
                     add_action(acts,na,&a);
                 }
             }
@@ -660,8 +668,8 @@ static void enum_vertex(const Model *m, const State *s, Action *acts, int *na){
         int matches[256], nm=0;
         for(int wi=0;wi<m->nvword;wi++) if(vword_matches(&m->vwords[wi],known,nk)) matches[nm++]=wi;
         int chosen=-1; char title[240], status[240];
-        if(nm==1){ chosen=matches[0]; snprintf(title,sizeof(title),"Complete vertex word %s,%s,%s",m->vwords[chosen].v[0].s,m->vwords[chosen].v[1].s,m->vwords[chosen].v[2].s); snprintf(status,sizeof(status),"OK: completed vertex word."); }
-        else if(nm==2){ int aaa=-1, other=-1; for(int i=0;i<nm;i++){ if(vword_is_aaa(&m->vwords[matches[i]])) aaa=matches[i]; else other=matches[i]; } if(aaa>=0 && other>=0){ chosen=other; snprintf(title,sizeof(title),"Outlaw AAA; force vertex %s,%s,%s",m->vwords[chosen].v[0].s,m->vwords[chosen].v[1].s,m->vwords[chosen].v[2].s); snprintf(status,sizeof(status),"OK: outlawed AAA and forced surviving vertex word."); } }
+        if(nm==1){ chosen=matches[0]; snprintf(title,sizeof(title),"Complete vertex word %s,%s,%s",m->vwords[chosen].v[0].s,m->vwords[chosen].v[1].s,m->vwords[chosen].v[2].s); snprintf(status,sizeof(status),"wrote 1 letter"); }
+        else if(nm==2){ int aaa=-1, other=-1; for(int i=0;i<nm;i++){ if(vword_is_aaa(&m->vwords[matches[i]])) aaa=matches[i]; else other=matches[i]; } if(aaa>=0 && other>=0){ chosen=other; snprintf(title,sizeof(title),"Outlaw AAA; force vertex %s,%s,%s",m->vwords[chosen].v[0].s,m->vwords[chosen].v[1].s,m->vwords[chosen].v[2].s); snprintf(status,sizeof(status),"wrote 1 letter"); } }
         if(chosen<0) continue;
         int used[3]={0,0,0};
         for(int i=0;i<nk;i++) for(int j=0;j<3;j++) if(!used[j] && tok_eq(&m->vwords[chosen].v[j],&known[i])){ used[j]=1; break; }
@@ -769,8 +777,8 @@ static void enum_hex_forget(const Model *m, const State *s, Action *acts, int *n
         int adds=0; for(int k=0;k<6;k++) if(tok_empty(&c->slot[k]) && ok[k] && !tok_empty(&agree[k])){ action_add(&a,ci,k,&agree[k]); if(++adds>=2) break; }
         if(a.nadd){
             describe_remember_action(c, &a, a.title, sizeof(a.title));
-            snprintf(a.status,sizeof(a.status),"OK: remembered %d letter%s at (%d,%d).",
-                     a.nadd, a.nadd == 1 ? "" : "s", c->q,c->r);
+            snprintf(a.status,sizeof(a.status),"wrote %d letter%s",
+                     a.nadd, a.nadd == 1 ? "" : "s");
             add_action(acts,na,&a);
         }
     }
@@ -793,7 +801,10 @@ static int apply_action(State *s, const Action *a, char *status, size_t sz){
         if(a->add[i].ci < 0 || a->add[i].ci >= tmp.ncell){ snprintf(status,sz,"ERR: invalid action cell index"); return 0; }
         if(!set_cell_slot(&tmp.cells[a->add[i].ci],a->add[i].slot,&a->add[i].sym,err,sizeof(err))){ snprintf(status,sz,"ERR: %s",err); return 0; }
     }
-    *s=tmp; snprintf(status,sz,"%s",a->status[0]?a->status:"OK"); return 1;
+    *s=tmp;
+    snprintf(status, sz, "wrote %d letter%s",
+             a->nadd, a->nadd == 1 ? "" : "s");
+    return 1;
 }
 static void push_hist(History *h,const State *s){ if(h->n>=MAX_HIST){ memmove(&h->s[0],&h->s[1],sizeof(State)*(MAX_HIST-1)); h->n=MAX_HIST-1; } h->s[h->n++]=*s; }
 static int pop_hist(History *h,State *s){ if(h->n<=0) return 0; *s=h->s[--h->n]; return 1; }
@@ -859,10 +870,43 @@ static void print_status_line(const char *status){
     printf("%-76s\n", buf);
 }
 
+static void print_blank_line(void){ printf("%-76s\n", ""); }
 
-static void render(const Model *m, const State *s, Action *acts, int na, const char *status){
+static void render_help_body(void){
+    static const char *help[] = {
+        "Commands:",
+        "  1..N   apply action",
+        "  a      apply action 1 repeatedly until stuck/conflict",
+        "  ↑ / ↓  scroll completion list",
+        "  u      undo",
+        "  r      reset to central edge",
+        "  q      quit",
+        "  ?      help",
+        "",
+        "Press return to return to the diagram."
+    };
+    enum { BODY_ROWS = 21 };
+    int nhelp = (int)(sizeof(help) / sizeof(help[0]));
+    int top = (BODY_ROWS - nhelp) / 2;
+    if(top < 0) top = 0;
+    for(int i=0;i<BODY_ROWS;i++){
+        if(i >= top && i < top + nhelp) printf("%-76s\n", help[i - top]);
+        else print_blank_line();
+    }
+}
+
+static void render(const Model *m, const State *s, Action *acts, int na,
+                   int action_scroll, const char *status, int help_mode){
     (void)m;
     printf("RL7 HCE | q: quit, ?: help, u: undo, a: force-all, r: reset | 80x24\n");
+    if(help_mode){
+        render_help_body();
+        print_blank_line();
+        printf("$: ");
+        fflush(stdout);
+        return;
+    }
+
     int rr[3]={1,0,-1};
     for(int ri=0;ri<3;ri++){
         int r=rr[ri], idx[16], cnt=0;
@@ -872,16 +916,26 @@ static void render(const Model *m, const State *s, Action *acts, int na, const c
         const char *indent=(r&1)?"       ":"";
         for(int line=0;line<5;line++){ printf("%s",indent); for(int i=0;i<cnt;i++){ printf("%s",blocks[i][line]); if(i+1<cnt) putchar(' '); } putchar('\n'); }
     }
-    printf("Complete: showing %d of %d actions\n", na<4?na:4, na);
-    int lim=na<4?na:4;
+
+    int visible = na < 4 ? na : 4;
+    int max_scroll = na > visible ? na - visible : 0;
+    if(action_scroll < 0) action_scroll = 0;
+    if(action_scroll > max_scroll) action_scroll = max_scroll;
+    if(na > visible){
+        printf("Complete: actions %d-%d of %d  (↑/↓ scroll)\n",
+               action_scroll + 1, action_scroll + visible, na);
+    } else {
+        printf("Complete: showing %d of %d actions\n", visible, na);
+    }
     for(int i=0;i<4;i++){
-        if(i<lim) print_short_option(i+1, acts[i].title);
-        else printf("%-76s\n", "");
+        int ai = action_scroll + i;
+        if(i<visible && ai<na) print_short_option(ai+1, acts[ai].title);
+        else print_blank_line();
     }
     print_status_line(status);
+    print_blank_line();
     printf("$: "); fflush(stdout);
 }
-
 
 static int parse_int_strict(const char *s,int *out){
     while(isspace((unsigned char)*s)) s++;
@@ -895,21 +949,105 @@ static int parse_int_strict(const char *s,int *out){
     *out = (int)v;
     return 1;
 }
-static void help(void){
-    printf("\nCommands:\n  1..N apply action\n  a    apply action 1 repeatedly until stuck/conflict\n  u    undo\n  r    reset to central edge\n  q    quit\n  ?    help\n\nPress return...");
-    fflush(stdout);
-    char buf[32];
-    if (fgets(buf, sizeof(buf), stdin) == NULL) {
-        clearerr(stdin);
+
+typedef enum { INPUT_SUBMIT, INPUT_SCROLL_UP, INPUT_SCROLL_DOWN, INPUT_EOF } InputKind;
+
+typedef struct {
+    int tty;
+    struct termios oldt;
+    int active;
+} TermMode;
+
+static void term_restore(TermMode *tm){
+    if(tm->active){
+        tcsetattr(STDIN_FILENO, TCSANOW, &tm->oldt);
+        tm->active = 0;
     }
 }
 
-static void erase_frame(int first){
-    (void)first;
-    /* Always repaint from a clean 80x24 frame.  The 24-line upward
-     * cursor motion is fragile after prompts/help or terminal wrapping. */
-    printf("\033[H\033[2J");
+static int term_setup(TermMode *tm){
+    memset(tm, 0, sizeof(*tm));
+    tm->tty = isatty(STDIN_FILENO);
+    if(!tm->tty) return 1;
+    if(tcgetattr(STDIN_FILENO, &tm->oldt) != 0) return 0;
+    struct termios raw = tm->oldt;
+    raw.c_lflag &= (tcflag_t)~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+    if(tcsetattr(STDIN_FILENO, TCSANOW, &raw) != 0) return 0;
+    tm->active = 1;
+    return 1;
 }
+
+static InputKind read_input(TermMode *tm, char *line, size_t linesz){
+    line[0] = '\0';
+    if(!tm->tty){
+        if(!fgets(line, linesz, stdin)) return INPUT_EOF;
+        line[strcspn(line, "\r\n")] = '\0';
+        if(strcmp(line, "\033[A") == 0) return INPUT_SCROLL_UP;
+        if(strcmp(line, "\033[B") == 0) return INPUT_SCROLL_DOWN;
+        return INPUT_SUBMIT;
+    }
+
+    size_t n = 0;
+    for(;;){
+        unsigned char ch;
+        ssize_t got = read(STDIN_FILENO, &ch, 1);
+        if(got == 0) return INPUT_EOF;
+        if(got < 0){
+            if(errno == EINTR) continue;
+            return INPUT_EOF;
+        }
+        if(ch == '\r' || ch == '\n'){
+            line[n] = '\0';
+            putchar('\n');
+            fflush(stdout);
+            return INPUT_SUBMIT;
+        }
+        if(ch == 0x7f || ch == '\b'){
+            if(n > 0){
+                n--;
+                line[n] = '\0';
+                printf("\b \b");
+                fflush(stdout);
+            }
+            continue;
+        }
+        if(ch == 0x04){
+            if(n == 0) return INPUT_EOF;
+            continue;
+        }
+        if(ch == 0x1b){
+            unsigned char seq[2];
+            ssize_t g1 = read(STDIN_FILENO, &seq[0], 1);
+            if(g1 == 1 && seq[0] == '['){
+                ssize_t g2 = read(STDIN_FILENO, &seq[1], 1);
+                if(g2 == 1){
+                    if(seq[1] == 'A') return INPUT_SCROLL_UP;
+                    if(seq[1] == 'B') return INPUT_SCROLL_DOWN;
+                }
+            }
+            continue;
+        }
+        if(isprint(ch)){
+            if(n + 1 < linesz){
+                line[n++] = (char)ch;
+                line[n] = '\0';
+                putchar((int)ch);
+                fflush(stdout);
+            }
+        }
+    }
+}
+
+static void erase_frame(int first, int after_enter){
+    if(first) return;
+    printf("\r\033[K");
+    int rows = after_enter ? 24 : 23;
+    for(int i=0;i<rows;i++) printf("\033[1A\r\033[K");
+}
+
+static int max_action_scroll(int na){ return na > 4 ? na - 4 : 0; }
 
 int main(int argc, char **argv){
     const char *model_path = DEFAULT_MODEL;
@@ -920,21 +1058,57 @@ int main(int argc, char **argv){
     }
     Model m; char status[256], err[256];
     if(!load_model(model_path,&m,err,sizeof(err))){ fprintf(stderr,"ERR: %s\n",err); return 1; }
-    State s; History h; Action acts[MAX_ACTIONS]; char line[256]; int first_frame=1; h.n=0; init_state(&s); snprintf(status,sizeof(status),"loaded %s: %d tiles, %d edge rules, %d vertex words",model_path,m.ntile,m.nrule,m.nvword);
+
+    TermMode tm;
+    if(!term_setup(&tm)){
+        fprintf(stderr, "ERR: could not configure terminal input\n");
+        return 1;
+    }
+
+    State s; History h; Action acts[MAX_ACTIONS]; char line[256];
+    int first_frame=1, action_scroll=0, help_mode=0, after_enter=0;
+    h.n=0;
+    init_state(&s);
+    snprintf(status,sizeof(status),"loaded %s: %d tiles, %d edge rules, %d vertex words",model_path,m.ntile,m.nrule,m.nvword);
+
     for(;;){
         int na=enumerate_actions(&m,&s,acts);
-        erase_frame(first_frame); first_frame=0;
-        render(&m,&s,acts,na,status);
-        if(!fgets(line,sizeof(line),stdin)){ printf("\nEOF\n"); break; }
-        line[strcspn(line,"\r\n")]='\0'; char *p=line; while(isspace((unsigned char)*p)) p++;
+        int max_scroll = max_action_scroll(na);
+        if(action_scroll > max_scroll) action_scroll = max_scroll;
+        if(action_scroll < 0) action_scroll = 0;
+        erase_frame(first_frame, after_enter);
+        first_frame=0;
+        after_enter=0;
+        render(&m,&s,acts,na,action_scroll,status,help_mode);
+
+        InputKind input = read_input(&tm, line, sizeof(line));
+        if(input == INPUT_EOF){ printf("\nEOF\n"); break; }
+        if(input == INPUT_SCROLL_UP || input == INPUT_SCROLL_DOWN){
+            if(!help_mode){
+                if(input == INPUT_SCROLL_UP && action_scroll > 0) action_scroll--;
+                if(input == INPUT_SCROLL_DOWN && action_scroll < max_action_scroll(na)) action_scroll++;
+            }
+            after_enter = 0;
+            continue;
+        }
+
+        after_enter = 1;
+        char *p=line;
+        while(isspace((unsigned char)*p)) p++;
+
+        if(help_mode){
+            help_mode = 0;
+            continue;
+        }
         if(!*p){ snprintf(status,sizeof(status),"ready"); continue; }
-        if(strcmp(p,"r")==0){ init_state(&s); h.n=0; snprintf(status,sizeof(status),"OK: reset to central edge"); first_frame=1; continue; }
-        if(strcmp(p,"q")==0||strcmp(p,"quit")==0){ printf("bye\n"); break; }
-        if(strcmp(p,"?")==0||strcmp(p,"help")==0){ help(); snprintf(status,sizeof(status),"help shown"); continue; }
-        if(strcmp(p,"u")==0){ if(pop_hist(&h,&s)) snprintf(status,sizeof(status),"OK: undo"); else snprintf(status,sizeof(status),"ERR: nothing to undo"); continue; }
+        if(strcmp(p,"r")==0){ init_state(&s); h.n=0; action_scroll=0; snprintf(status,sizeof(status),"reset to central edge"); continue; }
+        if(strcmp(p,"q")==0||strcmp(p,"quit")==0){ break; }
+        if(strcmp(p,"?")==0||strcmp(p,"help")==0){ help_mode=1; continue; }
+        if(strcmp(p,"u")==0){ if(pop_hist(&h,&s)) snprintf(status,sizeof(status),"undo"); else snprintf(status,sizeof(status),"ERR: nothing to undo"); action_scroll=0; continue; }
         if(strcmp(p,"a")==0){
             State before=s;
             int applied=0;
+            int wrote=0;
             while(applied < 256){
                 Action now[MAX_ACTIONS];
                 int nc=enumerate_actions(&m,&s,now);
@@ -944,16 +1118,30 @@ int main(int argc, char **argv){
                     snprintf(status,sizeof(status),"ERR: action 1 failed verification: %.180s",verr);
                     break;
                 }
+                int step_wrote = now[0].nadd;
                 if(!apply_action(&s, &now[0], status, sizeof(status))) break;
+                wrote += step_wrote;
                 applied++;
             }
             if(applied>0) push_hist(&h,&before);
-            snprintf(status,sizeof(status),"OK: applied action 1 %d time%s%s",applied,applied==1?"":"s",applied>=256?"; stopped at cap":"");
+            snprintf(status,sizeof(status),"wrote %d letter%s in %d action%s%s",
+                     wrote, wrote == 1 ? "" : "s",
+                     applied, applied == 1 ? "" : "s",
+                     applied>=256?"; stopped at cap":"");
+            action_scroll=0;
             continue;
         }
-        int choice=0; if(!parse_int_strict(p,&choice)){ snprintf(status,sizeof(status),"ERR: parse failed; type number, q, r, u, a, or ?"); continue; }
+        int choice=0;
+        if(!parse_int_strict(p,&choice)){
+            snprintf(status,sizeof(status),"ERR: parse failed; type number, q, r, u, a, or ?");
+            continue;
+        }
         if(choice<1 || choice>na){ snprintf(status,sizeof(status),"ERR: action %d out of range 1..%d",choice,na); continue; }
-        push_hist(&h,&s); if(!apply_action(&s,&acts[choice-1],status,sizeof(status))) pop_hist(&h,&s);
+        push_hist(&h,&s);
+        if(!apply_action(&s,&acts[choice-1],status,sizeof(status))) pop_hist(&h,&s);
+        action_scroll=0;
     }
+    term_restore(&tm);
+    printf("bye\n");
     return 0;
 }
