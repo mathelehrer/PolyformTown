@@ -19,14 +19,14 @@ POLY_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/poly_pipeline.o
 VCOMP_SURFACE = $(SRC)/throughput/vcomp.o $(SRC)/throughput/vcomp_pipeline.o
 RL0_SURFACE = $(SRC)/rl0/forget_map.o $(SRC)/rl0/boundary0.o $(SRC)/rl0/vcomp0.o $(SRC)/rl0/attach0.o
 
-.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 boot_rl6 figures figures_files rl5_pathology_svg rl5_super6_sat_data rl5_overlap671213_sat_data rl5_sat_data rl5_super6_errata_placeholder rl5_super6_sat_check rl5_overlap671213_sat_check rl5_sat_solver_notice rl6_unified_data rl6_refine_data \
+.PHONY: all tools data boot clean_boot_data boot_splash splash boot_rl0 boot_rl1 boot_rl2 boot_rl3 boot_rl4 boot_rl5 boot_rl6 figures figures_files rl5_pathology_svg rl5_super6_sat_data rl5_overlap671213_sat_data rl5_sat_data rl5_super6_errata_placeholder rl5_super6_sat_check rl5_overlap671213_sat_check rl5_sat_solver_notice rl6_unified_data rl6_refine_data hce \
 
 .NOTPARALLEL: boot
 	checks test clean \
 	poly_count poly_print vcomp_count count_vcomp vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate supertile_depict pathological_item6 \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate hce supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl0_svg rl0_refine_svg rl0_refine_svg_print rl1_svg_naive \
 	rl1_survivors_svg rl2_survivors_svg rl3_survivors_svg \
@@ -45,7 +45,7 @@ all: tools
 tools: poly_count poly_print vcomp_count vcomp_print vcomp_parity \
 	rl0_generate rl0_refine rl1_generate rl1_refine rl2_generate \
 	rl3_generate rl4_generate rl4_refine \
-	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate supertile_depict pathological_item6 \
+	rl5_generate rl5_hexagons rl5_supertile_hexagons rl5_refine rl5_stats rl5_sat rl6_reduce rl6_refine rl6_generate hce supertile_depict pathological_item6 \
 	imgtable tile_to_imgtable rl0_depict rl1_depict depict_search0_graph \
 	rl1_generate_naive rl1_hexagons rl1_search \
 	meta_graph tiling_3x3_demo tiling_4x4_demo \
@@ -62,7 +62,7 @@ $(BIN):
 clean:
 	$(call announce,clean compiled artifacts)
 	@rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl5/*.o $(SRC)/rl6/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
+		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl5/*.o $(SRC)/rl6/*.o $(SRC)/rl7/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
@@ -73,6 +73,7 @@ clean:
 		$(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
 		$(BIN)/pathological_item6 $(BIN)/rl5_sat $(BIN)/rl6_reduce $(BIN)/rl6_refine $(BIN)/rl6_generate \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
+		$(BIN)/hce \
 		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
@@ -227,6 +228,11 @@ $(BIN)/rl6_refine: $(BIN)/rl6_reduce | $(BIN)
 rl6_generate: $(BIN)/rl6_generate
 $(BIN)/rl6_generate: $(SRC)/rl6/generate6.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/rl6/generate6.o
+
+hce: $(BIN)/hce
+rl7_collar_reepl: hce
+$(BIN)/hce: $(SRC)/rl7/hce.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl7/hce.o
 
 RL6_UNIFIED_DATA ?= data/rl6/unified_model.dat
 RL6_REFINED_DATA ?= data/rl6/refined_model.dat
