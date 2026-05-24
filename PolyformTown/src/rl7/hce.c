@@ -821,7 +821,7 @@ static void centered(char out[16], const char *in){
     out[pos] = '\0';
 }
 
-static void cell_lines(const Cell *c, char lines[5][128]){
+static void cell_lines(const Cell *c, int label_q, int label_r, char lines[5][128]){
     const char *t0 = tok_empty(&c->slot[display_top[0]]) ? " " : c->slot[display_top[0]].s;
     const char *t1 = tok_empty(&c->slot[display_top[1]]) ? " " : c->slot[display_top[1]].s;
     const char *t2 = tok_empty(&c->slot[display_top[2]]) ? " " : c->slot[display_top[2]].s;
@@ -829,7 +829,7 @@ static void cell_lines(const Cell *c, char lines[5][128]){
     const char *b1 = tok_empty(&c->slot[display_bottom[1]]) ? " " : c->slot[display_bottom[1]].s;
     const char *b2 = tok_empty(&c->slot[display_bottom[2]]) ? " " : c->slot[display_bottom[2]].s;
     char coord[32], mid[16];
-    snprintf(coord, sizeof(coord), "(%d,%d)", c->q, c->r);
+    snprintf(coord, sizeof(coord), "(%d,%d)", label_q, label_r);
     centered(mid, coord);
     snprintf(lines[0],128,"┌───┬───┬───┐");
     snprintf(lines[1],128,"│ %-1.1s   %-1.1s   %-1.1s │",t0,t1,t2);
@@ -912,7 +912,14 @@ static void render(const Model *m, const State *s, Action *acts, int na,
         int r=rr[ri], idx[16], cnt=0;
         for(int i=0;i<s->ncell;i++) if(s->cells[i].r==r) idx[cnt++]=i;
         for(int i=0;i<cnt;i++) for(int j=i+1;j<cnt;j++) if(s->cells[idx[j]].q < s->cells[idx[i]].q){ int t=idx[i]; idx[i]=idx[j]; idx[j]=t; }
-        char blocks[16][5][128]; for(int i=0;i<cnt;i++) cell_lines(&s->cells[idx[i]],blocks[i]);
+        char blocks[16][5][128];
+        for(int i=0;i<cnt;i++){
+            const Cell *cell = &s->cells[idx[i]];
+            int label_q = cell->q;
+            int label_r = cell->r;
+            if(label_r == -1) label_q += 1;
+            cell_lines(cell, label_q, label_r, blocks[i]);
+        }
         const char *indent=(r&1)?"       ":"";
         for(int line=0;line<5;line++){ printf("%s",indent); for(int i=0;i<cnt;i++){ printf("%s",blocks[i][line]); if(i+1<cnt) putchar(' '); } putchar('\n'); }
     }
