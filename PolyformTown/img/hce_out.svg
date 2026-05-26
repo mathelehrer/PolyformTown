@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="427" height="321" viewBox="0 0 427 321">
+<style><![CDATA[
+svg { background: #ffffff; }
+.hex { stroke: #111827; stroke-width: 1.4; }
+.tok { font: 700 15px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #020617; text-anchor: middle; dominant-baseline: middle; }
+.opt { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #94a3b8; text-anchor: middle; dominant-baseline: middle; }
+]]></style>
+<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>
+<g class="patch">
+<g class="cell" data-q="-1" data-r="1">
+<polygon class="hex" fill="#fee2e2" points="113.67,34.00 153.51,57.00 153.51,103.00 113.67,126.00 73.84,103.00 73.84,57.00"/>
+<text class="tok" x="138.37" y="95.76">F</text>
+<text class="tok" x="138.37" y="67.24">G</text>
+<text class="tok" x="113.67" y="52.98">H</text>
+<text class="tok" x="88.98" y="67.24">C</text>
+<text class="tok" x="88.98" y="95.76">E</text>
+<text class="tok" x="113.67" y="110.02">A</text>
+</g>
+<g class="cell" data-q="0" data-r="1">
+<polygon class="hex" fill="#fee2e2" points="193.35,34.00 233.19,57.00 233.19,103.00 193.35,126.00 153.51,103.00 153.51,57.00"/>
+<text class="tok" x="218.05" y="95.76">G</text>
+<text class="tok" x="218.05" y="67.24">H</text>
+<text class="tok" x="193.35" y="52.98">C</text>
+<text class="tok" x="168.65" y="67.24">E</text>
+<text class="tok" x="168.65" y="95.76">A</text>
+<text class="tok" x="193.35" y="110.02">F</text>
+</g>
+<g class="cell" data-q="1" data-r="1">
+<polygon class="hex" fill="#f8fafc" points="273.02,34.00 312.86,57.00 312.86,103.00 273.02,126.00 233.19,103.00 233.19,57.00"/>
+<text class="opt" x="248.32" y="94.76">3</text>
+<text class="opt" x="273.02" y="109.02">3</text>
+</g>
+<g class="cell" data-q="-1" data-r="0">
+<polygon class="hex" fill="#f1f5f9" points="73.84,103.00 113.67,126.00 113.67,172.00 73.84,195.00 34.00,172.00 34.00,126.00"/>
+<text class="tok" x="98.54" y="164.76">A</text>
+<text class="tok" x="98.54" y="136.24">F</text>
+<text class="tok" x="73.84" y="121.98">G</text>
+<text class="tok" x="49.14" y="136.24">H</text>
+<text class="opt" x="49.14" y="163.76">2</text>
+<text class="opt" x="73.84" y="178.02">2</text>
+</g>
+<g class="cell" data-q="0" data-r="0">
+<polygon class="hex" fill="#dbeafe" points="153.51,103.00 193.35,126.00 193.35,172.00 153.51,195.00 113.67,172.00 113.67,126.00"/>
+<text class="tok" x="178.21" y="164.76">A</text>
+<text class="tok" x="178.21" y="136.24">K</text>
+<text class="tok" x="153.51" y="121.98">F</text>
+<text class="tok" x="128.81" y="136.24">H</text>
+<text class="tok" x="128.81" y="164.76">C</text>
+<text class="tok" x="153.51" y="179.02">E</text>
+</g>
+<g class="cell" data-q="1" data-r="0">
+<polygon class="hex" fill="#dcfce7" points="233.19,103.00 273.02,126.00 273.02,172.00 233.19,195.00 193.35,172.00 193.35,126.00"/>
+<text class="tok" x="257.88" y="164.76">A</text>
+<text class="tok" x="257.88" y="136.24">F</text>
+<text class="tok" x="233.19" y="121.98">G</text>
+<text class="tok" x="208.49" y="136.24">H</text>
+<text class="tok" x="208.49" y="164.76">J</text>
+<text class="tok" x="233.19" y="179.02">C</text>
+</g>
+<g class="cell" data-q="2" data-r="0">
+<polygon class="hex" fill="#f1f5f9" points="312.86,103.00 352.70,126.00 352.70,172.00 312.86,195.00 273.02,172.00 273.02,126.00"/>
+<text class="tok" x="337.56" y="164.76">A</text>
+<text class="opt" x="337.56" y="135.24">2</text>
+<text class="opt" x="312.86" y="120.98">2</text>
+<text class="tok" x="288.16" y="136.24">H</text>
+<text class="tok" x="288.16" y="164.76">C</text>
+<text class="tok" x="312.86" y="179.02">E</text>
+</g>
+<g class="cell" data-q="-1" data-r="-1">
+<polygon class="hex" fill="#f8fafc" points="113.67,172.00 153.51,195.00 153.51,241.00 113.67,264.00 73.84,241.00 73.84,195.00"/>
+<text class="opt" x="138.37" y="204.24">3</text>
+<text class="opt" x="113.67" y="189.98">3</text>
+</g>
+<g class="cell" data-q="0" data-r="-1">
+<polygon class="hex" fill="#fee2e2" points="193.35,172.00 233.19,195.00 233.19,241.00 193.35,264.00 153.51,241.00 153.51,195.00"/>
+<text class="tok" x="218.05" y="233.76">E</text>
+<text class="tok" x="218.05" y="205.24">A</text>
+<text class="tok" x="193.35" y="190.98">F</text>
+<text class="tok" x="168.65" y="205.24">G</text>
+<text class="tok" x="168.65" y="233.76">H</text>
+<text class="tok" x="193.35" y="248.02">C</text>
+</g>
+<g class="cell" data-q="1" data-r="-1">
+<polygon class="hex" fill="#fee2e2" points="273.02,172.00 312.86,195.00 312.86,241.00 273.02,264.00 233.19,241.00 233.19,195.00"/>
+<text class="tok" x="297.72" y="233.76">C</text>
+<text class="tok" x="297.72" y="205.24">E</text>
+<text class="tok" x="273.02" y="190.98">A</text>
+<text class="tok" x="248.32" y="205.24">F</text>
+<text class="tok" x="248.32" y="233.76">G</text>
+<text class="tok" x="273.02" y="248.02">H</text>
+</g>
+</g>
+</svg>
