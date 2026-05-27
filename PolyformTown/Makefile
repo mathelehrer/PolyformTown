@@ -231,8 +231,8 @@ $(BIN)/rl6_generate: $(SRC)/rl6/generate6.o | $(BIN)
 
 hce: $(BIN)/hce
 rl7_collar_reepl: hce
-$(BIN)/hce: $(SRC)/rl7/hce.o | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/rl7/hce.o
+$(BIN)/hce: $(SRC)/rl7/hce.o $(SRC)/rl7/boundary7.o $(SRC)/rl7/comp7.o $(SRC)/rl7/evo7.o $(SRC)/usage/print7.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/rl7/hce.o $(SRC)/rl7/boundary7.o $(SRC)/rl7/comp7.o $(SRC)/rl7/evo7.o $(SRC)/usage/print7.o
 
 RL6_UNIFIED_DATA ?= data/rl6/unified_model.dat
 RL6_REFINED_DATA ?= data/rl6/refined_model.dat
