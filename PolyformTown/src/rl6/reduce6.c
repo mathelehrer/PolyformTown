@@ -2982,6 +2982,10 @@ scan_done:
     }
 
     printf("standard_minus_cycle=%d\n", missing);
+    if(getenv("RL6_DUMP_CYCLE_FIGS")){
+        printf("---[cycle vertex figures dump]---\n");
+        for(int i=0;i<ncycle;i++) print_fig(m, &cycle[i]);
+    }
     printf("cycle_minus_standard=%d\n", extra);
     printf("status=%s\n", (missing == 0 && extra == 0) ? "exact" : "standard_has_false_positives");
 

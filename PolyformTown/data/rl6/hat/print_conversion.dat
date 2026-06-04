@@ -1,0 +1,22 @@
+# Mountain and Range refined vertex -> ordinary/basic hat-index print conversion
+# GENERATED DATA: do not edit; regenerate with `make boot` or `make rl6_print_conversion`.
+# Inputs: data/rl5/hexagons.dat, data/rl6/unified_model.dat,
+#         data/rl6/refined_model.dat, and RL6 closed-cycle atlas computation.
+# Cyclic rows are CCW; all cyclic rotations are equivalent.
+# Verified atlas meeting vertex slot = 1.
+AAA = 0 0 0
+AAC = 0 0 10
+ACC = 0 10 10
+AFC = 1 3 11
+AFF = 1 3 5
+AFH = 1 3 7
+AFJ = 1 3 a
+CCC = 10 10 10
+CFH = 11 3 7
+EEE = 12 12 12
+EEG = 12 12 6
+EGG = 12 6 6
+EHG = 12 8 6
+FKH = 5 b 7
+GGH = 6 6 8
+# unresolved: GGG
