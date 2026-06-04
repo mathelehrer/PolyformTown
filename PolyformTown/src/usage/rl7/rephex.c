@@ -224,9 +224,8 @@ static int export_current(const ReplState *state, int hats, unsigned rotation_st
         snprintf(status, status_size, "ERR: print failed; see data/run/rl7/rephex/current_print.dat");
         return 0;
     }
-    snprintf(status, status_size, "printed %s rot=%u: img/rl7/rephex/%s",
-             hats ? "hats" : "hexes", rotation_step * 30,
-             hats ? "current_hat.svg" : "current.svg");
+    if (hats) snprintf(status, status_size, "printed hats DH+%u deg: img/rl7/rephex/current_hat.svg", rotation_step * 30);
+    else snprintf(status, status_size, "printed hexes rot=%u deg: img/rl7/rephex/current.svg", rotation_step * 30);
     return 1;
 }
 
@@ -304,7 +303,7 @@ static void render_help(void) {
     print_fixed("  A H 2       choose axiom H immediately at depth 2");
     print_fixed("  0 .. 6      set inflation depth immediately");
     print_fixed("  + / -       increase or decrease inflation depth");
-    print_fixed("  P [n]       print/open hats; rotate n x 30 degrees (default 0)");
+    print_fixed("  P [n]       print hats; DH phase + n x 30 degrees (default 0)");
     print_fixed("  PH [n]      print/open hexes; rotate n x 30 degrees (default 0)");
     print_fixed("  T           toggle ordinary/tree palette");
     print_fixed("  Q           quit");

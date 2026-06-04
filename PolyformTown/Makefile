@@ -62,7 +62,7 @@ $(BIN):
 clean:
 	$(call announce,clean compiled artifacts)
 	@rm -f $(SRC)/*.o $(SRC)/core/*.o $(SRC)/rl0/*.o \
-		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl5/*.o $(SRC)/rl6/*.o $(SRC)/rl7/*.o $(SRC)/rl7/inflation/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/usage/rl7/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
+		$(SRC)/rl1/*.o $(SRC)/rl2/*.o $(SRC)/rl3/*.o $(SRC)/rl4/*.o $(SRC)/rl5/*.o $(SRC)/rl6/*.o $(SRC)/rl7/*.o $(SRC)/rl7/inflation/*.o $(SRC)/rl1/debug/*.o $(SRC)/usage/*.o $(SRC)/usage/rl6/*.o $(SRC)/usage/rl7/*.o $(SRC)/throughput/*.o $(SRC)/meta/*.o \
 		$(BIN)/poly_count $(BIN)/poly_print $(BIN)/vcomp_count \
 		$(BIN)/count_vcomp $(BIN)/vcomp_print $(BIN)/vcomp_parity \
 		$(BIN)/imgtable $(BIN)/tile_to_imgtable \
@@ -73,7 +73,7 @@ clean:
 		$(BIN)/supertile_depict $(BIN)/rl5_refine $(BIN)/rl5_stats \
 		$(BIN)/pathological_item6 $(BIN)/rl5_sat $(BIN)/rl6_reduce $(BIN)/rl6_refine $(BIN)/rl6_generate \
 		$(BIN)/rl2_refine $(BIN)/rl3_refine $(BIN)/filter_runlevels \
-		$(BIN)/hce $(BIN)/rephex $(BIN)/rephex_print $(BIN)/rl7_inflation_print \
+		$(BIN)/hce $(BIN)/rephex $(BIN)/rephex_print $(BIN)/rl6_print_conversion $(BIN)/rl7_inflation_print \
 		$(BIN)/rl1_hexagons $(BIN)/rl1_search $(BIN)/rl1_refine \
 		$(BIN)/search1 $(BIN)/refine1 \
 		$(BIN)/rl0_refine \
@@ -241,8 +241,8 @@ $(BIN)/rephex: $(SRC)/usage/rl7/rephex.o | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl7/rephex.o
 
 rephex_print: $(BIN)/rephex_print
-$(BIN)/rephex_print: $(SRC)/usage/rl7/rephex_print.o $(SRC)/rl7/inflation/inflation7.o | $(BIN)
-	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl7/rephex_print.o $(SRC)/rl7/inflation/inflation7.o -lm
+$(BIN)/rephex_print: $(SRC)/usage/rl7/rephex_print.o $(SRC)/usage/rl7/rephex_hat.o $(SRC)/rl7/inflation/inflation7.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl7/rephex_print.o $(SRC)/usage/rl7/rephex_hat.o $(SRC)/rl7/inflation/inflation7.o -lm
 
 rl7_inflation_figures: rephex_print
 	@$(SRC)/usage/rl7/render_inflation_gallery.sh img/rl7/inflation
@@ -375,8 +375,11 @@ boot_rl6: rl6_refine rl6_unified_data
 
 RL6_PRINT_CONVERSION_DATA := data/rl6/hat/print_conversion.dat
 
-rl6_print_conversion: rl6_reduce
-	@python3 $(SRC)/usage/rl6/generate_print_conversion.py . $(RL6_PRINT_CONVERSION_DATA)
+rl6_print_conversion: $(BIN)/rl6_print_conversion rl6_reduce
+	@$(BIN)/rl6_print_conversion $(RL6_PRINT_CONVERSION_DATA)
+
+$(BIN)/rl6_print_conversion: $(SRC)/usage/rl6/generate_print_conversion.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/rl6/generate_print_conversion.o
 
 rl5_super6_errata_placeholder:
 	@mkdir -p $(dir $(RL5_ERRATA_DATA))

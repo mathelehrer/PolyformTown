@@ -1,4 +1,5 @@
 #include "rl7/inflation/inflation7.h"
+#include "usage/rl7/rephex_hat.h"
 
 #include <errno.h>
 #include <math.h>
@@ -324,19 +325,17 @@ static int write_svg(const char *path, MR7Init init, unsigned level,
     return 1;
 }
 
-static int run_hat_renderer(MR7Init init, unsigned level, Palette palette,
-                            unsigned rotation_step, char *err, size_t errsz) {
-    char command[1024];
-    snprintf(command, sizeof(command),
-             "python3 src/usage/rl7/rephex_hat.py --root . --cells %s --output %s --audit %s --axiom %s --level %u --palette %s --rotation-step %u",
-             CURRENT_DATA_PATH, CURRENT_HAT_SVG_PATH, CURRENT_HAT_DATA_PATH,
-             mr7_init_name(init), level, palette_name(palette), rotation_step);
-    int result = system(command);
-    if (result == -1) { snprintf(err, errsz, "failed to invoke hat renderer"); return 0; }
-    if (!WIFEXITED(result) || WEXITSTATUS(result) != 0) {
-        snprintf(err, errsz, "hat renderer returned status %d", WIFEXITED(result) ? WEXITSTATUS(result) : -1);
-        return 0;
-    }
+static int run_hat_renderer(const MR7Cells *cells, MR7Init init, unsigned level,
+                            Palette palette, unsigned rotation_step,
+                            char *err, size_t errsz) {
+    RephexHatStats stats;
+    if (!rephex_hat_render(cells, CURRENT_HAT_SVG_PATH, CURRENT_HAT_DATA_PATH,
+                           mr7_init_name(init), level, palette == PALETTE_TREE,
+                           rotation_step, &stats, err, errsz)) return 0;
+    printf("hat-status: %s placed=%zu/%zu unresolved_figures=%zu conflicts=%zu overlaps=%zu\n",
+           stats.placed_hats == stats.total_cells ? "complete" : "partial",
+           stats.placed_hats, stats.total_cells, stats.unresolved_figures,
+           stats.cycle_conflicts, stats.overlaps);
     return 1;
 }
 
@@ -509,7 +508,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
         if (!ensure_svg_output_dir(err, sizeof(err)) ||
             !ensure_runtime_dir(err, sizeof(err)) ||
-            !run_hat_renderer(init, level, palette, rotation_step, err, sizeof(err))) {
+            !run_hat_renderer(&cells, init, level, palette, rotation_step, err, sizeof(err))) {
             fprintf(stderr, "hat-svg failure: %s\n", err); mr7_cells_free(&cells); mr7_patch_free(&patch); return 1;
         }
         printf("hat-svg: %s\n", CURRENT_HAT_SVG_PATH);
