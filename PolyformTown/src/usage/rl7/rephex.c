@@ -307,7 +307,7 @@ static void render_help(void) {
     print_fixed("  PH [n]      print/open hexes; rotate n x 30 degrees (default 0)");
     print_fixed("  T           toggle ordinary/tree palette");
     print_fixed("  Q           quit");
-    for (int i = 0; i < 8; i++) print_blank_line();
+    for (int i = 0; i < 9; i++) print_blank_line();
     print_fixed("Press return to return.");
     printf("$: "); fflush(stdout);
 }
