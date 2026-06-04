@@ -75,7 +75,8 @@ static const char *fill_for(char state, Palette p) {
     }
     if (state == '0') return "#f1d777";
     if (state == '1') return "#f5af74";
-    if (state == 'B') return "#c49a76";
+    if (state == 'B') return "#ad825f"; /* pass-through H */
+    if (state == 'C') return "#d1ae8c"; /* capped H */
     return "#79c996";
 }
 
@@ -88,7 +89,8 @@ static const char *ansi_for(char state, Palette p) {
     }
     if (state == '0') return "\033[38;5;178m";
     if (state == '1') return "\033[38;5;166m";
-    if (state == 'B') return "\033[38;5;130m";
+    if (state == 'B') return "\033[38;5;137m";
+    if (state == 'C') return "\033[38;5;180m";
     return "\033[38;5;35m";
 }
 
@@ -208,11 +210,11 @@ static int write_current_data(const char *path, MR7Init init, unsigned level,
     fprintf(fp, "# REPHEX current computed pattern\n");
     fprintf(fp, "# axiom=%s level=%u cells=%zu\n", mr7_init_name(init), level, cells->n);
     fprintf(fp, "# source=%s\n", record ? record : "");
-    fprintf(fp, "# q r state orientation colour_index\n");
+    fprintf(fp, "# q r state orientation colour_index dark_cap\n");
     for (size_t i = 0; i < cells->n; i++)
-        fprintf(fp, "%d %d %c %u %u\n", cells->cell[i].q, cells->cell[i].r,
+        fprintf(fp, "%d %d %c %u %u %u\n", cells->cell[i].q, cells->cell[i].r,
                 cells->cell[i].state, (unsigned)cells->cell[i].ori,
-                (unsigned)cells->cell[i].color_index);
+                (unsigned)cells->cell[i].color_index, (unsigned)cells->cell[i].dark_cap);
     if (fclose(fp) != 0 || rename(tmp, path) != 0) {
         remove(tmp); snprintf(err, errsz, "cannot install current runtime data"); return 0;
     }
@@ -227,9 +229,10 @@ static int read_current_data(const char *path, MR7Cells *cells, char *err, size_
     char line[512];
     while (fgets(line, sizeof(line), fp)) {
         if (line[0] == '#') continue;
-        MR7Cell c; unsigned ori = 0, colour = 0;
-        if (sscanf(line, "%d %d %c %u %u", &c.q, &c.r, &c.state, &ori, &colour) != 5) continue;
-        c.ori = (uint8_t)ori; c.color_index = (uint8_t)colour;
+        MR7Cell c; unsigned ori = 0, colour = 0, dark_cap = 0;
+        int fields = sscanf(line, "%d %d %c %u %u %u", &c.q, &c.r, &c.state, &ori, &colour, &dark_cap);
+        if (fields < 5) continue;
+        c.ori = (uint8_t)ori; c.color_index = (uint8_t)colour; c.dark_cap = (uint8_t)dark_cap;
         if (n == cap) {
             size_t next = cap ? cap * 2 : 64;
             MR7Cell *grown = realloc(items, next * sizeof(*items));
@@ -268,6 +271,82 @@ static void raw_center(int q, int r, double *x, double *y) {
      * below, stored cyclic tile rows display CCW as required by RL5/RL6. */
     *x = sqrt(3.0) * ((double)q + 0.5 * (double)r);
     *y = 1.5 * (double)r;
+}
+
+/* Hex skin geometry follows the oriented RL7 axial directions.  A tile's
+ * principal diameter points in its stored orientation.  D0 carries its two
+ * upper-side branches; D1 carries the matching lower-side branches. */
+static const int skin_dirs[6][2] = {
+    {-1, 0}, {0, -1}, {1, -1}, {1, 0}, {0, 1}, {-1, 1}
+};
+
+static void unit_for_ori(unsigned ori, double *ux, double *uy) {
+    double x, y;
+    raw_center(skin_dirs[ori % 6][0], skin_dirs[ori % 6][1], &x, &y);
+    double n = sqrt(x * x + y * y);
+    *ux = x / n;
+    *uy = y / n;
+}
+
+static void svg_line(FILE *fp, double x0, double y0, double x1, double y1,
+                     unsigned rotation_step, const char *stroke, double width) {
+    rotate_output_point(&x0, &y0, rotation_step);
+    rotate_output_point(&x1, &y1, rotation_step);
+    fprintf(fp, "<line x1=\"%.6f\" y1=\"%.6f\" x2=\"%.6f\" y2=\"%.6f\" stroke=\"%s\" stroke-width=\"%.3f\" stroke-linecap=\"round\"/>\n",
+            x0, y0, x1, y1, stroke, width);
+}
+
+static void svg_arrow_head(FILE *fp, double px, double py, double ux, double uy,
+                           double size, unsigned rotation_step,
+                           const char *stroke, double width) {
+    double vx = -uy, vy = ux;
+    double tipx = px + size * ux, tipy = py + size * uy;
+    double backx = px - 0.75 * size * ux, backy = py - 0.75 * size * uy;
+    svg_line(fp, backx + 0.60 * size * vx, backy + 0.60 * size * vy,
+             tipx, tipy, rotation_step, stroke, width);
+    svg_line(fp, backx - 0.60 * size * vx, backy - 0.60 * size * vy,
+             tipx, tipy, rotation_step, stroke, width);
+}
+
+static void write_hex_skin(FILE *fp, const MR7Cell *cell, unsigned rotation_step) {
+    const char *ink = "#252525";
+    double cx, cy, ux, uy;
+    raw_center(cell->q, cell->r, &cx, &cy);
+    unit_for_ori(cell->ori, &ux, &uy);
+
+    if (cell->state == 'G' || cell->state == 'C') {
+        /* A green tree-palette leaf is terminal: its principal arrow runs
+         * into the cell and terminates exactly at the centroid. */
+        svg_line(fp, cx - 0.78 * ux, cy - 0.78 * uy,
+                 cx, cy, rotation_step, ink, 0.036);
+        svg_arrow_head(fp, cx - 0.105 * ux, cy - 0.105 * uy, ux, uy,
+                       0.105, rotation_step, ink, 0.032);
+    } else {
+        /* Continuing diameter with two same-facing direction arrows. */
+        svg_line(fp, cx - 0.78 * ux, cy - 0.78 * uy,
+                 cx + 0.78 * ux, cy + 0.78 * uy, rotation_step, ink, 0.036);
+        svg_arrow_head(fp, cx - 0.39 * ux, cy - 0.39 * uy, ux, uy,
+                       0.105, rotation_step, ink, 0.032);
+        svg_arrow_head(fp, cx + 0.39 * ux, cy + 0.39 * uy, ux, uy,
+                       0.105, rotation_step, ink, 0.032);
+    }
+
+    if (cell->state == '0' || cell->state == '1') {
+        /* For a horizontal D0->D1 axis: D0 branches above, D1 below.
+         * This realizes the a,b / g,h branch convention as a first visual
+         * test; it remains data-derived from the stored D orientation. */
+        int sign = cell->state == '0' ? -1 : 1;
+        int b0 = ((int)cell->ori + sign + 6) % 6;
+        int b1 = ((int)cell->ori + 2 * sign + 12) % 6;
+        for (int i = 0; i < 2; i++) {
+            double bx, by;
+            unit_for_ori((unsigned)(i ? b1 : b0), &bx, &by);
+            svg_line(fp, cx, cy, cx + 0.62 * bx, cy + 0.62 * by,
+                     rotation_step, ink, 0.032);
+            svg_arrow_head(fp, cx + 0.52 * bx, cy + 0.52 * by, bx, by,
+                           0.085, rotation_step, ink, 0.028);
+        }
+    }
 }
 
 static int write_svg(const char *path, MR7Init init, unsigned level,
@@ -315,6 +394,10 @@ static int write_svg(const char *path, MR7Init init, unsigned level,
         }
         fprintf(fp, "\" fill=\"%s\" stroke=\"#282828\" stroke-width=\"0.020\"/>\n",
                 fill_for(cells->cell[i].state, palette));
+    }
+    if (palette == PALETTE_TREE) {
+        for (size_t i = 0; i < cells->n; i++)
+            write_hex_skin(fp, &cells->cell[i], rotation_step);
     }
     fputs("</svg>\n", fp);
     if (fclose(fp) != 0 || rename(tmp_path, path) != 0) {

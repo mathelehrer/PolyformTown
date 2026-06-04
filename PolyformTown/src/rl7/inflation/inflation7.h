@@ -28,6 +28,7 @@ typedef struct {
     MR7Kind kind;
     uint8_t ori;
     uint8_t color_index;     /* auxiliary inherited/relative-position colour */
+    uint8_t dark_cap;        /* tree skin: B/H arrow terminates at centroid */
     MR7Token *word;
     size_t word_len;
 } MR7Tile;
@@ -48,9 +49,10 @@ typedef struct {
 
 typedef struct {
     int q, r;
-    char state;              /* '0'/'1' D halves, 'B', 'G', or 'F' */
+    char state;              /* '0'/'1' D halves, 'B' pass, 'C' cap, 'G', or 'F' */
     uint8_t ori;
     uint8_t color_index;
+    uint8_t dark_cap;        /* persisted tree-skin cap bit */
 } MR7Cell;
 
 typedef struct {

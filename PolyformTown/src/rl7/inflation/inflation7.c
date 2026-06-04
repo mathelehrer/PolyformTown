@@ -87,9 +87,10 @@ static int reserve_tiles(MR7Patch *p, size_t add, char *err, size_t errsz) {
     return 1;
 }
 
-static int append_tile(MR7Patch *p, MR7Kind kind, uint8_t ori, uint8_t color,
-                       const MR7Token *word, size_t word_len,
-                       char *err, size_t errsz) {
+static int append_tile_skin(MR7Patch *p, MR7Kind kind, uint8_t ori, uint8_t color,
+                            uint8_t dark_cap,
+                            const MR7Token *word, size_t word_len,
+                            char *err, size_t errsz) {
     if (!reserve_tiles(p, 1, err, errsz)) return 0;
     MR7Token *copy = NULL;
     if (word_len) {
@@ -101,9 +102,16 @@ static int append_tile(MR7Patch *p, MR7Kind kind, uint8_t ori, uint8_t color,
     t->kind = kind;
     t->ori = mod6(ori);
     t->color_index = color;
+    t->dark_cap = dark_cap;
     t->word = copy;
     t->word_len = word_len;
     return 1;
+}
+
+static int append_tile(MR7Patch *p, MR7Kind kind, uint8_t ori, uint8_t color,
+                       const MR7Token *word, size_t word_len,
+                       char *err, size_t errsz) {
+    return append_tile_skin(p, kind, ori, color, 0, word, word_len, err, errsz);
 }
 
 static size_t phi_token_len(char symbol) {
@@ -143,19 +151,28 @@ static int root_word(const MR7Tile *t, MR7Token **word, size_t *len,
     return 1;
 }
 
-static int append_child(MR7Patch *out, const MR7Token *root, size_t root_len,
-                        MR7Kind kind, uint8_t ori, uint8_t color,
-                        const MR7Token *off, size_t off_len,
-                        char *err, size_t errsz) {
+static int append_child_skin(MR7Patch *out, const MR7Token *root, size_t root_len,
+                             MR7Kind kind, uint8_t ori, uint8_t color,
+                             uint8_t dark_cap,
+                             const MR7Token *off, size_t off_len,
+                             char *err, size_t errsz) {
     if (off_len > SIZE_MAX - root_len) return fail(err, errsz, "child word overflow");
     size_t n = root_len + off_len;
     MR7Token *word = n ? malloc(n * sizeof(*word)) : NULL;
     if (n && !word) return fail(err, errsz, "out of memory building child word");
     if (root_len) memcpy(word, root, root_len * sizeof(*word));
     if (off_len) memcpy(word + root_len, off, off_len * sizeof(*word));
-    int ok = append_tile(out, kind, ori, color, word, n, err, errsz);
+    int ok = append_tile_skin(out, kind, ori, color, dark_cap, word, n, err, errsz);
     free(word);
     return ok;
+}
+
+static int append_child(MR7Patch *out, const MR7Token *root, size_t root_len,
+                        MR7Kind kind, uint8_t ori, uint8_t color,
+                        const MR7Token *off, size_t off_len,
+                        char *err, size_t errsz) {
+    return append_child_skin(out, root, root_len, kind, ori, color, 0,
+                             off, off_len, err, errsz);
 }
 
 static int tile_key_cmp(const void *aa, const void *bb) {
@@ -180,6 +197,9 @@ static int sort_unique(MR7Patch *p, char *err, size_t errsz) {
         if (tile_key_cmp(prev, cur) == 0) {
             if (prev->color_index != cur->color_index) {
                 return fail(err, errsz, "auxiliary colour conflict on duplicate tile");
+            }
+            if (prev->dark_cap != cur->dark_cap) {
+                return fail(err, errsz, "tree-skin cap conflict on duplicate tile");
             }
             tile_free(cur);
         } else {
@@ -290,8 +310,14 @@ int mr7_inflate(const MR7Patch *in, MR7Patch *out, const MR7ColorMap *map,
             CHILD(MR7_G, i-1, map->d_child[9], T('D', i), T('K', i), T('g', mod6(i-1)));
             CHILD(MR7_G, i-2, map->d_child[10], T('D', i), T('K', i), T('h', mod6(i-2)));
         } else {
+            uint8_t axis_cap = (uint8_t)(t->kind == MR7_G || t->dark_cap);
             CHILD0(MR7_D, i, map->h_child[0]);
-            CHILD(MR7_B, i, map->h_child[1], T('D', i), T('K', i));
+            { MR7Token x[] = { T('D', i), T('K', i) };
+              if (!append_child_skin(out, root, nroot, MR7_B, mod6(i),
+                                     map->h_child[1], axis_cap, x, 2, err, errsz)) {
+                  free(root); goto bad;
+              }
+            }
             CHILD(MR7_G, i+2, map->h_child[2], T('D', i), T('a', mod6(i+2)));
             CHILD(MR7_G, i+1, map->h_child[3], T('D', i), T('b', mod6(i+1)));
             CHILD(MR7_G, i-1, map->h_child[4], T('g', mod6(i-1)));
@@ -311,8 +337,8 @@ static int append_patch_copy(MR7Patch *dst, const MR7Patch *src,
                              char *err, size_t errsz) {
     for (size_t i = 0; i < src->n; i++) {
         const MR7Tile *t = &src->tile[i];
-        if (!append_tile(dst, t->kind, t->ori, t->color_index,
-                         t->word, t->word_len, err, errsz)) return 0;
+        if (!append_tile_skin(dst, t->kind, t->ori, t->color_index, t->dark_cap,
+                              t->word, t->word_len, err, errsz)) return 0;
     }
     return 1;
 }
@@ -417,7 +443,7 @@ static int c3_reduce_choice(const MR7Patch *source, const int ix[3], MR7Patch *r
         }
         size_t at = 0;
         for (size_t i = 0; i < t->word_len; i++) if (!remove[k][i]) word[at++] = t->word[i];
-        if (!append_tile(&tmp, t->kind, t->ori, t->color_index, word, n, err, errsz)) {
+        if (!append_tile_skin(&tmp, t->kind, t->ori, t->color_index, t->dark_cap, word, n, err, errsz)) {
             free(word);
             for (int j = 0; j < 3; j++) free(remove[j]);
             mr7_patch_free(&tmp);
@@ -643,8 +669,9 @@ int mr7_tiles_to_cells(const MR7Patch *patch, MR7Cells *out,
         const MR7Tile *t = &patch->tile[i];
         int q, r;
         eval_word(t->word, t->word_len, &q, &r);
-        a[n++] = (MR7Cell){q, r, t->kind == MR7_D ? '0' : mr7_kind_name(t->kind)[0], t->ori, t->color_index};
-        if (t->kind == MR7_D) a[n++] = (MR7Cell){q + dirs[t->ori][0], r + dirs[t->ori][1], '1', t->ori, t->color_index};
+        char state = t->kind == MR7_D ? '0' : (t->kind == MR7_B && t->dark_cap ? 'C' : mr7_kind_name(t->kind)[0]);
+        a[n++] = (MR7Cell){q, r, state, t->ori, t->color_index, t->dark_cap};
+        if (t->kind == MR7_D) a[n++] = (MR7Cell){q + dirs[t->ori][0], r + dirs[t->ori][1], '1', t->ori, t->color_index, 0};
     }
     qsort(a, n, sizeof(*a), cell_cmp);
     for (size_t i = 1; i < n; i++) {

@@ -254,15 +254,16 @@ static const char *legend_ansi(char state, int tree_palette) {
     }
     if (state == '0') return "\033[38;5;178m";
     if (state == '1') return "\033[38;5;166m";
-    if (state == 'B') return "\033[38;5;130m";
+    if (state == 'B') return "\033[38;5;137m";
+    if (state == 'C') return "\033[38;5;180m";
     return "\033[38;5;35m";
 }
 
 static void print_legend(const ReplState *state) {
     if (state->tree_palette) {
-        printf("tree: %s⬢\033[0m = branch  %s⬢\033[0m = leaf  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
-               legend_ansi('B', 1), legend_ansi('G', 1), legend_ansi('0', 1),
-               legend_ansi('1', 1), legend_ansi('F', 1));
+        printf("tree: %s⬢\033[0m pass  %s⬢\033[0m cap  %s⬢\033[0m leaf  %s⬢\033[0m D0  %s⬢\033[0m D1  %s⬢\033[0m F\n",
+               legend_ansi('B', 1), legend_ansi('C', 1), legend_ansi('G', 1),
+               legend_ansi('0', 1), legend_ansi('1', 1), legend_ansi('F', 1));
     } else {
         printf("ordinary: %s⬢\033[0m = H  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
                legend_ansi('G', 0), legend_ansi('0', 0), legend_ansi('1', 0),
