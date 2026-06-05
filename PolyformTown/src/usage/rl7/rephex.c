@@ -177,10 +177,20 @@ static void erase_frame(int first, int after_enter) {
 
 static int refresh_current(ReplState *state) {
     if (!state->pattern_dirty) return 1;
-    char command[LINE_MAX];
+    char command[LINE_MAX * 3];
     snprintf(command, sizeof(command),
-             "./bin/rephex_print %s %u --write-current-only --no-color >/dev/null 2>&1",
-             axioms[state->axiom].code, state->depth);
+             "mkdir -p data/run/rl7/rephex && "
+             "REPHEX_NO_OPEN=1 ./bin/rephex_print %s %u --write-current-only --no-color "
+             "> data/run/rl7/rephex/current_print.dat 2>&1 && "
+             "REPHEX_NO_OPEN=1 ./bin/rephex_print %s %u --from-current%s --svg --rotation-step 0 --no-color "
+             ">> data/run/rl7/rephex/current_print.dat 2>&1 && "
+             "REPHEX_NO_OPEN=1 ./bin/rephex_print %s %u --from-current%s --hat-svg --rotation-step 0 --no-color "
+             ">> data/run/rl7/rephex/current_print.dat 2>&1",
+             axioms[state->axiom].code, state->depth,
+             axioms[state->axiom].code, state->depth,
+             state->tree_palette ? " --palette tree" : "",
+             axioms[state->axiom].code, state->depth,
+             state->tree_palette ? " --palette tree" : "");
     int rc = system(command);
     if (rc == -1 || !WIFEXITED(rc) || WEXITSTATUS(rc) != 0) return 0;
     state->pattern_dirty = 0;
@@ -391,6 +401,7 @@ int main(int argc, char **argv) {
         }
         if (!strcmp(command, "t")) {
             state.tree_palette = !state.tree_palette;
+            state.pattern_dirty = 1;
             snprintf(state.status, sizeof(state.status), "palette: %s", state.tree_palette ? "tree" : "ordinary");
             continue;
         }

@@ -6,6 +6,7 @@
 typedef struct {
     size_t total_cells, supported_cells, false_cells, placed_hats, components;
     size_t unresolved_figures, empty_domains, cycle_conflicts, overlaps;
+    size_t seed_fallback_used;
     size_t domain_histogram[61];
 } RephexHatStats;
 
