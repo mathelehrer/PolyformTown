@@ -1,4 +1,4 @@
-#include "rl7/inflation/inflation7.h"
+#include "rl7/inflation7.h"
 
 #include <limits.h>
 #include <stdarg.h>

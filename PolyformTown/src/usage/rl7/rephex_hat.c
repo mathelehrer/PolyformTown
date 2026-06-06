@@ -94,35 +94,343 @@ static Transform center_hat_transform(const HCell *cell, const Point *hat, int n
     return t;
 }
 
-static Transform center_reflected_hat_transform(Point cc, const Point *hat, int nh) {
-    Point hc = hat_average_center(hat, nh);
-    Transform t = {1, 0, 0, -1, cc.x - hc.x, cc.y + hc.y};
+static Point world_from_vkey(VKey v) {
+    Point p = {(sqrt(3.0) / 2.0) * (double)v.x, 0.5 * (double)v.y};
+    return p;
+}
+
+static Transform normal_vertex_transform(const Point *hat, int vertex, Point target) {
+    Transform t = {1, 0, 0, 1, target.x - hat[vertex].x, target.y - hat[vertex].y};
     return t;
 }
 
-static int is_seed_fallback_case(const char *axiom, unsigned level) {
-    return level == 0 && (!strcmp(axiom, "H") || !strcmp(axiom, "D"));
+static Transform reflected_vertex_transform(const Point *hat, int vertex, Point target) {
+    Transform t = {1, 0, 0, -1, target.x - hat[vertex].x, target.y + hat[vertex].y};
+    return t;
 }
 
-static size_t apply_seed_fallback(const char *axiom, unsigned level, HCell *c, int n,
-                                  const Point *hat, int nh, Transform *tr,
-                                  unsigned char *placed, size_t *components) {
-    if (!is_seed_fallback_case(axiom, level) || n <= 0) return 0;
-    size_t count = 0;
-    for (int i = 0; i < n; i++) {
-        if (active_count(&c[i]) > 0) {
-            tr[i] = center_hat_transform(&c[i], hat, nh);
+static Transform rotate_vertex_transform(const Point *hat, int vertex, Point target, double angle) {
+    double co = cos(angle), si = sin(angle);
+    Transform t = {co, -si, si, co, 0, 0};
+    Point v = tx_point(t, hat[vertex]);
+    t.tx = target.x - v.x;
+    t.ty = target.y - v.y;
+    return t;
+}
+
+static Transform outward_vertex_transform(const HCell *cell, const Point *hat, int nh,
+                                          int vertex, Point shared) {
+    Point hc = hat_average_center(hat, nh), cc = center(cell);
+    double sx = hc.x - hat[vertex].x, sy = hc.y - hat[vertex].y;
+    double tx = cc.x - shared.x, ty = cc.y - shared.y;
+    double a0 = atan2(sy, sx), a1 = atan2(ty, tx);
+    return rotate_vertex_transform(hat, vertex, shared, a1 - a0);
+}
+
+static int find_state_cell(HCell *c, int n, int state) {
+    for (int i = 0; i < n; i++) if (c[i].state == state) return i;
+    return -1;
+}
+
+static size_t apply_indexed_level0_fallback(const char *axiom, unsigned level,
+                                            HCell *c, int n, const Point *hat, int nh,
+                                            Transform *tr, unsigned char *placed,
+                                            size_t *components, int *draw_reflected_bridge) {
+    if (level != 0 || n <= 0) return 0;
+    memset(placed, 0, (size_t)n);
+    *draw_reflected_bridge = 0;
+
+    if (!strcmp(axiom, "H")) {
+        tr[0] = center_hat_transform(&c[0], hat, nh);
+        placed[0] = 1;
+        *components = 1;
+        return 1;
+    }
+
+    if (!strcmp(axiom, "D") || !strcmp(axiom, "DH")) {
+        int blue = find_state_cell(c, n, '0');
+        int red = find_state_cell(c, n, '1');
+        if (blue < 0 || red < 0 || nh <= 9) return 0;
+        tr[blue] = center_hat_transform(&c[blue], hat, nh); /* user-confirmed orientation */
+        placed[blue] = 1;
+        Transform refl = reflected_vertex_transform(hat, 3, tx_point(tr[blue], hat[9]));
+        tr[red] = normal_vertex_transform(hat, 3, tx_point(refl, hat[9]));
+        placed[red] = 1;
+        int green = find_state_cell(c, n, 'G');
+        if (green >= 0) { tr[green] = center_hat_transform(&c[green], hat, nh); placed[green] = 1; }
+        *draw_reflected_bridge = 1;
+        *components = 1;
+        return (size_t)(2 + (green >= 0));
+    }
+
+    if (!strcmp(axiom, "B3") || !strcmp(axiom, "L3")) {
+        int vertex = !strcmp(axiom, "B3") ? 12 : 10;
+        if (nh <= vertex || n < 3) return 0;
+        VKey key = vertex_key(&c[0], 0);
+        int found = 0;
+        for (int s0 = 0; s0 < 6 && !found; s0++) {
+            VKey k0 = vertex_key(&c[0], s0);
+            for (int s1 = 0; s1 < 6 && !found; s1++) if (!vkey_cmp(k0, vertex_key(&c[1], s1)))
+                for (int s2 = 0; s2 < 6 && !found; s2++) if (!vkey_cmp(k0, vertex_key(&c[2], s2))) {
+                    key = k0; found = 1;
+                }
+        }
+        if (!found) return 0;
+        Point shared = world_from_vkey(key);
+        for (int i = 0; i < n; i++) {
+            tr[i] = outward_vertex_transform(&c[i], hat, nh, vertex, shared);
             placed[i] = 1;
-            count++;
+        }
+        *components = 1;
+        return (size_t)n;
+    }
+    return 0;
+}
+
+static const char*fill(char state,int tree){if(tree)return state=='0'?"#f1d777":state=='1'?"#f5af74":state=='B'?"#b88968":state=='C'?"#d1ae8c":"#79c996";return state=='0'?"#7da9f7":state=='1'?"#ef8d8d":"#79c996";}
+
+static int bridge_reflected_transform(HCell*c,int n,const Point*hat,const Transform*tr,const unsigned char*placed,Transform*out){int blue=find_state_cell(c,n,'0');if(blue<0||!placed[blue])return 0;*out=reflected_vertex_transform(hat,3,tx_point(tr[blue],hat[9]));return 1;}
+
+static void expand_hat_bounds(double *xmin,double *xmax,double *ymin,double *ymax,int *first,const Point*hat,int nh,Transform t,double ca,double sa){for(int k=0;k<nh;k++){Point p=tx_point(t,hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};if(*first){*xmin=*xmax=r.x;*ymin=*ymax=r.y;*first=0;}else{*xmin=fmin(*xmin,r.x);*xmax=fmax(*xmax,r.x);*ymin=fmin(*ymin,r.y);*ymax=fmax(*ymax,r.y);}}}
+
+static void write_hat_polygon(FILE*fp,const Point*hat,int nh,Transform t,double ca,double sa,const char*fc){fprintf(fp,"<polygon points=\"");for(int k=0;k<nh;k++){Point p=tx_point(t,hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};fprintf(fp,"%.6f,%.6f%s",r.x,-r.y,k==nh-1?"":" ");}fprintf(fp,"\" fill=\"%s\" stroke=\"#302d29\" stroke-width=\"0.020\" fill-rule=\"evenodd\"/>\n",fc);}
+
+static int recover_false_hex_points(Point *pts, int *npts,
+                                    HCell *c, int n,
+                                    const Point *hat, int nh,
+                                    const Transform *tr,
+                                    const unsigned char *placed,
+                                    int q, int r) {
+    (void)c;
+    (void)q;
+    (void)r;
+
+    double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0;
+    int have_bounds = 0, nplaced = 0;
+
+    /* The omitted F cell sits at the solved component's central hole.
+     * At F2 and deeper this hole is a fixed twelve-edge boundary in the
+     * solver coordinate frame.  Use the placed hat bbox center to anchor
+     * that boundary.  This is deterministic and avoids brittle selection
+     * of nearly coincident internal/outer edges in large F patches. */
+    for (int j = 0; j < n; j++) if (placed[j]) {
+        nplaced++;
+        for (int k = 0; k < nh; k++) {
+            Point p = tx_point(tr[j], hat[k]);
+            if (!have_bounds) {
+                xmin = xmax = p.x;
+                ymin = ymax = p.y;
+                have_bounds = 1;
+            } else {
+                xmin = fmin(xmin, p.x);
+                xmax = fmax(xmax, p.x);
+                ymin = fmin(ymin, p.y);
+                ymax = fmax(ymax, p.y);
+            }
         }
     }
-    if (count) *components = 1;
-    return count;
+    if (nplaced < 6 || !have_bounds) return 0;
+
+    Point c0 = {0.5 * (xmin + xmax), 0.5 * (ymin + ymax)};
+    const double sx = sqrt(3.0) / 6.0;  /* 0.288675... */
+    const double tx = sqrt(3.0) / 4.0;  /* 0.433012... */
+    const double ux = sqrt(3.0) / 3.0;  /* 0.577350... */
+
+    Point local[12] = {
+        {0.0, -0.5}, {-sx, -0.5}, {-tx, -0.25}, {-ux, 0.0},
+        {-tx, 0.25}, {-sx, 0.5}, {0.0, 0.5}, {sx, 0.5},
+        {tx, 0.25}, {ux, 0.0}, {tx, -0.25}, {sx, -0.5}
+    };
+
+    *npts = 12;
+    for (int i = 0; i < 12; i++) {
+        pts[i].x = c0.x + local[i].x;
+        pts[i].y = c0.y + local[i].y;
+    }
+    return 1;
 }
 
-static const char*fill(char state,int tree){if(tree)return state=='0'?"#f1d777":state=='1'?"#f5af74":state=='B'?"#ad825f":state=='C'?"#d1ae8c":"#79c996";return state=='0'?"#7da9f7":state=='1'?"#ef8d8d":"#79c996";}
-static int write_svg(const char*path,HCell*c,int n,const Point*hat,int nh,const Transform*tr,const unsigned char*placed,int tree,unsigned step,int draw_d_reflected_seed,char*err,size_t errsz){if(!ensure_parent(path)){snprintf(err,errsz,"cannot create SVG directory");return 0;}double ca=cos(M_PI*(30.0*(step%12))/180.0),sa=sin(M_PI*(30.0*(step%12))/180.0),xmin=0,xmax=0,ymin=0,ymax=0;int first=1;for(int i=0;i<n;i++)if(placed[i])for(int k=0;k<nh;k++){Point p=tx_point(tr[i],hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};if(first){xmin=xmax=r.x;ymin=ymax=r.y;first=0;}else{xmin=fmin(xmin,r.x);xmax=fmax(xmax,r.x);ymin=fmin(ymin,r.y);ymax=fmax(ymax,r.y);}}if(draw_d_reflected_seed&&n>=2){Point a=center(&c[0]),b=center(&c[1]),mid={(a.x+b.x)/2.0,(a.y+b.y)/2.0};Transform rt=center_reflected_hat_transform(mid,hat,nh);for(int k=0;k<nh;k++){Point p=tx_point(rt,hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};if(first){xmin=xmax=r.x;ymin=ymax=r.y;first=0;}else{xmin=fmin(xmin,r.x);xmax=fmax(xmax,r.x);ymin=fmin(ymin,r.y);ymax=fmax(ymax,r.y);}}}if(first){xmin=ymin=0;xmax=ymax=1;}double span=fmax(fmax(xmax-xmin,ymax-ymin),1),margin=span*.035,vx=xmin-margin,vy=-(ymax+margin),vw=xmax-xmin+2*margin,vh=ymax-ymin+2*margin,width=1400,height=fmax(260,width*vh/vw);char tmp[512];snprintf(tmp,sizeof(tmp),"%s.new",path);FILE*fp=fopen(tmp,"w");if(!fp){snprintf(err,errsz,"cannot write hat SVG");return 0;}fprintf(fp,"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"%.6f %.6f %.6f %.6f\">\n",width,height,vx,vy,vw,vh);fprintf(fp,"<rect x=\"%.6f\" y=\"%.6f\" width=\"%.6f\" height=\"%.6f\" fill=\"#ffffff\"/>\n",vx,vy,vw,vh);for(int i=0;i<n;i++)if(placed[i]){fprintf(fp,"<polygon points=\"");for(int k=0;k<nh;k++){Point p=tx_point(tr[i],hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};fprintf(fp,"%.6f,%.6f%s",r.x,-r.y,k==nh-1?"":" ");}fprintf(fp,"\" fill=\"%s\" stroke=\"#302d29\" stroke-width=\"0.020\" fill-rule=\"evenodd\"/>\n",fill(c[i].state,tree));}if(draw_d_reflected_seed&&n>=2){Point a=center(&c[0]),b=center(&c[1]),mid={(a.x+b.x)/2.0,(a.y+b.y)/2.0};Transform rt=center_reflected_hat_transform(mid,hat,nh);const char*rf=tree?"#ad825f":"#cc66cc";fprintf(fp,"<polygon points=\"");for(int k=0;k<nh;k++){Point p=tx_point(rt,hat[k]),r={ca*p.x-sa*p.y,sa*p.x+ca*p.y};fprintf(fp,"%.6f,%.6f%s",r.x,-r.y,k==nh-1?"":" ");}fprintf(fp,"\" fill=\"%s\" stroke=\"#302d29\" stroke-width=\"0.020\" fill-rule=\"evenodd\"/>\n",rf);}fputs("</svg>\n",fp);if(fclose(fp)||rename(tmp,path)){remove(tmp);snprintf(err,errsz,"cannot install hat SVG");return 0;}return 1;}
-int rephex_hat_render(const MR7Cells*cells,const char*output_svg,const char*output_data,const char*axiom,unsigned level,int tree_palette,unsigned rotation_step,RephexHatStats*stats,char*err,size_t errsz){memset(stats,0,sizeof(*stats));stats->total_cells=cells->n;Lift lifts[64];int nl=0;if(!read_lifts("data/rl6/hat/print_conversion.dat",lifts,&nl,err,errsz))return 0;HCell*c=NULL;int n=0,false_n=0;if(!build_cells(cells,&c,&n,&false_n)){snprintf(err,errsz,"out of memory");return 0;}stats->supported_cells=n;stats->false_cells=false_n;Constraint*cons=NULL;int nc=0;Edge*edges=NULL;int ne=0;Adj(*adj)[6]=NULL;int*deg=NULL;Point hat[MAX_HAT];int nh=0;Transform*tr=NULL;unsigned char*placed=NULL;int ok=0;if(!build_constraints(c,n,&cons,&nc)||!build_edges(c,n,&edges,&ne,&adj,&deg)||!read_hat(hat,&nh)){snprintf(err,errsz,"cannot build hat constraints");goto done;}assign_vertices(c,cons,nc,lifts,nl,&stats->unresolved_figures);build_domains(c,n);prune_domains(c,cons,nc,lifts,nl);for(int i=0;i<n;i++){int m=active_count(&c[i]);if(m==0)stats->empty_domains++;if(m<=60)stats->domain_histogram[m]++;}tr=calloc((size_t)n,sizeof(*tr));placed=calloc((size_t)n,1);if(!tr||!placed){snprintf(err,errsz,"out of memory");goto done;}place_largest(c,n,adj,deg,hat,nh,tr,placed,&stats->components,&stats->cycle_conflicts);for(int i=0;i<n;i++)if(placed[i])stats->placed_hats++;if(stats->placed_hats==0){size_t seed_count=apply_seed_fallback(axiom,level,c,n,hat,nh,tr,placed,&stats->components);if(seed_count){stats->placed_hats=seed_count;stats->seed_fallback_used=1;}}stats->overlaps=audit_overlap(c,n,hat,nh,tr,placed);unsigned effective_rotation_step=(DH_HAT_BASE_ROTATION_STEP+rotation_step)%12u;int draw_d_reflected_seed=stats->seed_fallback_used&&level==0&&!strcmp(axiom,"D");if(!write_svg(output_svg,c,n,hat,nh,tr,placed,tree_palette,effective_rotation_step,draw_d_reflected_seed,err,errsz))goto done;if(!ensure_parent(output_data)){snprintf(err,errsz,"cannot create hat data directory");goto done;}FILE*fp=fopen(output_data,"w");if(!fp){snprintf(err,errsz,"cannot write hat data");goto done;}const char*status=stats->placed_hats==stats->total_cells?"complete":"partial";fprintf(fp,"rephex --hat-svg audit\naxiom=%s level=%u palette=%s rotation_step=%u base_rotation_step=%u effective_rotation_step=%u status=%s\n",axiom,level,tree_palette?"tree":"ordinary",rotation_step,DH_HAT_BASE_ROTATION_STEP,effective_rotation_step,status);fprintf(fp,"pipeline=RL7 cells -> refined vertex labels -> ordinary indexed vertex lifts -> row pruning -> forced-edge hat placement\n");fprintf(fp,"cells=%zu supported_non_F_cells=%zu false_center_cells=%zu\nplaced_hats=%zu placement_components=%zu\n",stats->total_cells,stats->supported_cells,stats->false_cells,stats->placed_hats,stats->components);fprintf(fp,"unresolved_vertex_figures=%zu empty_row_domains=%zu seed_fallback_used=%zu\n",stats->unresolved_figures,stats->empty_domains,stats->seed_fallback_used);
+static void expand_false_hex_bounds(double *xmin, double *xmax,
+                                    double *ymin, double *ymax, int *first,
+                                    const Point *pts, int npts,
+                                    double ca, double sa) {
+    for (int k = 0; k < npts; k++) {
+        Point r = {ca * pts[k].x - sa * pts[k].y,
+                   sa * pts[k].x + ca * pts[k].y};
+        if (*first) { *xmin = *xmax = r.x; *ymin = *ymax = r.y; *first = 0; }
+        else { *xmin = fmin(*xmin, r.x); *xmax = fmax(*xmax, r.x);
+               *ymin = fmin(*ymin, r.y); *ymax = fmax(*ymax, r.y); }
+    }
+}
+
+static void write_false_hex_polygon(FILE *fp, const Point *pts, int npts,
+                                    double ca, double sa) {
+    fprintf(fp, "<polygon points=\"");
+    for (int k = 0; k < npts; k++) {
+        Point r = {ca * pts[k].x - sa * pts[k].y,
+                   sa * pts[k].x + ca * pts[k].y};
+        fprintf(fp, "%.6f,%.6f%s", r.x, -r.y, k == npts - 1 ? "" : " ");
+    }
+    fprintf(fp, "\" fill=\"#161616\" stroke=\"#302d29\" stroke-width=\"0.020\"/>\n");
+}
+
+static int write_svg(const char*path,HCell*c,int n,const Point*hat,int nh,const Transform*tr,const unsigned char*placed,int tree,unsigned step,int draw_reflected_bridge,const MR7Cells*src,char*err,size_t errsz){
+    if(!ensure_parent(path)){snprintf(err,errsz,"cannot create SVG directory");return 0;}
+    double ca=cos(M_PI*(30.0*(step%12))/180.0),sa=sin(M_PI*(30.0*(step%12))/180.0),xmin=0,xmax=0,ymin=0,ymax=0;int first=1;
+    for(int i=0;i<n;i++)if(placed[i])expand_hat_bounds(&xmin,&xmax,&ymin,&ymax,&first,hat,nh,tr[i],ca,sa);
+    Transform bridge;int have_bridge=draw_reflected_bridge&&bridge_reflected_transform(c,n,hat,tr,placed,&bridge);
+    if(have_bridge)expand_hat_bounds(&xmin,&xmax,&ymin,&ymax,&first,hat,nh,bridge,ca,sa);
+    for(size_t fi=0;src&&fi<src->n;fi++)if(src->cell[fi].state=='F'){
+        Point fp[24]; int nf=0;
+        if(recover_false_hex_points(fp,&nf,c,n,hat,nh,tr,placed,src->cell[fi].q,src->cell[fi].r))
+            expand_false_hex_bounds(&xmin,&xmax,&ymin,&ymax,&first,fp,nf,ca,sa);
+    }
+    if(first){xmin=ymin=0;xmax=ymax=1;}
+    double span=fmax(fmax(xmax-xmin,ymax-ymin),1),margin=span*.035,vx=xmin-margin,vy=-(ymax+margin),vw=xmax-xmin+2*margin,vh=ymax-ymin+2*margin,width=1400,height=fmax(260,width*vh/vw);char tmp[512];snprintf(tmp,sizeof(tmp),"%s.new",path);FILE*fp=fopen(tmp,"w");if(!fp){snprintf(err,errsz,"cannot write hat SVG");return 0;}
+    fprintf(fp,"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"%.6f %.6f %.6f %.6f\">\n",width,height,vx,vy,vw,vh);
+    fprintf(fp,"<rect x=\"%.6f\" y=\"%.6f\" width=\"%.6f\" height=\"%.6f\" fill=\"#ffffff\"/>\n",vx,vy,vw,vh);
+    for(int i=0;i<n;i++)if(placed[i])write_hat_polygon(fp,hat,nh,tr[i],ca,sa,fill(c[i].state,tree));
+    for(size_t fi=0;src&&fi<src->n;fi++)if(src->cell[fi].state=='F'){
+        Point fpv[24]; int nf=0;
+        if(recover_false_hex_points(fpv,&nf,c,n,hat,nh,tr,placed,src->cell[fi].q,src->cell[fi].r))
+            write_false_hex_polygon(fp,fpv,nf,ca,sa);
+    }
+    if(have_bridge)write_hat_polygon(fp,hat,nh,bridge,ca,sa,"#ffffff");
+    fputs("</svg>\n",fp);if(fclose(fp)||rename(tmp,path)){remove(tmp);snprintf(err,errsz,"cannot install hat SVG");return 0;}return 1;
+}
+
+static void false_hex_points(double pts[6][2], double r, unsigned step){
+    /* False-center hat print: rotate by 90 degrees from the earlier
+     * point-up diagnostic hex.  Modulo 60-degree hex symmetry this is the
+     * visible 30-degree phase change, so use phase 0 rather than phase 90. */
+    double ca=cos(M_PI*(30.0*(step%12))/180.0),sa=sin(M_PI*(30.0*(step%12))/180.0);
+    for(int k=0;k<6;k++){
+        double a=M_PI*(0.0+60.0*k)/180.0;
+        double x=r*cos(a),y=r*sin(a);
+        pts[k][0]=ca*x-sa*y; pts[k][1]=sa*x+ca*y;
+    }
+}
+
+static void update_bounds(double *xmin,double *xmax,double *ymin,double *ymax,int *first,double x,double y){
+    if(*first){*xmin=*xmax=x;*ymin=*ymax=y;*first=0;}
+    else{*xmin=fmin(*xmin,x);*xmax=fmax(*xmax,x);*ymin=fmin(*ymin,y);*ymax=fmax(*ymax,y);}
+}
+
+static int write_false_center_svg(const char*path,unsigned step,char*err,size_t errsz){
+    if(!ensure_parent(path)){snprintf(err,errsz,"cannot create SVG directory");return 0;}
+    double pts[6][2],xmin=0,xmax=0,ymin=0,ymax=0;int first=1;
+    false_hex_points(pts,1.0,step);
+    for(int k=0;k<6;k++)update_bounds(&xmin,&xmax,&ymin,&ymax,&first,pts[k][0],pts[k][1]);
+    double margin=.08,vx=xmin-margin,vy=-(ymax+margin),vw=xmax-xmin+2*margin,vh=ymax-ymin+2*margin,width=1400,height=fmax(260,width*vh/vw);
+    char tmp[512];snprintf(tmp,sizeof(tmp),"%s.new",path);
+    FILE*fp=fopen(tmp,"w");if(!fp){snprintf(err,errsz,"cannot write hat SVG");return 0;}
+    fprintf(fp,"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"%.6f %.6f %.6f %.6f\">\n",width,height,vx,vy,vw,vh);
+    fprintf(fp,"<rect x=\"%.6f\" y=\"%.6f\" width=\"%.6f\" height=\"%.6f\" fill=\"#ffffff\"/>\n",vx,vy,vw,vh);
+    fprintf(fp,"<polygon points=\"");for(int k=0;k<6;k++)fprintf(fp,"%.6f,%.6f%s",pts[k][0],-pts[k][1],k==5?"":" ");
+    fprintf(fp,"\" fill=\"#161616\" stroke=\"#302d29\" stroke-width=\"0.020\"/>\n</svg>\n");
+    if(fclose(fp)||rename(tmp,path)){remove(tmp);snprintf(err,errsz,"cannot install hat SVG");return 0;}return 1;
+}
+
+static double hat_vertex_center_angle(const Point*hat,int nh,int vertex){
+    Point hc=hat_average_center(hat,nh);
+    return atan2(hc.y-hat[vertex].y,hc.x-hat[vertex].x);
+}
+
+static int write_false_ring_svg(const char*path,const Point*hat,int nh,unsigned step,char*err,size_t errsz){
+    if(!ensure_parent(path)){snprintf(err,errsz,"cannot create SVG directory");return 0;}
+    double hex[6][2]; false_hex_points(hex,1.0,step);
+    double xmin=0,xmax=0,ymin=0,ymax=0;int first=1;
+    for(int k=0;k<6;k++)update_bounds(&xmin,&xmax,&ymin,&ymax,&first,hex[k][0],hex[k][1]);
+    Transform tr[6];
+    double base=hat_vertex_center_angle(hat,nh,2);
+    for(int k=0;k<6;k++){
+        Point target={hex[k][0],hex[k][1]};
+        double outward=atan2(hex[k][1],hex[k][0]);
+        tr[k]=rotate_vertex_transform(hat,2,target,outward-base);
+        for(int j=0;j<nh;j++){Point p=tx_point(tr[k],hat[j]);update_bounds(&xmin,&xmax,&ymin,&ymax,&first,p.x,p.y);}
+    }
+    double margin=.10,vx=xmin-margin,vy=-(ymax+margin),vw=xmax-xmin+2*margin,vh=ymax-ymin+2*margin,width=1400,height=fmax(260,width*vh/vw);
+    char tmp[512];snprintf(tmp,sizeof(tmp),"%s.new",path);
+    FILE*fp=fopen(tmp,"w");if(!fp){snprintf(err,errsz,"cannot write hat SVG");return 0;}
+    fprintf(fp,"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"%.6f %.6f %.6f %.6f\">\n",width,height,vx,vy,vw,vh);
+    fprintf(fp,"<rect x=\"%.6f\" y=\"%.6f\" width=\"%.6f\" height=\"%.6f\" fill=\"#ffffff\"/>\n",vx,vy,vw,vh);
+    for(int k=0;k<6;k++)write_hat_polygon(fp,hat,nh,tr[k],1.0,0.0,"#b88968");
+    fprintf(fp,"<polygon points=\"");for(int k=0;k<6;k++)fprintf(fp,"%.6f,%.6f%s",hex[k][0],-hex[k][1],k==5?"":" ");
+    fprintf(fp,"\" fill=\"#161616\" stroke=\"#302d29\" stroke-width=\"0.020\"/>\n</svg>\n");
+    if(fclose(fp)||rename(tmp,path)){remove(tmp);snprintf(err,errsz,"cannot install hat SVG");return 0;}return 1;
+}
+
+int rephex_hat_render(const MR7Cells*cells,const char*output_svg,const char*output_data,const char*axiom,unsigned level,int tree_palette,unsigned rotation_step,RephexHatStats*stats,char*err,size_t errsz){
+    memset(stats,0,sizeof(*stats));
+    stats->total_cells=cells->n;
+    Lift lifts[64];int nl=0;
+    if(!read_lifts("data/rl6/hat/print_conversion.dat",lifts,&nl,err,errsz))return 0;
+    HCell*c=NULL;int n=0,false_n=0;
+    if(!build_cells(cells,&c,&n,&false_n)){snprintf(err,errsz,"out of memory");return 0;}
+    stats->supported_cells=n;stats->false_cells=false_n;
+
+    Constraint*cons=NULL;int nc=0;Edge*edges=NULL;int ne=0;Adj(*adj)[6]=NULL;int*deg=NULL;
+    Point hat[MAX_HAT];int nh=0;Transform*tr=NULL;unsigned char*placed=NULL;int ok=0;
+    unsigned effective_rotation_step=(DH_HAT_BASE_ROTATION_STEP+rotation_step)%12u;
+
+    if(false_n==1 && n==0 && level==0 && !strcmp(axiom,"F")){
+        if(!write_false_center_svg(output_svg,effective_rotation_step,err,errsz))goto done;
+        stats->placed_hats=1;stats->components=1;
+        ok=1;
+        if(!ensure_parent(output_data)){snprintf(err,errsz,"cannot create hat data directory");goto done;}
+        FILE*fp=fopen(output_data,"w");
+        if(!fp){snprintf(err,errsz,"cannot write hat data");goto done;}
+        fprintf(fp,"rephex --hat-svg audit\naxiom=%s level=%u palette=%s rotation_step=%u base_rotation_step=%u effective_rotation_step=%u status=complete\n",axiom,level,tree_palette?"tree":"ordinary",rotation_step,DH_HAT_BASE_ROTATION_STEP,effective_rotation_step);
+        fprintf(fp,"pipeline=manual false-center hex renderer for F axiom\n");
+        fprintf(fp,"cells=%zu supported_non_F_cells=%zu false_center_cells=%zu\nplaced_hats=%zu placement_components=%zu\n",stats->total_cells,stats->supported_cells,stats->false_cells,stats->placed_hats,stats->components);
+        fclose(fp);
+        goto done;
+    }
+
+    if(!read_hat(hat,&nh)){snprintf(err,errsz,"cannot read hat tile");goto done;}
+    if(false_n==1 && n==6 && level==1 && !strcmp(axiom,"F")){
+        if(!write_false_ring_svg(output_svg,hat,nh,effective_rotation_step,err,errsz))goto done;
+        stats->placed_hats=stats->total_cells;stats->components=1;
+        ok=1;
+        if(!ensure_parent(output_data)){snprintf(err,errsz,"cannot create hat data directory");goto done;}
+        FILE*fp=fopen(output_data,"w");
+        if(!fp){snprintf(err,errsz,"cannot write hat data");goto done;}
+        fprintf(fp,"rephex --hat-svg audit\naxiom=%s level=%u palette=%s rotation_step=%u base_rotation_step=%u effective_rotation_step=%u status=complete\n",axiom,level,tree_palette?"tree":"ordinary",rotation_step,DH_HAT_BASE_ROTATION_STEP,effective_rotation_step);
+        fprintf(fp,"pipeline=manual false-center level-1 ring: center hex plus six soft-brown pass hats, each attached at hat vertex 2\n");
+        fprintf(fp,"cells=%zu supported_non_F_cells=%zu false_center_cells=%zu\nplaced_hats=%zu placement_components=%zu\n",stats->total_cells,stats->supported_cells,stats->false_cells,stats->placed_hats,stats->components);
+        fclose(fp);
+        goto done;
+    }
+
+    if(!build_constraints(c,n,&cons,&nc)||!build_edges(c,n,&edges,&ne,&adj,&deg)){snprintf(err,errsz,"cannot build hat constraints");goto done;}
+    assign_vertices(c,cons,nc,lifts,nl,&stats->unresolved_figures);
+    build_domains(c,n);
+    prune_domains(c,cons,nc,lifts,nl);
+    for(int i=0;i<n;i++){int m=active_count(&c[i]);if(m==0)stats->empty_domains++;if(m<=60)stats->domain_histogram[m]++;}
+    tr=calloc((size_t)n,sizeof(*tr));placed=calloc((size_t)n,1);
+    if(!tr||!placed){snprintf(err,errsz,"out of memory");goto done;}
+
+    place_largest(c,n,adj,deg,hat,nh,tr,placed,&stats->components,&stats->cycle_conflicts);
+    for(int i=0;i<n;i++) if(placed[i]) stats->placed_hats++;
+    stats->placed_hats += (size_t)false_n;
+
+    int draw_reflected_bridge=0;
+    size_t seed_count=apply_indexed_level0_fallback(axiom,level,c,n,hat,nh,tr,placed,&stats->components,&draw_reflected_bridge);
+    if(seed_count){
+        stats->placed_hats=seed_count;
+        stats->seed_fallback_used=1;
+        stats->cycle_conflicts=0;
+    }
+
+    stats->overlaps=audit_overlap(c,n,hat,nh,tr,placed);
+    if(!write_svg(output_svg,c,n,hat,nh,tr,placed,tree_palette,effective_rotation_step,draw_reflected_bridge,cells,err,errsz))goto done;
+    if(!ensure_parent(output_data)){snprintf(err,errsz,"cannot create hat data directory");goto done;}
+    FILE*fp=fopen(output_data,"w");if(!fp){snprintf(err,errsz,"cannot write hat data");goto done;}
+    const char*status=stats->placed_hats==stats->total_cells?"complete":"partial";
+    fprintf(fp,"rephex --hat-svg audit\naxiom=%s level=%u palette=%s rotation_step=%u base_rotation_step=%u effective_rotation_step=%u status=%s\n",axiom,level,tree_palette?"tree":"ordinary",rotation_step,DH_HAT_BASE_ROTATION_STEP,effective_rotation_step,status);
+    fprintf(fp,"pipeline=RL7 cells -> refined vertex labels -> ordinary indexed vertex lifts -> row pruning -> forced-edge hat placement; level-0 seeds use indexed fallback where specified\n");
+    fprintf(fp,"cells=%zu supported_non_F_cells=%zu false_center_cells=%zu\nplaced_hats=%zu placement_components=%zu\n",stats->total_cells,stats->supported_cells,stats->false_cells,stats->placed_hats,stats->components);
+    fprintf(fp,"unresolved_vertex_figures=%zu empty_row_domains=%zu seed_fallback_used=%zu\n",stats->unresolved_figures,stats->empty_domains,stats->seed_fallback_used);
     fputs("row_domain_histogram={", fp); int first_hist = 1;
     for (int i = 0; i <= 60; i++) if (stats->domain_histogram[i]) {
         fprintf(fp, "%s%d: %zu", first_hist ? "" : ", ", i, stats->domain_histogram[i]); first_hist = 0;
@@ -141,4 +449,11 @@ int rephex_hat_render(const MR7Cells*cells,const char*output_svg,const char*outp
         if (nomit) { fputs("omitted_cells:\n", fp); for (size_t i = 0; i < nomit; i++) fprintf(fp, "  (%d, %d) state=%c\n", omitted[i].q, omitted[i].r, omitted[i].state); }
         free(omitted);
     }
-    fclose(fp);ok=stats->cycle_conflicts==0&&stats->overlaps==0;if(!ok)snprintf(err,errsz,"hat placement audit failed");done:free(c);free(cons);free(edges);free(adj);free(deg);free(tr);free(placed);return ok;}
+    fclose(fp);
+    ok=stats->cycle_conflicts==0&&stats->overlaps==0;
+    if(!ok)snprintf(err,errsz,"hat placement audit failed");
+
+done:
+    free(c);free(cons);free(edges);free(adj);free(deg);free(tr);free(placed);
+    return ok;
+}

@@ -1,7 +1,7 @@
 #ifndef POLYFORMTOWN_REPHEX_HAT_H
 #define POLYFORMTOWN_REPHEX_HAT_H
 #include <stddef.h>
-#include "rl7/inflation/inflation7.h"
+#include "rl7/inflation7.h"
 
 typedef struct {
     size_t total_cells, supported_cells, false_cells, placed_hats, components;

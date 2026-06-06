@@ -12,9 +12,9 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "boundary7.h"
-#include "comp7.h"
-#include "evo7.h"
+#include "rl7/boundary7.h"
+#include "rl7/comp7.h"
+#include "rl7/evo7.h"
 #include "usage/print7.h"
 
 #define SVG_PATH_MAX    256

@@ -10,7 +10,7 @@ else
     out_abs="$root/$out"
 fi
 term_abs="$out_abs/terminal"
-mkdir -p "$out_abs" "$term_abs"
+mkdir -p "$out_abs" "$term_abs" "$root/data/rl7/inflation"
 
 make -C "$root" rephex_print >/dev/null
 REPHEX_NO_OPEN=1 "$bin" --write-axioms "$root/data/rl7/inflation/axioms.dat" >/dev/null
@@ -37,17 +37,15 @@ for level in 0 1 2; do
     done
 done
 
-python3 "$root/src/usage/rl7/assemble_inflation_catalogue.py" "$out_abs" ordinary >/dev/null
-python3 "$root/src/usage/rl7/assemble_inflation_catalogue.py" "$out_abs" tree >/dev/null
-
-if python3 -c 'import cairosvg' >/dev/null 2>&1; then
-    python3 - "$out_abs" <<'PY'
-from pathlib import Path
-import sys
-import cairosvg
-out = Path(sys.argv[1])
-for src in sorted(out.glob('*.svg')):
-    cairosvg.svg2png(url=str(src), write_to=str(src.with_suffix('.png')))
-PY
+# Keep the source tree C/shell-only.  If a system SVG converter is present,
+# produce PNG siblings; otherwise leave the canonical SVGs in place.
+if command -v rsvg-convert >/dev/null 2>&1; then
+    for src in "$out_abs"/*.svg; do
+        rsvg-convert "$src" -o "${src%.svg}.png"
+    done
+elif command -v inkscape >/dev/null 2>&1; then
+    for src in "$out_abs"/*.svg; do
+        inkscape "$src" --export-type=png --export-filename="${src%.svg}.png" >/dev/null 2>&1 || true
+    done
 fi
-printf 'generated C-derived SVG/PNG catalogue and ANSI/text diagrams in %s\n' "$out_abs"
+printf 'generated C-derived SVGs and ANSI/text diagrams in %s\n' "$out_abs"

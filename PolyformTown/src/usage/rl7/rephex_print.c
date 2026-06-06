@@ -1,4 +1,4 @@
-#include "rl7/inflation/inflation7.h"
+#include "rl7/inflation7.h"
 #include "usage/rl7/rephex_hat.h"
 
 #include <errno.h>
@@ -75,9 +75,16 @@ static const char *fill_for(char state, Palette p) {
     }
     if (state == '0') return "#f1d777";
     if (state == '1') return "#f5af74";
-    if (state == 'B') return "#ad825f"; /* pass-through H */
-    if (state == 'C') return "#d1ae8c"; /* capped H */
-    return "#79c996";
+    if (state == 'B') return "#b88968"; /* pass / branch H: dark brown */
+    if (state == 'C') return "#d1ae8c"; /* capped H: light brown */
+    return "#79c996"; /* green terminal H */
+}
+
+static const char *fill_for_cell(const MR7Cell *cell, Palette p,
+                                 MR7Init init, unsigned level) {
+    (void)init;
+    (void)level;
+    return fill_for(cell->state, p);
 }
 
 static const char *ansi_for(char state, Palette p) {
@@ -89,8 +96,8 @@ static const char *ansi_for(char state, Palette p) {
     }
     if (state == '0') return "\033[38;5;178m";
     if (state == '1') return "\033[38;5;166m";
-    if (state == 'B') return "\033[38;5;137m";
-    if (state == 'C') return "\033[38;5;180m";
+    if (state == 'B') return "\033[38;5;173m"; /* dark brown pass / branch */
+    if (state == 'C') return "\033[38;5;180m"; /* light brown cap */
     return "\033[38;5;35m";
 }
 
@@ -314,15 +321,30 @@ static void write_hex_skin(FILE *fp, const MR7Cell *cell, unsigned rotation_step
     raw_center(cell->q, cell->r, &cx, &cy);
     unit_for_ori(cell->ori, &ux, &uy);
 
+    if (cell->state == 'F') {
+        const char *gray = "#777777";
+        for (unsigned d = 0; d < 6; d++) {
+            double vx, vy;
+            unit_for_ori(d, &vx, &vy);
+            svg_line(fp, cx, cy, cx + 0.62 * vx, cy + 0.62 * vy,
+                     rotation_step, gray, 0.032);
+            svg_arrow_head(fp, cx + 0.52 * vx, cy + 0.52 * vy, vx, vy,
+                           0.085, rotation_step, gray, 0.028);
+        }
+        return;
+    }
+
     if (cell->state == 'G' || cell->state == 'C') {
-        /* A green tree-palette leaf is terminal: its principal arrow runs
-         * into the cell and terminates exactly at the centroid. */
+        /* Terminal/cap H cells use the half-arrow convention:
+         * the principal arrow runs into the cell and terminates at centroid. */
         svg_line(fp, cx - 0.78 * ux, cy - 0.78 * uy,
                  cx, cy, rotation_step, ink, 0.036);
         svg_arrow_head(fp, cx - 0.105 * ux, cy - 0.105 * uy, ux, uy,
                        0.105, rotation_step, ink, 0.032);
     } else {
-        /* Continuing diameter with two same-facing direction arrows. */
+        /* Pass cells and D cells use a continuing diameter with two
+         * same-facing direction arrows.  This is deliberately used for B:
+         * low-lying F1 has six B pass states around the false center, not caps. */
         svg_line(fp, cx - 0.78 * ux, cy - 0.78 * uy,
                  cx + 0.78 * ux, cy + 0.78 * uy, rotation_step, ink, 0.036);
         svg_arrow_head(fp, cx - 0.39 * ux, cy - 0.39 * uy, ux, uy,
@@ -353,7 +375,7 @@ static int write_svg(const char *path, MR7Init init, unsigned level,
                      Palette palette, const MR7Patch *patch, const MR7Cells *cells,
                      const char *record, unsigned rotation_step,
                      char *err, size_t errsz) {
-    (void)init; (void)level; (void)patch; (void)record;
+    (void)patch; (void)record;
     char tmp_path[512];
     snprintf(tmp_path, sizeof(tmp_path), "%s.new", path);
     FILE *fp = fopen(tmp_path, "wb");
@@ -393,11 +415,13 @@ static int write_svg(const char *path, MR7Init init, unsigned level,
             fprintf(fp, "%.6f,%.6f%s", x, y, k == 5 ? "" : " ");
         }
         fprintf(fp, "\" fill=\"%s\" stroke=\"#282828\" stroke-width=\"0.020\"/>\n",
-                fill_for(cells->cell[i].state, palette));
+                fill_for_cell(&cells->cell[i], palette, init, level));
     }
-    if (palette == PALETTE_TREE) {
-        for (size_t i = 0; i < cells->n; i++)
-            write_hex_skin(fp, &cells->cell[i], rotation_step);
+    for (size_t i = 0; i < cells->n; i++) {
+        /* Draw arrows in both ordinary and tree palettes.  Ordinary is not a
+         * blank-fill palette; it still needs F spokes and pass/D/H direction
+         * marks for debugging the low axioms. */
+        write_hex_skin(fp, &cells->cell[i], rotation_step);
     }
     fputs("</svg>\n", fp);
     if (fclose(fp) != 0 || rename(tmp_path, path) != 0) {
@@ -408,10 +432,43 @@ static int write_svg(const char *path, MR7Init init, unsigned level,
     return 1;
 }
 
+static int low_axiom_hat_case(MR7Init init, unsigned level) {
+    if (level == 0 && (init == MR7_INIT_D || init == MR7_INIT_DH || init == MR7_INIT_F)) return 1;
+    if (level == 1 && init == MR7_INIT_F) return 1;
+    return 0;
+}
+
+static int run_low_axiom_hat_helper(MR7Init init, unsigned level, Palette palette,
+                                    unsigned rotation_step) {
+    char command[1024];
+    snprintf(command, sizeof(command),
+             "REPHEX_NO_OPEN=1 ./bin/rephex_hacked %s %u%s --from-current --hat-svg "
+             "--rotation-step %u --no-color",
+             mr7_init_name(init), level,
+             palette == PALETTE_TREE ? " --palette tree" : "",
+             rotation_step);
+    int rc = system(command);
+    return rc != -1 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0;
+}
+
 static int run_hat_renderer(const MR7Cells *cells, MR7Init init, unsigned level,
                             Palette palette, unsigned rotation_step,
                             char *err, size_t errsz) {
     RephexHatStats stats;
+
+    /*
+     * Low-lying axiom hat depictions are a one-off service leaf.  Try that
+     * helper only for the final hat-SVG product.  If it fails, fall through to
+     * the published normal renderer so generation, terminal, hex SVG, and most
+     * hat SVG output remain available.
+     */
+    if (low_axiom_hat_case(init, level) &&
+        run_low_axiom_hat_helper(init, level, palette, rotation_step)) {
+        printf("hat-status: complete placed=low-axiom-helper axiom=%s level=%u\n",
+               mr7_init_name(init), level);
+        return 1;
+    }
+
     if (!rephex_hat_render(cells, CURRENT_HAT_SVG_PATH, CURRENT_HAT_DATA_PATH,
                            mr7_init_name(init), level, palette == PALETTE_TREE,
                            rotation_step, &stats, err, errsz)) return 0;

@@ -40,7 +40,7 @@ typedef struct {
     unsigned depth;
     int tree_palette;
     int choosing_axiom;
-    int pattern_dirty;
+    int needs_update;
     char status[STATUS_MAX];
 } ReplState;
 
@@ -176,8 +176,19 @@ static void erase_frame(int first, int after_enter) {
 }
 
 static int refresh_current(ReplState *state) {
-    if (!state->pattern_dirty) return 1;
-    char command[LINE_MAX * 3];
+    if (!state->needs_update) return 1;
+    char command[LINE_MAX * 4];
+
+    /*
+     * Main REPL update flow:
+     *   1. Generate current data.
+     *   2. Write hex SVG.
+     *   3. Write hat SVG.
+     *
+     * All three calls go through rephex_print.  If a low-lying axiom needs
+     * special hat geometry, rephex_print may ask the leaf helper for that
+     * one hat-SVG product.  The REPL does not call the helper directly.
+     */
     snprintf(command, sizeof(command),
              "mkdir -p data/run/rl7/rephex && "
              "REPHEX_NO_OPEN=1 ./bin/rephex_print %s %u --write-current-only --no-color "
@@ -193,7 +204,7 @@ static int refresh_current(ReplState *state) {
              state->tree_palette ? " --palette tree" : "");
     int rc = system(command);
     if (rc == -1 || !WIFEXITED(rc) || WEXITSTATUS(rc) != 0) return 0;
-    state->pattern_dirty = 0;
+    state->needs_update = 0;
     return 1;
 }
 
@@ -221,11 +232,25 @@ static int capture_diagram(const ReplState *state, char body[BODY_ROWS][LINE_MAX
     return 1;
 }
 
-static int export_current(const ReplState *state, int hats, unsigned rotation_step,
+static int export_current(ReplState *state, int hats, unsigned rotation_step,
                           char *status, size_t status_size) {
-    char command[LINE_MAX];
+    char command[LINE_MAX * 3];
+
+    /*
+     * P/PH are force-refresh + open/export commands.  They never branch the
+     * REPL around rephex_print.  The only allowed hack path is inside
+     * rephex_print's hat-SVG stage.
+     */
+    if (!refresh_current(state)) {
+        snprintf(status, status_size,
+                 "ERR: refresh failed; see data/run/rl7/rephex/current_print.dat");
+        return 0;
+    }
+
     snprintf(command, sizeof(command),
-             "mkdir -p data/run/rl7/rephex && ./bin/rephex_print %s %u --from-current%s %s --rotation-step %u --no-color > data/run/rl7/rephex/current_print.dat 2>&1",
+             "mkdir -p data/run/rl7/rephex && "
+             "./bin/rephex_print %s %u --from-current%s %s --rotation-step %u --no-color "
+             "> data/run/rl7/rephex/current_print.dat 2>&1",
              axioms[state->axiom].code, state->depth,
              state->tree_palette ? " --palette tree" : "",
              hats ? "--hat-svg" : "--svg", rotation_step);
@@ -234,7 +259,7 @@ static int export_current(const ReplState *state, int hats, unsigned rotation_st
         snprintf(status, status_size, "ERR: print failed; see data/run/rl7/rephex/current_print.dat");
         return 0;
     }
-    if (hats) snprintf(status, status_size, "printed hats DH+%u deg: img/rl7/rephex/current_hat.svg", rotation_step * 30);
+    if (hats) snprintf(status, status_size, "printed hats rot=%u deg: img/rl7/rephex/current_hat.svg", rotation_step * 30);
     else snprintf(status, status_size, "printed hexes rot=%u deg: img/rl7/rephex/current.svg", rotation_step * 30);
     return 1;
 }
@@ -264,7 +289,7 @@ static const char *legend_ansi(char state, int tree_palette) {
     }
     if (state == '0') return "\033[38;5;178m";
     if (state == '1') return "\033[38;5;166m";
-    if (state == 'B') return "\033[38;5;137m";
+    if (state == 'B') return "\033[38;5;173m";
     if (state == 'C') return "\033[38;5;180m";
     return "\033[38;5;35m";
 }
@@ -355,7 +380,7 @@ int main(int argc, char **argv) {
             if (!strcmp(command, "q") || !strcmp(command, "quit")) break;
             int next = parse_axiom(input);
             if (next < 0) { snprintf(state.status, sizeof(state.status), "ERR: unknown axiom '%s'", input); continue; }
-            state.axiom = next; state.depth = 0; state.choosing_axiom = 0; state.pattern_dirty = 1;
+            state.axiom = next; state.depth = 0; state.choosing_axiom = 0; state.needs_update = 1;
             snprintf(state.status, sizeof(state.status), "selected %s; depth reset to 0", axioms[next].code);
             continue;
         }
@@ -375,7 +400,7 @@ int main(int argc, char **argv) {
             }
             state.axiom = next;
             state.depth = fields == 2 ? requested_depth : 0;
-            state.pattern_dirty = 1;
+            state.needs_update = 1;
             snprintf(state.status, sizeof(state.status), "selected %s; depth %u",
                      axioms[next].code, state.depth);
             continue;
@@ -384,24 +409,24 @@ int main(int argc, char **argv) {
             unsigned requested_depth = 0;
             if (parse_depth(command, &requested_depth)) {
                 state.depth = requested_depth;
-                state.pattern_dirty = 1;
+                state.needs_update = 1;
                 snprintf(state.status, sizeof(state.status), "depth set to %u", state.depth);
                 continue;
             }
         }
         if (!strcmp(command, "+")) {
             if (state.depth >= 6) snprintf(state.status, sizeof(state.status), "depth already at maximum 6");
-            else { state.depth++; state.pattern_dirty = 1; snprintf(state.status, sizeof(state.status), "depth increased to %u", state.depth); }
+            else { state.depth++; state.needs_update = 1; snprintf(state.status, sizeof(state.status), "depth increased to %u", state.depth); }
             continue;
         }
         if (!strcmp(command, "-")) {
             if (!state.depth) snprintf(state.status, sizeof(state.status), "depth already at 0");
-            else { state.depth--; state.pattern_dirty = 1; snprintf(state.status, sizeof(state.status), "depth decreased to %u", state.depth); }
+            else { state.depth--; state.needs_update = 1; snprintf(state.status, sizeof(state.status), "depth decreased to %u", state.depth); }
             continue;
         }
         if (!strcmp(command, "t")) {
             state.tree_palette = !state.tree_palette;
-            state.pattern_dirty = 1;
+            state.needs_update = 1;
             snprintf(state.status, sizeof(state.status), "palette: %s", state.tree_palette ? "tree" : "ordinary");
             continue;
         }
