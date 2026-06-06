@@ -1,7 +1,9 @@
+#define _XOPEN_SOURCE 700
 #include "rl7/inflation7.h"
 #include "usage/rl7/rephex_hat.h"
 
 #include <errno.h>
+#include <locale.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <wchar.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -234,6 +237,15 @@ static void print_cell_glyph(const MR7Cell *cell, int color, Palette palette, in
     else printf("⬢%s", sep);
 }
 
+static int hex_glyph_cols(void) {
+    int w = wcwidth(L'⬢');
+    return w > 0 ? w : 1;
+}
+
+static void print_blank_cols(int n) {
+    while (n-- > 0) putchar(' ');
+}
+
 static void text_diagram(const MR7Cells *cells, int color, Palette palette,
                          int diagram_only, int repl_window,
                          int preview_rows, int preview_cols) {
@@ -244,31 +256,62 @@ static void text_diagram(const MR7Cells *cells, int color, Palette palette,
         const int max_rows = preview_rows > 0 ? preview_rows : 16;
         const int available_cols = preview_cols > 0 ? preview_cols : 79;
         /*
-         * In the terminal used for rephex, the flat-top glyph occupies two
-         * display columns and each non-final cell includes one separating
-         * space.  Reserve the worst-case row indent before choosing a crop.
+         * REPL previews are rectangular terminal windows.  The old whole-patch
+         * print convention still needs a staggered leading space, but letting
+         * that indentation grow without bound turns a rectangular q/r crop into
+         * a screen-space parallelogram.  Keep the stagger phase and backfill q
+         * as the row advances so the window remains rectangular.
          */
-        const int glyph_cols = 2;
+        const int glyph_cols = hex_glyph_cols();
         const int separated_cell_cols = glyph_cols + 1;
-        const int max_indent = max_rows > 0 ? max_rows - 1 : 0;
-        const int max_cols =
-            (available_cols - max_indent + (separated_cell_cols - glyph_cols)) /
-            separated_cell_cols;
+        const int stagger_period = 2;
+        const int max_cols = (available_cols + (separated_cell_cols - glyph_cols)) /
+                             separated_cell_cols;
         const int rspan = r1 - r0 + 1, qspan = q1 - q0 + 1;
+
+        int full_width = 0;
+        for (int r = r0; r <= r1; r++) {
+            int row_q1 = q1;
+            while (row_q1 >= q0 && !find_cell(cells, row_q1, r)) row_q1--;
+            if (row_q1 < q0) continue;
+            int cells_in_row = row_q1 - q0 + 1;
+            int width = (r - r0) + glyph_cols * cells_in_row +
+                        (cells_in_row > 0 ? cells_in_row - 1 : 0);
+            if (width > full_width) full_width = width;
+        }
+        if (rspan <= max_rows && full_width <= available_cols) {
+            for (int r = r0; r <= r1; r++) {
+                int row_q1 = q1;
+                while (row_q1 >= q0 && !find_cell(cells, row_q1, r)) row_q1--;
+                for (int pad = 0; pad < r - r0; pad++) putchar(' ');
+                for (int q = q0; q <= row_q1; q++) {
+                    const MR7Cell *cell = find_cell(cells, q, r);
+                    if (!cell) { printf("  "); continue; }
+                    print_cell_glyph(cell, color, palette, q == row_q1);
+                }
+                putchar('\n');
+            }
+            return;
+        }
+
         int vr0 = r0, vq0 = q0;
         if (rspan > max_rows) vr0 = r0 + (rspan - max_rows) / 2;
         if (qspan > max_cols) vq0 = q0 + (qspan - max_cols) / 2;
         int vr1 = vr0 + (rspan > max_rows ? max_rows - 1 : rspan - 1);
-        int vq1 = vq0 + (qspan > max_cols ? max_cols - 1 : qspan - 1);
-        int clipped = vr0 != r0 || vr1 != r1 || vq0 != q0 || vq1 != q1;
-        printf("@clipped=%d\n", clipped);
         for (int r = vr0; r <= vr1; r++) {
-            int row_q1 = vq1;
-            while (row_q1 >= vq0 && !find_cell(cells, row_q1, r)) row_q1--;
-            for (int pad = 0; pad < r - vr0; pad++) putchar(' ');
-            for (int q = vq0; q <= row_q1; q++) {
+            int pad = r - vr0;
+            int phase = pad % stagger_period;
+            int q_backfill = pad / stagger_period;
+            int row_q0 = vq0 - q_backfill;
+            int cells_this_row = (available_cols - phase +
+                                  (separated_cell_cols - glyph_cols)) /
+                                 separated_cell_cols;
+            int row_q1 = row_q0 + cells_this_row - 1;
+            while (row_q1 >= row_q0 && !find_cell(cells, row_q1, r)) row_q1--;
+            for (int sp = 0; sp < phase; sp++) putchar(' ');
+            for (int q = row_q0; q <= row_q1; q++) {
                 const MR7Cell *cell = find_cell(cells, q, r);
-                if (!cell) { printf("  "); continue; }
+                if (!cell) { print_blank_cols(separated_cell_cols); continue; }
                 print_cell_glyph(cell, color, palette, q == row_q1);
             }
             putchar('\n');
@@ -671,6 +714,7 @@ static void usage(FILE *fp, const char *argv0) {
 }
 
 int main(int argc, char **argv) {
+    setlocale(LC_CTYPE, "");
     unsigned level = 0;
     int have_level = 0, have_init = 0;
     int check = 0, list = 0, color = isatty(STDOUT_FILENO);

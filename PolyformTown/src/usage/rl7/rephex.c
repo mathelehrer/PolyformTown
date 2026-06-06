@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 #define STATUS_MAX 200
-#define LINE_MAX   512
+#define COMMAND_MAX 4096
 #define TERM_COLS  80
 #define TERM_ROWS  24
 /* Keep the last column unused to avoid terminal auto-wrap. */
@@ -194,7 +194,7 @@ static void erase_frame(int first, int after_enter) {
 
 static int refresh_current(ReplState *state) {
     if (!state->needs_update) return 1;
-    char command[LINE_MAX * 4];
+    char command[COMMAND_MAX];
 
     /*
      * Main REPL update flow:
@@ -225,33 +225,64 @@ static int refresh_current(ReplState *state) {
     return 1;
 }
 
-static int capture_diagram(const ReplState *state, char body[BODY_ROWS][LINE_MAX], int *clipped) {
-    char command[LINE_MAX];
+static void free_body(char *body[BODY_ROWS]) {
+    for (int i = 0; i < BODY_ROWS; i++) {
+        free(body[i]);
+        body[i] = NULL;
+    }
+}
+
+static int set_body_line(char **dst, const char *src) {
+    char *copy = strdup(src ? src : "");
+    if (!copy) return 0;
+    free(*dst);
+    *dst = copy;
+    return 1;
+}
+
+static int capture_diagram(const ReplState *state, char *body[BODY_ROWS], int *clipped) {
+    char command[COMMAND_MAX];
     snprintf(command, sizeof(command),
              "./bin/rephex_print %s %u --from-current%s --repl-window --preview-rows %d --preview-cols %d --color 2>/dev/null",
              axioms[state->axiom].code, state->depth,
              palette_arg(state->palette), BODY_ROWS, FRAME_COLS);
     FILE *pipe = popen(command, "r");
     if (!pipe) return 0;
+
     *clipped = 0;
     int n = 0;
-    char line[LINE_MAX];
-    while (fgets(line, sizeof(line), pipe)) {
-        line[strcspn(line, "\r\n")] = '\0';
-        if (!strncmp(line, "@clipped=", 9)) { *clipped = atoi(line + 9) != 0; continue; }
-        if (n < BODY_ROWS) snprintf(body[n++], LINE_MAX, "%s", line);
-        else *clipped = 1;
+    char *line = NULL;
+    size_t cap = 0;
+    ssize_t len;
+    int ok = 1;
+
+    while ((len = getline(&line, &cap, pipe)) != -1) {
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+            line[--len] = '\0';
+        if (!strncmp(line, "@clipped=", 9)) {
+            *clipped = atoi(line + 9) != 0;
+            continue;
+        }
+        if (n < BODY_ROWS) {
+            if (!set_body_line(&body[n++], line)) { ok = 0; break; }
+        } else {
+            *clipped = 1;
+        }
     }
+    free(line);
+
     int status = pclose(pipe);
-    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) return 0;
-    if (*clipped) snprintf(body[BODY_ROWS - 1], LINE_MAX, "... preview clipped; use PH to inspect SVG");
-    while (n < BODY_ROWS) body[n++][0] = '\0';
+    if (!ok || status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) return 0;
+    if (*clipped && !set_body_line(&body[BODY_ROWS - 1], "... preview clipped; use PH to inspect SVG")) return 0;
+    while (n < BODY_ROWS) {
+        if (!set_body_line(&body[n++], "")) return 0;
+    }
     return 1;
 }
 
 static int export_current(ReplState *state, int hats, unsigned rotation_step,
                           char *status, size_t status_size) {
-    char command[LINE_MAX * 3];
+    char command[COMMAND_MAX];
 
     /*
      * P/PH are force-refresh + open/export commands.  They never branch the
@@ -339,7 +370,7 @@ static void print_legend(const ReplState *state) {
 
 static void render_state(ReplState *state) {
     char line[STATUS_MAX + 64];
-    char body[BODY_ROWS][LINE_MAX];
+    char *body[BODY_ROWS] = {0};
     int clipped = 0;
     int have_diagram = refresh_current(state) && capture_diagram(state, body, &clipped);
     print_fixed("REPHEX | A axiom | +/- depth | P print | PH hex | T color | ? help | Q quit");
@@ -348,7 +379,7 @@ static void render_state(ReplState *state) {
              palette_name(state->palette));
     print_fixed(line);
     print_blank_line();
-    for (int i = 0; i < BODY_ROWS; i++) printf("%s\n", have_diagram ? body[i] : "");
+    for (int i = 0; i < BODY_ROWS; i++) printf("%s\n", (have_diagram && body[i]) ? body[i] : "");
     print_blank_line();
     if (!have_diagram) status_line("ERR: rephex_print failed");
     else if (clipped) {
@@ -358,6 +389,7 @@ static void render_state(ReplState *state) {
         status_line(line);
     } else status_line(state->status);
     print_legend(state);
+    free_body(body);
     printf("$: "); fflush(stdout);
 }
 
