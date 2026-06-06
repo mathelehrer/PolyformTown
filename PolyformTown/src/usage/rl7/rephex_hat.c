@@ -25,7 +25,7 @@ typedef struct { int a, b, sa, sb; } Edge;
 typedef struct { int other, self_side, other_side; } Adj;
 typedef struct { int tile, rot, row[6], active; } Option;
 typedef struct { char key[4]; int val[3]; } Lift;
-typedef struct { int q, r, state, ori; char refined[6]; unsigned mask; int assigned[6]; Option opt[MAX_OPTS]; int nopt; } HCell;
+typedef struct { int q, r, state, ori; char leaf_tag; char refined[6]; unsigned mask; int assigned[6]; Option opt[MAX_OPTS]; int nopt; } HCell;
 typedef struct { double a,b,c,d,tx,ty; } Transform;
 typedef struct { int ix, iy, cell; } Bucket;
 
@@ -57,7 +57,7 @@ static int read_lifts(const char *path,Lift *out,int *nout,char *err,size_t errs
 static const Lift *find_lift(const Lift*l,int n,const char key[4]){for(int i=0;i<n;i++)if(!strcmp(l[i].key,key))return &l[i];return NULL;}
 static int triple_supported(const Lift*l,int n,const int v[3]){for(int i=0;i<n;i++)if(l[i].val[0]==v[0]&&l[i].val[1]==v[1]&&l[i].val[2]==v[2])return 1;return 0;}
 static int pair_supported(const Lift*l,int n,int a,int b){for(int i=0;i<n;i++)for(int k=0;k<3;k++){int x=l[i].val[k],y=l[i].val[(k+1)%3];if((x==a&&y==b)||(x==b&&y==a))return 1;}return 0;}
-static int build_cells(const MR7Cells*src,HCell**out,int*n,int*false_n){HCell*c=calloc(src->n,sizeof(*c));if(!c)return 0;*n=0;*false_n=0;for(size_t i=0;i<src->n;i++){if(src->cell[i].state=='F'){(*false_n)++;continue;}HCell*x=&c[(*n)++];x->q=src->cell[i].q;x->r=src->cell[i].r;x->state=src->cell[i].state;x->ori=src->cell[i].ori;set_refined(x);}qsort(c,*n,sizeof(*c),cmp_pos);*out=c;return 1;}
+static int build_cells(const MR7Cells*src,HCell**out,int*n,int*false_n){HCell*c=calloc(src->n,sizeof(*c));if(!c)return 0;*n=0;*false_n=0;for(size_t i=0;i<src->n;i++){if(src->cell[i].state=='F'){(*false_n)++;continue;}HCell*x=&c[(*n)++];x->q=src->cell[i].q;x->r=src->cell[i].r;x->state=src->cell[i].state;x->ori=src->cell[i].ori;x->leaf_tag=src->cell[i].leaf_tag;set_refined(x);}qsort(c,*n,sizeof(*c),cmp_pos);*out=c;return 1;}
 static int side_between(const HCell*a,const HCell*b){for(int s=0;s<6;s++){VKey v1=vertex_key(a,s),v2=vertex_key(a,(s+1)%6);for(int t=0;t<6;t++){VKey w1=vertex_key(b,t),w2=vertex_key(b,(t+1)%6);if((!vkey_cmp(v1,w1)&&!vkey_cmp(v2,w2))||(!vkey_cmp(v1,w2)&&!vkey_cmp(v2,w1)))return s;}}return -1;}
 static int build_constraints(HCell*c,int n,Constraint**out,int*nout){VHit*h=malloc((size_t)n*6*sizeof(*h));Constraint*cons=malloc((size_t)n*6*sizeof(*cons));if(!h||!cons){free(h);free(cons);return 0;}int nh=0,nc=0;for(int i=0;i<n;i++)for(int s=0;s<6;s++){h[nh].key=vertex_key(&c[i],s);h[nh].cell=i;h[nh].slot=s;nh++;}qsort(h,nh,sizeof(*h),cmp_vhit);for(int i=0;i<nh;){int j=i+1;while(j<nh&&!vkey_cmp(h[i].key,h[j].key))j++;int k=j-i;if(k==2||k==3){VHit tmp[3];for(int z=0;z<k;z++)tmp[z]=h[i+z];sort_hits_angle(tmp,k,c);cons[nc].arity=k;for(int z=0;z<k;z++){cons[nc].cell[z]=tmp[z].cell;cons[nc].slot[z]=tmp[z].slot;}nc++;}i=j;}free(h);*out=cons;*nout=nc;return 1;}
 static int build_edges(HCell*c,int n,Edge**out,int*nout,Adj(**adj)[6],int**deg){Edge*e=malloc((size_t)n*3*sizeof(*e));Adj(*a)[6]=calloc((size_t)n,sizeof(*a));int*d=calloc((size_t)n,sizeof(*d));if(!e||!a||!d){free(e);free(a);free(d);return 0;}int ne=0;for(int i=0;i<n;i++)for(int k=0;k<6;k++){int j=find_pos(c,n,c[i].q+DIRS[k][0],c[i].r+DIRS[k][1]);if(j<=i)continue;int si=side_between(&c[i],&c[j]),sj=side_between(&c[j],&c[i]);if(si<0||sj<0){free(e);free(a);free(d);return 0;}e[ne]=(Edge){i,j,si,sj};a[i][d[i]++]=(Adj){j,si,sj};a[j][d[j]++]=(Adj){i,sj,si};ne++;}*out=e;*nout=ne;*adj=a;*deg=d;return 1;}
@@ -187,7 +187,7 @@ static size_t apply_indexed_level0_fallback(const char *axiom, unsigned level,
     return 0;
 }
 
-static const char*fill(char state,int tree){if(tree)return state=='0'?"#f1d777":state=='1'?"#f5af74":state=='B'?"#b88968":state=='C'?"#d1ae8c":"#79c996";return state=='0'?"#7da9f7":state=='1'?"#ef8d8d":"#79c996";}
+static const char*fill_cell(const HCell *c,int tree){if(!tree){if(c->state=='0')return"#7da9f7";if(c->state=='1')return"#ef8d8d";if(c->state=='F')return"#161616";return"#79c996";}if(c->state=='0')return"#f1d777";if(c->state=='1')return"#f5af74";if(c->state=='F')return"#161616";if(c->state=='B')return"#b88968";if(c->state=='C')return"#d1ae8c";if(tree==2&&c->state=='G'){if(c->leaf_tag=='T')return"#5fb86f";if(c->leaf_tag=='U')return"#bce7b9";return"#79c996";}return"#79c996";}
 
 static int bridge_reflected_transform(HCell*c,int n,const Point*hat,const Transform*tr,const unsigned char*placed,Transform*out){int blue=find_state_cell(c,n,'0');if(blue<0||!placed[blue])return 0;*out=reflected_vertex_transform(hat,3,tx_point(tr[blue],hat[9]));return 1;}
 
@@ -289,7 +289,7 @@ static int write_svg(const char*path,HCell*c,int n,const Point*hat,int nh,const 
     double span=fmax(fmax(xmax-xmin,ymax-ymin),1),margin=span*.035,vx=xmin-margin,vy=-(ymax+margin),vw=xmax-xmin+2*margin,vh=ymax-ymin+2*margin,width=1400,height=fmax(260,width*vh/vw);char tmp[512];snprintf(tmp,sizeof(tmp),"%s.new",path);FILE*fp=fopen(tmp,"w");if(!fp){snprintf(err,errsz,"cannot write hat SVG");return 0;}
     fprintf(fp,"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0f\" height=\"%.0f\" viewBox=\"%.6f %.6f %.6f %.6f\">\n",width,height,vx,vy,vw,vh);
     fprintf(fp,"<rect x=\"%.6f\" y=\"%.6f\" width=\"%.6f\" height=\"%.6f\" fill=\"#ffffff\"/>\n",vx,vy,vw,vh);
-    for(int i=0;i<n;i++)if(placed[i])write_hat_polygon(fp,hat,nh,tr[i],ca,sa,fill(c[i].state,tree));
+    for(int i=0;i<n;i++)if(placed[i])write_hat_polygon(fp,hat,nh,tr[i],ca,sa,fill_cell(&c[i],tree));
     for(size_t fi=0;src&&fi<src->n;fi++)if(src->cell[fi].state=='F'){
         Point fpv[24]; int nf=0;
         if(recover_false_hex_points(fpv,&nf,c,n,hat,nh,tr,placed,src->cell[fi].q,src->cell[fi].r))

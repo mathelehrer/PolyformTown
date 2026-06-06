@@ -15,7 +15,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef enum { PALETTE_ORDINARY, PALETTE_TREE } Palette;
+typedef enum { PALETTE_ORDINARY, PALETTE_TREE, PALETTE_SPLIT } Palette;
 
 #define CURRENT_SVG_PATH       "img/rl7/rephex/current.svg"
 #define CURRENT_HAT_SVG_PATH   "img/rl7/rephex/current_hat.svg"
@@ -51,6 +51,92 @@ static const MR7Cell *find_cell(const MR7Cells *cells, int q, int r) {
     return NULL;
 }
 
+static void neighbor_delta(int dir, int *dq, int *dr) {
+    static const int d[6][2] = {
+        {1,0}, {0,1}, {-1,1}, {-1,0}, {0,-1}, {1,-1}
+    };
+    *dq = d[dir % 6][0];
+    *dr = d[dir % 6][1];
+}
+
+static void sorted_small_ints(int *a, size_t n) {
+    for (size_t i = 1; i < n; i++) {
+        int v = a[i]; size_t j = i;
+        while (j && a[j-1] > v) { a[j] = a[j-1]; j--; }
+        a[j] = v;
+    }
+}
+
+static int component_line_signature(const MR7Cells *cells, const size_t *comp,
+                                    size_t cn, int axis, int *counts,
+                                    size_t *line_n) {
+    int keys[64], line_counts[64];
+    size_t n = 0;
+    if (cn > 64) return 0;
+    for (size_t i = 0; i < cn; i++) {
+        const MR7Cell *c = &cells->cell[comp[i]];
+        int key = axis == 0 ? c->q : (axis == 1 ? c->r : c->q + c->r);
+        size_t j = 0;
+        for (; j < n; j++) if (keys[j] == key) break;
+        if (j == n) { keys[n] = key; line_counts[n] = 1; n++; }
+        else line_counts[j]++;
+    }
+    for (size_t i = 0; i < n; i++) counts[i] = line_counts[i];
+    sorted_small_ints(counts, n);
+    *line_n = n;
+    return 1;
+}
+
+static int is_six_leaf_triangle(const MR7Cells *cells, const size_t *comp, size_t cn) {
+    if (cn != 6) return 0;
+    for (int axis = 0; axis < 3; axis++) {
+        int counts[16]; size_t n = 0;
+        if (!component_line_signature(cells, comp, cn, axis, counts, &n)) continue;
+        if (n == 3 && counts[0] == 1 && counts[1] == 2 && counts[2] == 3) return 1;
+    }
+    return 0;
+}
+
+static int is_eight_leaf_two_row(const MR7Cells *cells, const size_t *comp, size_t cn) {
+    if (cn != 8) return 0;
+    for (int axis = 0; axis < 3; axis++) {
+        int counts[16]; size_t n = 0;
+        if (!component_line_signature(cells, comp, cn, axis, counts, &n)) continue;
+        if (n == 2 && counts[0] == 4 && counts[1] == 4) return 1;
+    }
+    return 0;
+}
+
+static void classify_split_leaf_components(MR7Cells *cells) {
+    if (!cells || !cells->n) return;
+    unsigned char *seen = calloc(cells->n, 1);
+    size_t *queue = malloc(cells->n * sizeof(*queue));
+    size_t *comp = malloc(cells->n * sizeof(*comp));
+    if (!seen || !queue || !comp) { free(seen); free(queue); free(comp); return; }
+    for (size_t seed = 0; seed < cells->n; seed++) {
+        if (seen[seed] || cells->cell[seed].state != 'G') continue;
+        size_t head = 0, tail = 0, cn = 0;
+        seen[seed] = 1; queue[tail++] = seed;
+        while (head < tail) {
+            size_t idx = queue[head++];
+            comp[cn++] = idx;
+            for (int dir = 0; dir < 6; dir++) {
+                int dq = 0, dr = 0;
+                neighbor_delta(dir, &dq, &dr);
+                const MR7Cell *nb = find_cell(cells, cells->cell[idx].q + dq, cells->cell[idx].r + dr);
+                if (!nb || nb->state != 'G') continue;
+                size_t nb_idx = (size_t)(nb - cells->cell);
+                if (!seen[nb_idx]) { seen[nb_idx] = 1; queue[tail++] = nb_idx; }
+            }
+        }
+        char mark = 'U';                 /* partial / boundary / unknown leaf component */
+        if (is_six_leaf_triangle(cells, comp, cn)) mark = 'T';
+        else if (is_eight_leaf_two_row(cells, comp, cn)) mark = 'P';
+        for (size_t i = 0; i < cn; i++) cells->cell[comp[i]].leaf_tag = mark;
+    }
+    free(seen); free(queue); free(comp);
+}
+
 static Counts count_kinds(const MR7Patch *patch) {
     Counts n = {0, 0, 0, 0};
     for (size_t i = 0; i < patch->n; i++) {
@@ -63,7 +149,9 @@ static Counts count_kinds(const MR7Patch *patch) {
 }
 
 static const char *palette_name(Palette p) {
-    return p == PALETTE_TREE ? "tree" : "ordinary";
+    if (p == PALETTE_TREE) return "tree";
+    if (p == PALETTE_SPLIT) return "split";
+    return "ordinary";
 }
 
 static const char *fill_for(char state, Palette p) {
@@ -73,10 +161,17 @@ static const char *fill_for(char state, Palette p) {
         if (state == '1') return "#ef8d8d";
         return "#79c996"; /* all H cells */
     }
+    if (p == PALETTE_SPLIT) {
+        if (state == '0') return "#f1d777";
+        if (state == '1') return "#f5af74";
+        if (state == 'B') return "#b88968"; /* pass / branch H */
+        if (state == 'C') return "#d1ae8c"; /* capped H */
+        return "#79c996"; /* H leaf default; split shade handled by leaf_tag */
+    }
     if (state == '0') return "#f1d777";
     if (state == '1') return "#f5af74";
-    if (state == 'B') return "#b88968"; /* pass / branch H: dark brown */
-    if (state == 'C') return "#d1ae8c"; /* capped H: light brown */
+    if (state == 'B') return "#b88968"; /* pass / branch H */
+    if (state == 'C') return "#d1ae8c"; /* capped H */
     return "#79c996"; /* green terminal H */
 }
 
@@ -84,21 +179,42 @@ static const char *fill_for_cell(const MR7Cell *cell, Palette p,
                                  MR7Init init, unsigned level) {
     (void)init;
     (void)level;
+    if (p == PALETTE_SPLIT && cell->state == 'G') {
+        if (cell->leaf_tag == 'T') return "#5fb86f"; /* complete 6-H triangle */
+        if (cell->leaf_tag == 'U') return "#bce7b9"; /* partial/boundary/unknown */
+        return "#79c996";                            /* P/par8 or unclassified */
+    }
     return fill_for(cell->state, p);
 }
 
 static const char *ansi_for(char state, Palette p) {
-    if (state == 'F') return "\033[38;5;240m";
+    if (state == 'F') return "[38;5;240m";
     if (p == PALETTE_ORDINARY) {
-        if (state == '0') return "\033[38;5;27m";
-        if (state == '1') return "\033[38;5;160m";
+        if (state == '0') return "[38;5;27m";
+        if (state == '1') return "[38;5;160m";
+        return "[38;5;35m";
+    }
+    if (p == PALETTE_SPLIT) {
+        if (state == '0') return "[38;5;178m";
+        if (state == '1') return "[38;5;166m";
+        if (state == 'B') return "[38;5;173m";
+        if (state == 'C') return "[38;5;180m";
+        return "[38;5;35m";
+    }
+    if (state == '0') return "[38;5;178m";
+    if (state == '1') return "[38;5;166m";
+    if (state == 'B') return "[38;5;173m"; /* dark brown pass / branch */
+    if (state == 'C') return "[38;5;180m"; /* light brown cap */
+    return "[38;5;35m";
+}
+
+static const char *ansi_for_cell(const MR7Cell *cell, Palette p) {
+    if (p == PALETTE_SPLIT && cell->state == 'G') {
+        if (cell->leaf_tag == 'T') return "\033[38;5;34m";
+        if (cell->leaf_tag == 'U') return "\033[38;5;120m";
         return "\033[38;5;35m";
     }
-    if (state == '0') return "\033[38;5;178m";
-    if (state == '1') return "\033[38;5;166m";
-    if (state == 'B') return "\033[38;5;173m"; /* dark brown pass / branch */
-    if (state == 'C') return "\033[38;5;180m"; /* light brown cap */
-    return "\033[38;5;35m";
+    return ansi_for(cell->state, p);
 }
 
 static void bounds(const MR7Cells *cells, int *q0, int *q1, int *r0, int *r1) {
@@ -114,7 +230,7 @@ static void bounds(const MR7Cells *cells, int *q0, int *q1, int *r0, int *r1) {
 
 static void print_cell_glyph(const MR7Cell *cell, int color, Palette palette, int last) {
     const char *sep = last ? "" : " ";
-    if (color) printf("%s⬢\033[0m%s", ansi_for(cell->state, palette), sep);
+    if (color) printf("%s⬢\033[0m%s", ansi_for_cell(cell, palette), sep);
     else printf("⬢%s", sep);
 }
 
@@ -181,9 +297,15 @@ static void text_diagram(const MR7Cells *cells, int color, Palette palette,
     if (!diagram_only && color && palette == PALETTE_ORDINARY) {
         printf("\nordinary: %s⬢\033[0m = H  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
                ansi_for('G', palette), ansi_for('0', palette), ansi_for('1', palette), ansi_for('F', palette));
+    } else if (!diagram_only && color && palette == PALETTE_SPLIT) {
+        printf("\nsplit: %s⬢\033[0m = pass  %s⬢\033[0m = cap  %s⬢\033[0m = tri-leaf  %s⬢\033[0m = two-row-leaf  %s⬢\033[0m = unknown-leaf  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
+               ansi_for('B', palette), ansi_for('C', palette), ansi_for('T', palette),
+               ansi_for('G', palette), ansi_for('t', palette), ansi_for('0', palette),
+               ansi_for('1', palette), ansi_for('F', palette));
     } else if (!diagram_only && color) {
-        printf("\ntree: %s⬢\033[0m = branch  %s⬢\033[0m = leaf  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
-               ansi_for('B', palette), ansi_for('G', palette), ansi_for('0', palette), ansi_for('1', palette), ansi_for('F', palette));
+        printf("\ntree: %s⬢\033[0m = pass  %s⬢\033[0m = cap  %s⬢\033[0m = leaf  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
+               ansi_for('B', palette), ansi_for('C', palette), ansi_for('G', palette),
+               ansi_for('0', palette), ansi_for('1', palette), ansi_for('F', palette));
     }
 }
 
@@ -217,11 +339,12 @@ static int write_current_data(const char *path, MR7Init init, unsigned level,
     fprintf(fp, "# REPHEX current computed pattern\n");
     fprintf(fp, "# axiom=%s level=%u cells=%zu\n", mr7_init_name(init), level, cells->n);
     fprintf(fp, "# source=%s\n", record ? record : "");
-    fprintf(fp, "# q r state orientation colour_index dark_cap\n");
+    fprintf(fp, "# q r state orientation colour_index dark_cap leaf_tag\n");
     for (size_t i = 0; i < cells->n; i++)
-        fprintf(fp, "%d %d %c %u %u %u\n", cells->cell[i].q, cells->cell[i].r,
+        fprintf(fp, "%d %d %c %u %u %u %c\n", cells->cell[i].q, cells->cell[i].r,
                 cells->cell[i].state, (unsigned)cells->cell[i].ori,
-                (unsigned)cells->cell[i].color_index, (unsigned)cells->cell[i].dark_cap);
+                (unsigned)cells->cell[i].color_index, (unsigned)cells->cell[i].dark_cap,
+                cells->cell[i].leaf_tag ? cells->cell[i].leaf_tag : 'N');
     if (fclose(fp) != 0 || rename(tmp, path) != 0) {
         remove(tmp); snprintf(err, errsz, "cannot install current runtime data"); return 0;
     }
@@ -236,10 +359,11 @@ static int read_current_data(const char *path, MR7Cells *cells, char *err, size_
     char line[512];
     while (fgets(line, sizeof(line), fp)) {
         if (line[0] == '#') continue;
-        MR7Cell c; unsigned ori = 0, colour = 0, dark_cap = 0;
-        int fields = sscanf(line, "%d %d %c %u %u %u", &c.q, &c.r, &c.state, &ori, &colour, &dark_cap);
+        MR7Cell c; unsigned ori = 0, colour = 0, dark_cap = 0; char leaf_tag = 'N';
+        int fields = sscanf(line, "%d %d %c %u %u %u %c", &c.q, &c.r, &c.state, &ori, &colour, &dark_cap, &leaf_tag);
         if (fields < 5) continue;
         c.ori = (uint8_t)ori; c.color_index = (uint8_t)colour; c.dark_cap = (uint8_t)dark_cap;
+        c.leaf_tag = fields >= 7 ? leaf_tag : 'N';
         if (n == cap) {
             size_t next = cap ? cap * 2 : 64;
             MR7Cell *grown = realloc(items, next * sizeof(*items));
@@ -445,7 +569,7 @@ static int run_low_axiom_hat_helper(MR7Init init, unsigned level, Palette palett
              "REPHEX_NO_OPEN=1 ./bin/rephex_hacked %s %u%s --from-current --hat-svg "
              "--rotation-step %u --no-color",
              mr7_init_name(init), level,
-             palette == PALETTE_TREE ? " --palette tree" : "",
+             (palette == PALETTE_TREE || palette == PALETTE_SPLIT) ? " --palette tree" : "",
              rotation_step);
     int rc = system(command);
     return rc != -1 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0;
@@ -470,7 +594,7 @@ static int run_hat_renderer(const MR7Cells *cells, MR7Init init, unsigned level,
     }
 
     if (!rephex_hat_render(cells, CURRENT_HAT_SVG_PATH, CURRENT_HAT_DATA_PATH,
-                           mr7_init_name(init), level, palette == PALETTE_TREE,
+                           mr7_init_name(init), level, (palette == PALETTE_SPLIT ? 2 : (palette == PALETTE_TREE ? 1 : 0)),
                            rotation_step, &stats, err, errsz)) return 0;
     printf("hat-status: %s placed=%zu/%zu unresolved_figures=%zu conflicts=%zu overlaps=%zu\n",
            stats.placed_hats == stats.total_cells ? "complete" : "partial",
@@ -533,7 +657,7 @@ static const char *init_description(MR7Init init) {
 
 static void usage(FILE *fp, const char *argv0) {
     fprintf(fp,
-        "usage: %s AXIOM [LEVEL] [--palette tree] [--svg] [--hat-svg] [--rotation-step N]\n"
+        "usage: %s AXIOM [LEVEL] [--palette ordinary|tree|split|O|T|S] [--svg] [--hat-svg] [--rotation-step N]\n"
         "       %s AXIOM LEVEL --write-current-only\n"
         "       %s AXIOM LEVEL --from-current [--svg|--hat-svg|--repl-window]\n"
         "       %s --list-inits\n"
@@ -564,7 +688,13 @@ int main(int argc, char **argv) {
             usage(stdout, argv[0]); return 0;
         } else if (!strcmp(argv[i], "--check")) check = 1;
         else if (!strcmp(argv[i], "--list-inits")) list = 1;
-        else if (!strcmp(argv[i], "--palette") && i + 1 < argc && !strcmp(argv[i+1], "tree")) { palette = PALETTE_TREE; i++; }
+        else if (!strcmp(argv[i], "--palette") && i + 1 < argc) {
+            if (!strcmp(argv[i+1], "ordinary") || !strcmp(argv[i+1], "O") || !strcmp(argv[i+1], "o")) palette = PALETTE_ORDINARY;
+            else if (!strcmp(argv[i+1], "tree") || !strcmp(argv[i+1], "T") || !strcmp(argv[i+1], "t")) palette = PALETTE_TREE;
+            else if (!strcmp(argv[i+1], "split") || !strcmp(argv[i+1], "S") || !strcmp(argv[i+1], "s") || !strcmp(argv[i+1], "split-leaf") || !strcmp(argv[i+1], "leaf-split")) palette = PALETTE_SPLIT;
+            else { usage(stderr, argv[0]); return 2; }
+            i++;
+        }
         else if (!strcmp(argv[i], "--svg")) svg_requested = 1;
         else if (!strcmp(argv[i], "--hat-svg")) hat_svg_requested = 1;
         else if (!strcmp(argv[i], "--rotation-step") && i + 1 < argc && parse_rotation_step(argv[i+1], &rotation_step)) { i++; }
@@ -623,6 +753,13 @@ int main(int argc, char **argv) {
         if (!ensure_runtime_dir(err, sizeof(err)) ||
             !write_current_data(CURRENT_DATA_PATH, init, level, &cells, record, err, sizeof(err))) {
             fprintf(stderr, "runtime-data failure: %s\n", err); mr7_cells_free(&cells); mr7_patch_free(&patch); return 1;
+        }
+    }
+    if (palette == PALETTE_SPLIT) {
+        classify_split_leaf_components(&cells);
+        if (!ensure_runtime_dir(err, sizeof(err)) ||
+            !write_current_data(CURRENT_DATA_PATH, init, level, &cells, record, err, sizeof(err))) {
+            fprintf(stderr, "runtime-data failure: %s\n", err); mr7_cells_free(&cells); if (!from_current) mr7_patch_free(&patch); return 1;
         }
     }
     if (write_current_only) {

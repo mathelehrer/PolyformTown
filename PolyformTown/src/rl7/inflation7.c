@@ -241,12 +241,12 @@ int mr7_seed_single_h(MR7Patch *out, char *err, size_t errsz) {
 
 int mr7_seed_dh(MR7Patch *out, char *err, size_t errsz) {
     /* Fixed-point seed D|H: one dimer followed by one H in a straight
-     * three-cell row.  D0 occupies (-1,0),(0,0); H0@H3 occupies (1,0).
+     * three-cell row.  D0 occupies (-1,0),(0,0); B0@H3 occupies (1,0).
      * The bar denotes the H-step relation, not an intervening second dimer. */
     MR7Token hword = T('H', 3);
     mr7_patch_init(out);
     if (!append_tile(out, MR7_D, 0, 0, NULL, 0, err, errsz) ||
-        !append_tile(out, MR7_G, 0, 0, &hword, 1, err, errsz)) {
+        !append_tile(out, MR7_B, 0, 0, &hword, 1, err, errsz)) {
         mr7_patch_free(out);
         return 0;
     }
@@ -587,7 +587,7 @@ int mr7_make_init(MR7Init init, MR7Patch *out, const MR7ColorMap *map,
             if (record && recordsz) snprintf(record, recordsz, "H@e (unclassified H stored as G for display)");
             return mr7_seed_single_h(out, err, errsz);
         case MR7_INIT_DH:
-            if (record && recordsz) snprintf(record, recordsz, "DH: D0@e | H0@H3; straight cells (-1,0),(0,0),(1,0)");
+            if (record && recordsz) snprintf(record, recordsz, "DH: D0@e | B0@H3; straight cells (-1,0),(0,0),(1,0)");
             return mr7_seed_dh(out, err, errsz);
         case MR7_INIT_B3:
             return mr7_extract_c3_seed("BBB", out, record, recordsz, err, errsz);
@@ -670,8 +670,8 @@ int mr7_tiles_to_cells(const MR7Patch *patch, MR7Cells *out,
         int q, r;
         eval_word(t->word, t->word_len, &q, &r);
         char state = t->kind == MR7_D ? '0' : (t->kind == MR7_B && t->dark_cap ? 'C' : mr7_kind_name(t->kind)[0]);
-        a[n++] = (MR7Cell){q, r, state, t->ori, t->color_index, t->dark_cap};
-        if (t->kind == MR7_D) a[n++] = (MR7Cell){q + dirs[t->ori][0], r + dirs[t->ori][1], '1', t->ori, t->color_index, 0};
+        a[n++] = (MR7Cell){q, r, state, t->ori, t->color_index, t->dark_cap, 'N'};
+        if (t->kind == MR7_D) a[n++] = (MR7Cell){q + dirs[t->ori][0], r + dirs[t->ori][1], '1', t->ori, t->color_index, 0, 'N'};
     }
     qsort(a, n, sizeof(*a), cell_cmp);
     for (size_t i = 1; i < n; i++) {

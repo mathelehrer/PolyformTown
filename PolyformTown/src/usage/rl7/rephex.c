@@ -38,7 +38,7 @@ static const Axiom axioms[] = {
 typedef struct {
     int axiom;
     unsigned depth;
-    int tree_palette;
+    int palette;
     int choosing_axiom;
     int needs_update;
     char status[STATUS_MAX];
@@ -102,6 +102,23 @@ static int parse_axiom(const char *input) {
     if (strlen(lower) == 1 && lower[0] >= '1' && lower[0] <= '6')
         return lower[0] - '1';
     return -1;
+}
+
+static const char *palette_name(int palette) {
+    return palette == 1 ? "tree" : (palette == 2 ? "split" : "ordinary");
+}
+
+static const char *palette_arg(int palette) {
+    return palette == 1 ? " --palette tree" : (palette == 2 ? " --palette split" : "");
+}
+
+static int parse_palette_name(const char *input, int *palette) {
+    char lower[32];
+    lower_copy(lower, sizeof(lower), input);
+    if (!strcmp(lower, "o") || !strcmp(lower, "ordinary")) { *palette = 0; return 1; }
+    if (!strcmp(lower, "t") || !strcmp(lower, "tree")) { *palette = 1; return 1; }
+    if (!strcmp(lower, "s") || !strcmp(lower, "split") || !strcmp(lower, "split-leaf") || !strcmp(lower, "leaf-split")) { *palette = 2; return 1; }
+    return 0;
 }
 
 /* HCE-compatible raw terminal input and fixed-frame redraw. */
@@ -199,9 +216,9 @@ static int refresh_current(ReplState *state) {
              ">> data/run/rl7/rephex/current_print.dat 2>&1",
              axioms[state->axiom].code, state->depth,
              axioms[state->axiom].code, state->depth,
-             state->tree_palette ? " --palette tree" : "",
+             palette_arg(state->palette),
              axioms[state->axiom].code, state->depth,
-             state->tree_palette ? " --palette tree" : "");
+             palette_arg(state->palette));
     int rc = system(command);
     if (rc == -1 || !WIFEXITED(rc) || WEXITSTATUS(rc) != 0) return 0;
     state->needs_update = 0;
@@ -213,7 +230,7 @@ static int capture_diagram(const ReplState *state, char body[BODY_ROWS][LINE_MAX
     snprintf(command, sizeof(command),
              "./bin/rephex_print %s %u --from-current%s --repl-window --preview-rows %d --preview-cols %d --color 2>/dev/null",
              axioms[state->axiom].code, state->depth,
-             state->tree_palette ? " --palette tree" : "", BODY_ROWS, FRAME_COLS);
+             palette_arg(state->palette), BODY_ROWS, FRAME_COLS);
     FILE *pipe = popen(command, "r");
     if (!pipe) return 0;
     *clipped = 0;
@@ -252,7 +269,7 @@ static int export_current(ReplState *state, int hats, unsigned rotation_step,
              "./bin/rephex_print %s %u --from-current%s %s --rotation-step %u --no-color "
              "> data/run/rl7/rephex/current_print.dat 2>&1",
              axioms[state->axiom].code, state->depth,
-             state->tree_palette ? " --palette tree" : "",
+             palette_arg(state->palette),
              hats ? "--hat-svg" : "--svg", rotation_step);
     int rc = system(command);
     if (rc == -1 || !WIFEXITED(rc) || WEXITSTATUS(rc) != 0) {
@@ -280,11 +297,20 @@ static void render_axiom_chooser(const ReplState *state) {
     printf("$: "); fflush(stdout);
 }
 
-static const char *legend_ansi(char state, int tree_palette) {
+static const char *legend_ansi(char state, int palette) {
     if (state == 'F') return "\033[38;5;240m";
-    if (!tree_palette) {
+    if (!palette) {
         if (state == '0') return "\033[38;5;27m";
         if (state == '1') return "\033[38;5;160m";
+        return "\033[38;5;35m";
+    }
+    if (palette == 2) {
+        if (state == '0') return "\033[38;5;178m";
+        if (state == '1') return "\033[38;5;166m";
+        if (state == 'B') return "\033[38;5;173m";
+        if (state == 'C') return "\033[38;5;180m";
+        if (state == 'T') return "\033[38;5;34m";
+        if (state == 't') return "\033[38;5;120m";
         return "\033[38;5;35m";
     }
     if (state == '0') return "\033[38;5;178m";
@@ -295,10 +321,15 @@ static const char *legend_ansi(char state, int tree_palette) {
 }
 
 static void print_legend(const ReplState *state) {
-    if (state->tree_palette) {
+    if (state->palette == 1) {
         printf("tree: %s⬢\033[0m pass  %s⬢\033[0m cap  %s⬢\033[0m leaf  %s⬢\033[0m D0  %s⬢\033[0m D1  %s⬢\033[0m F\n",
                legend_ansi('B', 1), legend_ansi('C', 1), legend_ansi('G', 1),
                legend_ansi('0', 1), legend_ansi('1', 1), legend_ansi('F', 1));
+    } else if (state->palette == 2) {
+        printf("split: %s⬢\033[0m pass  %s⬢\033[0m cap  %s⬢\033[0m tri-leaf  %s⬢\033[0m two-row-leaf  %s⬢\033[0m unknown-leaf  %s⬢\033[0m D0  %s⬢\033[0m D1  %s⬢\033[0m F\n",
+               legend_ansi('B', 2), legend_ansi('C', 2), legend_ansi('T', 2),
+               legend_ansi('G', 2), legend_ansi('t', 2), legend_ansi('0', 2),
+               legend_ansi('1', 2), legend_ansi('F', 2));
     } else {
         printf("ordinary: %s⬢\033[0m = H  %s⬢\033[0m = D0  %s⬢\033[0m = D1  %s⬢\033[0m = F\n",
                legend_ansi('G', 0), legend_ansi('0', 0), legend_ansi('1', 0),
@@ -314,7 +345,7 @@ static void render_state(ReplState *state) {
     print_fixed("REPHEX | A axiom | +/- depth | P print | PH hex | T color | ? help | Q quit");
     snprintf(line, sizeof(line), "axiom: %-2s %-25s  depth: %-2u  palette: %s",
              axioms[state->axiom].code, axioms[state->axiom].description, state->depth,
-             state->tree_palette ? "tree" : "ordinary");
+             palette_name(state->palette));
     print_fixed(line);
     print_blank_line();
     for (int i = 0; i < BODY_ROWS; i++) printf("%s\n", have_diagram ? body[i] : "");
@@ -341,9 +372,10 @@ static void render_help(void) {
     print_fixed("  + / -       increase or decrease inflation depth");
     print_fixed("  P [n]       print hats; DH phase + n x 30 degrees (default 0)");
     print_fixed("  PH [n]      print/open hexes; rotate n x 30 degrees (default 0)");
-    print_fixed("  T           toggle ordinary/tree palette");
+    print_fixed("  T           toggle palette O -> T/tree -> S/split");
+    print_fixed("  T O|T|S     direct palette: ordinary, tree, split");
     print_fixed("  Q           quit");
-    for (int i = 0; i < 9; i++) print_blank_line();
+    for (int i = 0; i < 8; i++) print_blank_line();
     print_fixed("Press return to return.");
     printf("$: "); fflush(stdout);
 }
@@ -425,9 +457,22 @@ int main(int argc, char **argv) {
             continue;
         }
         if (!strcmp(command, "t")) {
-            state.tree_palette = !state.tree_palette;
+            state.palette = (state.palette + 1) % 3;
             state.needs_update = 1;
-            snprintf(state.status, sizeof(state.status), "palette: %s", state.tree_palette ? "tree" : "ordinary");
+            snprintf(state.status, sizeof(state.status), "palette: %s", palette_name(state.palette));
+            continue;
+        }
+        if (command[0] == 't' && isspace((unsigned char)command[1])) {
+            char pal[32] = {0}, extra[32] = {0};
+            int fields = sscanf(command + 1, " %31s %31s", pal, extra);
+            int parsed = 0;
+            if (fields == 1 && parse_palette_name(pal, &parsed)) {
+                state.palette = parsed;
+                state.needs_update = 1;
+                snprintf(state.status, sizeof(state.status), "palette: %s", palette_name(state.palette));
+            } else {
+                snprintf(state.status, sizeof(state.status), "ERR: use T or T O|T|S");
+            }
             continue;
         }
         if (!strncmp(command, "ph", 2) && (command[2] == '\0' || isspace((unsigned char)command[2]))) {
@@ -446,7 +491,7 @@ int main(int argc, char **argv) {
             }
             export_current(&state, 1, step, state.status, sizeof(state.status)); continue;
         }
-        snprintf(state.status, sizeof(state.status), "ERR: use A, A H 2, 0..6, +, -, P, PH, T, ?, or Q");
+        snprintf(state.status, sizeof(state.status), "ERR: use A, A H 2, 0..6, +, -, P, PH, T, T O|T|S, ?, or Q");
     }
     term_restore(&term);
     printf("\nbye\n");

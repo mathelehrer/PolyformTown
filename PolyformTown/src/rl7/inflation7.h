@@ -53,6 +53,7 @@ typedef struct {
     uint8_t ori;
     uint8_t color_index;
     uint8_t dark_cap;        /* persisted tree-skin cap bit */
+    char leaf_tag;           /* split palette: N none, T tri6, P par8, U unknown */
 } MR7Cell;
 
 typedef struct {

@@ -218,7 +218,7 @@ static int audit_f_ring(Pt polys[][MAX_HAT], int np) {
 
    DH0:
      Start with the same D arrangement.
-     Attach green H to an unoccupied blue/yellow edge:
+     Attach pass H to an unoccupied blue/yellow edge:
        existing edge(0,1,2) = H edge(10,9,8)
 
    F1:
@@ -262,7 +262,7 @@ static int hacked_render(const char *axiom, unsigned level, int tree, unsigned r
             int host_e012[3]={0,1,2};
             int green_e1098[3]={10,9,8};
             if(!place_by_path(hat, green_e1098, polys[0], host_e012, 3, polys[np], &err)) return 0;
-            fills[np++]=fill_for("H",tree);
+            fills[np++]=fill_for("B",tree);
             if(!audit_path(polys[0], host_e012, polys[3], green_e1098, 3)) return 0;
         }
 
