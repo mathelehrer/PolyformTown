@@ -9,7 +9,9 @@ mono_dump
 
 PolyformTown/references
 PolyformTown/img/gpt-debug
+PolyformTown/img/rl7
 PolyformTown/*.dat
 PolyformTown/*.svg
 PolyformTown/src/rl1/debug
 PolyformTown/data/rl5/sat/
+PolyformTown/data/run
