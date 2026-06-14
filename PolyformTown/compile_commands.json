@@ -1,0 +1,19 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-O3",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-Isrc",
+      "-c",
+      "-o",
+      "MyHatTileStuff/centers.o",
+      "MyHatTileStuff/centers.c"
+    ],
+    "directory": "/home/jmartin/CLionProjects/PolyformTown/PolyformTown",
+    "file": "/home/jmartin/CLionProjects/PolyformTown/PolyformTown/MyHatTileStuff/centers.c",
+    "output": "/home/jmartin/CLionProjects/PolyformTown/PolyformTown/MyHatTileStuff/centers.o"
+  }
+]

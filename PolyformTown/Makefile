@@ -460,6 +460,35 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 	$(CC) $(CFLAGS) -o $@ $(SRC)/usage/hat_boundary_dfs_check.o \
 		$(CORE) $(SRC)/core/dfs.o
 
+# -----------------------------------------------------------------------------
+# MyHatTileStuff - personal experiments
+# -----------------------------------------------------------------------------
+
+MY_HAT = MyHatTileStuff
+
+$(MY_HAT)/%.o: $(MY_HAT)/%.c
+	$(CC) $(CFLAGS) -I$(SRC) -c $< -o $@
+
+hat_three_no_rotation: $(BIN)/hat_three_no_rotation
+$(BIN)/hat_three_no_rotation: $(MY_HAT)/hat_three_no_rotation.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/hat_three_no_rotation.o $(CORE)
+
+hat_four_no_rotation: $(BIN)/hat_four_no_rotation
+$(BIN)/hat_four_no_rotation: $(MY_HAT)/hat_four_no_rotation.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/hat_four_no_rotation.o $(CORE)
+
+surrounding: $(BIN)/surrounding
+$(BIN)/surrounding: $(MY_HAT)/surrounding.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/surrounding.o $(CORE)
+
+surrounding2: $(BIN)/surrounding2
+$(BIN)/surrounding2: $(MY_HAT)/surrounding2.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/surrounding2.o $(CORE)
+
+centers: $(BIN)/centers
+$(BIN)/centers: $(MY_HAT)/centers.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/centers.o $(CORE)
+
 
 figures:
 	$(call announce,generate figures)

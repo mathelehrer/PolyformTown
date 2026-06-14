@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="109" height="170">
+<rect width="100%" height="100%" fill="white"/>
+<path d="M71.96,30.00L54.64,20.00L48.87,30.00L37.32,30.00L37.32,50.00L20.00,60.00L25.77,70.00L37.32,70.00L48.87,70.00L54.64,60.00L71.96,70.00L89.28,60.00L83.51,50.00L71.96,50.00 Z" fill="#f39c12" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="71.96" y="27.00" font-size="7" text-anchor="middle" fill="#111">0</text>
+<text x="54.64" y="17.00" font-size="7" text-anchor="middle" fill="#111">1</text>
+<text x="48.87" y="27.00" font-size="7" text-anchor="middle" fill="#111">2</text>
+<text x="37.32" y="27.00" font-size="7" text-anchor="middle" fill="#111">3</text>
+<text x="37.32" y="47.00" font-size="7" text-anchor="middle" fill="#111">4</text>
+<text x="20.00" y="57.00" font-size="7" text-anchor="middle" fill="#111">5</text>
+<text x="25.77" y="67.00" font-size="7" text-anchor="middle" fill="#111">6</text>
+<text x="37.32" y="67.00" font-size="7" text-anchor="middle" fill="#111">7</text>
+<text x="48.87" y="67.00" font-size="7" text-anchor="middle" fill="#111">8</text>
+<text x="54.64" y="57.00" font-size="7" text-anchor="middle" fill="#111">9</text>
+<text x="71.96" y="67.00" font-size="7" text-anchor="middle" fill="#111">10</text>
+<text x="89.28" y="57.00" font-size="7" text-anchor="middle" fill="#111">11</text>
+<text x="83.51" y="47.00" font-size="7" text-anchor="middle" fill="#111">12</text>
+<text x="71.96" y="47.00" font-size="7" text-anchor="middle" fill="#111">13</text>
+<path d="M71.96,70.00L54.64,60.00L48.87,70.00L37.32,70.00L37.32,90.00L20.00,100.00L25.77,110.00L37.32,110.00L48.87,110.00L54.64,100.00L71.96,110.00L89.28,100.00L83.51,90.00L71.96,90.00 Z" fill="#e67e22" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="71.96" y="78.00" font-size="7" text-anchor="middle" fill="#111">0</text>
+<text x="54.64" y="68.00" font-size="7" text-anchor="middle" fill="#111">1</text>
+<text x="48.87" y="78.00" font-size="7" text-anchor="middle" fill="#111">2</text>
+<text x="37.32" y="78.00" font-size="7" text-anchor="middle" fill="#111">3</text>
+<text x="37.32" y="98.00" font-size="7" text-anchor="middle" fill="#111">4</text>
+<text x="20.00" y="108.00" font-size="7" text-anchor="middle" fill="#111">5</text>
+<text x="25.77" y="118.00" font-size="7" text-anchor="middle" fill="#111">6</text>
+<text x="37.32" y="118.00" font-size="7" text-anchor="middle" fill="#111">7</text>
+<text x="48.87" y="118.00" font-size="7" text-anchor="middle" fill="#111">8</text>
+<text x="54.64" y="108.00" font-size="7" text-anchor="middle" fill="#111">9</text>
+<text x="71.96" y="118.00" font-size="7" text-anchor="middle" fill="#111">10</text>
+<text x="89.28" y="108.00" font-size="7" text-anchor="middle" fill="#111">11</text>
+<text x="83.51" y="98.00" font-size="7" text-anchor="middle" fill="#111">12</text>
+<text x="71.96" y="98.00" font-size="7" text-anchor="middle" fill="#111">13</text>
+<path d="M71.96,110.00L54.64,100.00L48.87,110.00L37.32,110.00L37.32,130.00L20.00,140.00L25.77,150.00L37.32,150.00L48.87,150.00L54.64,140.00L71.96,150.00L89.28,140.00L83.51,130.00L71.96,130.00 Z" fill="#e67442" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="71.96" y="118.00" font-size="7" text-anchor="middle" fill="#111">0</text>
+<text x="54.64" y="108.00" font-size="7" text-anchor="middle" fill="#111">1</text>
+<text x="48.87" y="118.00" font-size="7" text-anchor="middle" fill="#111">2</text>
+<text x="37.32" y="118.00" font-size="7" text-anchor="middle" fill="#111">3</text>
+<text x="37.32" y="138.00" font-size="7" text-anchor="middle" fill="#111">4</text>
+<text x="20.00" y="148.00" font-size="7" text-anchor="middle" fill="#111">5</text>
+<text x="25.77" y="158.00" font-size="7" text-anchor="middle" fill="#111">6</text>
+<text x="37.32" y="158.00" font-size="7" text-anchor="middle" fill="#111">7</text>
+<text x="48.87" y="158.00" font-size="7" text-anchor="middle" fill="#111">8</text>
+<text x="54.64" y="148.00" font-size="7" text-anchor="middle" fill="#111">9</text>
+<text x="71.96" y="158.00" font-size="7" text-anchor="middle" fill="#111">10</text>
+<text x="89.28" y="148.00" font-size="7" text-anchor="middle" fill="#111">11</text>
+<text x="83.51" y="138.00" font-size="7" text-anchor="middle" fill="#111">12</text>
+<text x="71.96" y="138.00" font-size="7" text-anchor="middle" fill="#111">13</text>
+<circle cx="54.64" cy="60.00" r="5" fill="red"/>
+</svg>
