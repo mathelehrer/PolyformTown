@@ -521,6 +521,43 @@ centers: $(BIN)/centers
 $(BIN)/centers: $(MY_HAT)/centers.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/centers.o $(CORE)
 
+h3_cluster: $(BIN)/h3_cluster
+$(BIN)/h3_cluster: $(MY_HAT)/h3_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/h3_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+# Generate h3-center cluster records, then render to an SVG grid using the same
+# pipeline as the rlN survivors figures (rl1_depict | imgtable).
+h3_cluster_svg: h3_cluster rl1_depict imgtable
+	@$(BIN)/h3_cluster
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/h3/completions.dat --grouped | \
+		$(BIN)/imgtable > img/h3_survivors.svg
+	@echo img/h3_survivors.svg
+
+h2_cluster: $(BIN)/h2_cluster
+$(BIN)/h2_cluster: $(MY_HAT)/h2_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/h2_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+h2_cluster_svg: h2_cluster rl1_depict imgtable
+	@$(BIN)/h2_cluster
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/h2/completions.dat --grouped | \
+		$(BIN)/imgtable > img/h2_survivors.svg
+	@echo img/h2_survivors.svg
+
+h4_cluster: $(BIN)/h4_cluster
+$(BIN)/h4_cluster: $(MY_HAT)/h4_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/h4_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+# h4 has no survivors, so the completions file is empty; render the four-hat
+# center itself (the dead-end cluster) instead.
+h4_cluster_svg: h4_cluster rl1_depict imgtable
+	@$(BIN)/h4_cluster
+	@mkdir -p img/
+	@$(BIN)/rl1_depict preferences/focus.tile data/h4/supertile.dat --grouped | \
+		$(BIN)/imgtable > img/h4_center.svg
+	@echo img/h4_center.svg
+
 
 figures:
 	$(call announce,generate figures)
