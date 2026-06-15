@@ -501,6 +501,10 @@ MY_HAT = MyHatTileStuff
 $(MY_HAT)/%.o: $(MY_HAT)/%.c
 	$(CC) $(CFLAGS) -I$(SRC) -c $< -o $@
 
+converter: $(BIN)/converter
+$(BIN)/converter: $(MY_HAT)/converter.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/converter.o $(CORE) -lm
+
 hat_three_no_rotation: $(BIN)/hat_three_no_rotation
 $(BIN)/hat_three_no_rotation: $(MY_HAT)/hat_three_no_rotation.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/hat_three_no_rotation.o $(CORE)
