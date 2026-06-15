@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="185" height="186">
+<rect width="100%" height="100%" fill="white"/>
+<path d="M88.95,74.00L67.30,61.50L60.08,74.00L45.65,74.00L45.65,99.00L24.00,111.50L31.22,124.00L45.65,124.00L60.08,124.00L67.30,111.50L88.95,124.00L110.60,111.50L103.39,99.00L88.95,99.00 Z" fill="#f39c12" stroke="#b7770d" stroke-width="1.50" stroke-linejoin="round" fill-opacity="0.75"/>
+<path d="M88.95,124.00L88.95,149.00L103.39,149.00L110.60,161.50L132.25,149.00L153.90,161.50L161.12,149.00L153.90,136.50L146.69,124.00L132.25,124.00L132.25,99.00L110.60,86.50L103.39,99.00L110.60,111.50 Z" fill="#e74c3c" stroke="#a93226" stroke-width="1.50" stroke-linejoin="round" fill-opacity="0.75"/>
+<path d="M132.25,99.00L153.90,86.50L146.69,74.00L153.90,61.50L132.25,49.00L132.25,24.00L117.82,24.00L110.60,36.50L103.39,49.00L110.60,61.50L88.95,74.00L88.95,99.00L103.39,99.00L110.60,86.50 Z" fill="#8e44ad" stroke="#6c3483" stroke-width="1.50" stroke-linejoin="round" fill-opacity="0.75"/>
+<circle cx="103.39" cy="99.00" r="5" fill="#c0392b" stroke="white" stroke-width="1.5"/>
+<text x="103.39" y="99.00" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#222" dy="-8">v[12]</text>
+</svg>

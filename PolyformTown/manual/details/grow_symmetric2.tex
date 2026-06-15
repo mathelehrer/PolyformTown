@@ -1,0 +1,837 @@
+% MyHatTileStuff/grow_symmetric2.c — Detailed Technical Explanation
+% Compile with: pdflatex -shell-escape grow_symmetric2.tex
+%
+\documentclass[10pt,a4paper]{article}
+
+%% ---------- Packages ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{margin=2cm, top=2.2cm, bottom=2.5cm}
+
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\setlist{noitemsep, topsep=2pt}
+\usepackage{needspace}
+
+%% minted — syntax highlighting (requires -shell-escape and pygments)
+\usepackage{minted}
+\setminted{
+  fontsize=\footnotesize,
+  baselinestretch=1.1,
+  breaklines=true,
+  linenos=false,
+  frame=none,
+  bgcolor=codebg
+}
+\definecolor{codebg}{HTML}{F5F5F5}
+
+%% tcolorbox — side-by-side description/code panels
+\usepackage[most]{tcolorbox}
+\tcbuselibrary{minted,skins,breakable}
+
+%% Colours
+\definecolor{titlecolor}{HTML}{1A4D8F}
+\definecolor{headercolor}{HTML}{2E6DB4}
+\definecolor{rulecolor}{HTML}{AECBEF}
+\definecolor{seedorange}{HTML}{F39C12}
+\definecolor{seedred}{HTML}{E74C3C}
+\definecolor{seedpurple}{HTML}{8E44AD}
+\definecolor{grownblue}{HTML}{A8D8EA}
+\definecolor{centerred}{HTML}{C0392B}
+
+%% Side-by-side box style
+\tcbset{
+  dualbox/.style={
+    enhanced,
+    colframe=rulecolor,
+    colback=white,
+    fonttitle=\bfseries\small,
+    breakable,
+    boxrule=0.6pt,
+    arc=3pt,
+    sidebyside,
+    sidebyside align=top seam,
+    sidebyside gap=6mm,
+    lefthand ratio=0.46,
+    before skip=8pt,
+    after skip=8pt,
+  }
+}
+
+%% Section colours
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries\color{titlecolor}}{}{0em}{}[\nobreak\vspace{-2pt}\color{rulecolor}\hrule\nobreak\vspace{4pt}]
+\titleformat{\subsection}{\normalsize\bfseries\color{headercolor}}{}{0em}{}
+
+%% Keep headings attached to the content that follows them
+\newcommand{\subsectionbreak}{\nobreak}
+\let\polysection\section
+\renewcommand\section{\needspace{0.16\textheight}\polysection}
+\let\polysubsection\subsection
+\renewcommand\subsection{\needspace{0.12\textheight}\polysubsection}
+
+%% Convenient macros
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\texttt{\footnotesize #1}}
+\newcommand{\vcoord}[3]{$(#1,\,#2,\,#3)$}
+
+%% ---------- Document ----------
+\begin{document}
+
+\begin{center}
+  {\Huge\bfseries\color{titlecolor} grow\_symmetric2.c}\\[4pt]
+  {\large\color{headercolor} Growing 3-Fold Symmetric Hat Clusters from the $v[12]$ Pinwheel}\\[6pt]
+  {\small \file{MyHatTileStuff/grow\_symmetric2.c} — Technical Reference}\\[2pt]
+  {\small\color{gray} \today}
+\end{center}
+
+\vspace{6pt}
+\noindent\rule{\linewidth}{1pt}
+\vspace{4pt}
+
+% -----------------------------------------------------------------------
+\section{Purpose}
+
+\code{grow\_symmetric2} enumerates hat-tile clusters that grow ring-by-ring
+around a fixed \emph{3-hat pinwheel} seed: three hat tiles sharing the
+single vertex $v[12]$ of the base hat cycle, placed at relative orientations
+$0°$, $120°$, and $240°$.  After growing $N$ concentric rings the program
+keeps only those completions whose outer boundary is invariant under a $120°$
+rotation around the shared vertex, outputting them as a \code{.dat} record
+file and (optionally) an SVG grid.
+
+\medskip
+\noindent The program answers the question: \emph{can a 3-fold rotationally
+symmetric hat cluster centred at vertex $v[12]$ be extended indefinitely, or
+does the RL0 vertex-arc rulebook force a dead end?}
+
+% -----------------------------------------------------------------------
+\section{Background}
+
+\subsection{The Tetrille Lattice and Hat Tile}
+
+The \textbf{tetrille} lattice tiles the plane with equilateral triangles and
+squares, producing vertices of three valences: $v=6$ (hexagonal, shared by
+two squares and two triangles), $v=4$ (square, shared by one square and two
+triangles), and $v=3$ (triangular, shared by one square and one triangle).
+A lattice point is an integer triple $(v, x, y)$ where $v$ carries the
+valence tag; arithmetic across valence tags requires an explicit lifting
+formula.
+
+The hat tile is a 14-vertex polygon whose boundary cycle in \file{hat.tile}
+reads:
+
+\begin{minted}{text}
+v[0]  = (6, 0, 0)     v[1]  = (4,-1, 0)     v[2]  = (3,-1, 0)
+v[3]  = (4,-1,-1)     v[4]  = (6, 0,-1)     v[5]  = (4, 0,-3)
+v[6]  = (3,-1,-2)     v[7]  = (4, 1,-3)     v[8]  = (3, 0,-2)
+v[9]  = (4, 1,-2)     v[10] = (6, 1,-1)     v[11] = (4, 2,-1)
+v[12] = (3, 1,-1)     v[13] = (4, 1,-1)
+\end{minted}
+
+\subsection{Choosing the Pinwheel Centre}
+
+A 3-hat pinwheel requires a vertex $p$ with interior angle $120°$ inside the
+hat.  Three of the hat's 14 vertices satisfy this: $v[0]$, $v[6]$, and
+$v[12]$.  They differ in two important ways.
+
+\begin{center}
+\begin{tabular}{@{}llllp{6cm}@{}}
+\toprule
+\textbf{Vertex} & \textbf{Coord} & \textbf{Valence} & \textbf{RL0 status}
+  & \textbf{Notes} \\
+\midrule
+$v[0]$ & $(6,0,0)$ & hexagonal & \textbf{valid} &
+  Tetrille coordinate origin; fixed point of all lattice rotations;
+  no translation needed for the symmetry check.  Dead end at level 3
+  (51-tile cluster, no further symmetric extension). \\[4pt]
+$v[6]$ & $(3,-1,-2)$ & triangular & \textbf{forbidden} &
+  Geometrically valid $120°$ angle, but the RL0 vertex-arc dictionary
+  prohibits three hats meeting there in a pinwheel arrangement.
+  Returns 0 completions even at level 1. \\[4pt]
+$v[12]$ & $(3,1,-1)$ & triangular & \textbf{valid} &
+  The centre used by this program.  Not the origin, so a translation
+  correction is required after each $60°$-lattice rotation.
+  Gives an open cluster: 2, 4, 10 symmetric completions at
+  levels 1, 2, 3. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% -----------------------------------------------------------------------
+\section{Rotation Around a Non-Origin Centre}
+
+\subsection{The Lattice Rotation Primitive}
+
+\code{cycle\_transform\_lattice(src, dst, lattice, t)} applies the
+\emph{origin-centred} 60°-step lattice rotation
+\[
+  R_t: (x, y) \;\longmapsto\; (-y,\; x+y)^t
+\]
+to every vertex of \code{src}.  The transform is exact on all three valence
+systems.  A single application with $t=1$ rotates by $60°$; $t=2$ rotates
+by $120°$; $t=4$ rotates by $240°$.  The rotation centre is always
+\emph{the lattice origin} $(v, 0, 0)$.
+
+\subsection{Rotating Around an Arbitrary Centre}
+
+To rotate a cycle by $120°$ around a point $C$ that is \emph{not} the
+origin, the standard conjugation trick is used:
+\[
+  \text{Rot}_{C,120°}(\mathbf{p})
+  \;=\; C + R_2(\mathbf{p} - C)
+  \;=\; R_2(\mathbf{p}) + \underbrace{(C - R_2(C))}_{\Delta}.
+\]
+The displacement $\Delta = C - R_2(C)$ is a fixed integer vector that depends
+only on $C$.  Because the tetrille $v=3$ system is closed under the
+\code{tetrille\_translate\_cycle} operation (which works in the coarser $v=6$
+units), $\Delta$ must be representable in $v=6$ units.
+
+\subsection{Computing the Translation Constants}
+
+\begin{tcolorbox}[dualbox, title={Translation computation in \code{build\_symmetric\_seed}}]
+  The program computes $\Delta$ once at startup by applying the $t=2$
+  rotation to a one-vertex cycle containing just $C = v[12]$, then
+  computing the displacement back to $C$ in the $v=6$ coordinate system.
+
+  \code{tetrille\_delta\_to\_6(valence, dx, dy, \&m, \&n)} converts an
+  integer displacement $(dx, dy)$ (in the coordinate system of a vertex
+  with the given valence) into $v=6$ lattice units $(m, n)$.  For
+  a $v=3$ vertex: $a = dx - dy$, $b = dx + 2\,dy$; then $m = a/3$,
+  $n = b/3$.  The function returns 0 if $dx, dy$ are not exactly
+  representable, which would indicate an invalid centre.
+
+  For $v[12] = (3, 1, -1)$: after $t=2$ the point maps to $(3, 0, 1)$,
+  giving $dx = 1 - 0 = 1$, $dy = -1 - 1 = -2$.  The formula yields
+  $m_6 = +1$, $n_6 = -1$.
+\tcblower
+\begin{minted}{c}
+Coord center = tile->base.v[CENTER_VERTEX];
+/* 12 = CENTER_VERTEX */
+
+/* 1-vertex cycle to find where C maps */
+Cycle tmp, rtmp;
+memset(&tmp, 0, sizeof(tmp));
+tmp.n = 1; tmp.v[0] = center;
+cycle_transform_lattice(&tmp, &rtmp,
+                        tile->lattice, 2);
+
+int dx = center.x - rtmp.v[0].x; /* +1 */
+int dy = center.y - rtmp.v[0].y; /* -2 */
+
+tetrille_delta_to_6(center.v, dx, dy,
+                    &g_rot_m6, &g_rot_n6);
+/* g_rot_m6 = +1, g_rot_n6 = -1 */
+\end{minted}
+\end{tcolorbox}
+
+\noindent The global pair \code{(g\_rot\_m6, g\_rot\_n6)} is used in every
+subsequent call to \code{has\_120\_symmetry}.
+
+% -----------------------------------------------------------------------
+\section{Seed Construction}
+
+\subsection{The Three-Hat Pinwheel}
+
+\begin{tcolorbox}[dualbox, title={\code{build\_symmetric\_seed} — overview}]
+  Three hat cycles are built at angles $0°$, $120°$, and $240°$:
+  \begin{itemize}
+    \item \code{rot[0] = tile->base} (orientation $t=0$)
+    \item \code{rot[1]}: obtained by \code{cycle\_transform\_lattice(base,\,t=2)}
+    \item \code{rot[2]}: obtained by \code{cycle\_transform\_lattice(base,\,t=4)}
+  \end{itemize}
+  After applying the lattice rotation, $v[12]$ moves to a different position.
+  The seed assembly step (below) searches over all $(be, te)$ pairs to find
+  the unique attachment of \code{rot[k]} that places its $v[12]$
+  back on the shared centre $C$.
+\tcblower
+\begin{minted}{c}
+Cycle rot[SEED_HATS];
+rot[0] = tile->base;
+cycle_transform_lattice(&tile->base,
+    &rot[1], tile->lattice, 2);  /* 120° */
+cycle_transform_lattice(&tile->base,
+    &rot[2], tile->lattice, 4);  /* 240° */
+
+/* poly[0] = first hat alone */
+poly[0].cycle_count = 1;
+poly[0].cycles[0]   = rot[0];
+hats[0]             = rot[0];
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Attaching Hat 2 and Hat 3}
+
+\begin{tcolorbox}[dualbox, title={Attachment loop for \code{k = 1, 2}}]
+  For each subsequent hat (k=1 and k=2) the program iterates over every
+  boundary edge \code{be} of the growing polygon and every edge index
+  \code{te} of \code{rot[k]}.  Three conditions must all hold for the
+  placement to be accepted:
+  \begin{enumerate}
+    \item \code{try\_attach\_tile\_poly\_ex} succeeds (the tile can be placed
+      without overlap).
+    \item The resulting polygon has no holes
+      (\code{cycle\_count == 1}).
+    \item The placed tile's vertex 12 coincides with the shared centre:
+      \code{aligned.v[CENTER\_VERTEX] == center}.
+  \end{enumerate}
+  The third condition is what enforces the ``three hats all touching at
+  $v[12]$'' constraint.  Without it, the loop would accept any non-overlapping
+  attachment of the rotated tile.
+\tcblower
+\begin{minted}{c}
+Edge edges[512];
+for (int k = 1; k < SEED_HATS; k++) {
+    int ok = 0;
+    int ec = build_boundary_edges(
+                 &poly[k-1], edges);
+    for (int be = 0; be < ec && !ok; be++)
+    for (int te = 0;
+         te < rot[k].n && !ok; te++) {
+        Cycle aligned;
+        if (!try_attach_tile_poly_ex(
+                &poly[k-1], &rot[k],
+                tile->lattice, be, te,
+                &poly[k], &aligned)) continue;
+        if (poly[k].cycle_count > 1) continue;
+        /* KEY: v[12] must stay at centre */
+        if (!coord_eq(
+                aligned.v[CENTER_VERTEX],
+                center)) continue;
+        hats[k] = aligned;
+        ok = 1;
+    }
+}
+\end{minted}
+\end{tcolorbox}
+
+\noindent For the canonical hat tile the search succeeds at
+$(be=10, te=13)$ for hat 2 and $(be=17, te=13)$ for hat 3, producing
+a 30-vertex outer boundary.
+
+\subsection{BComp1 State Initialisation}
+
+Once the three tile cycles are assembled into \code{poly[2]} (a hole-free
+polygon) and \code{hats[0..2]}, a \code{BComp1Record} is filled in and
+passed to \code{bcomp1\_state\_from\_record} to create the initial growth
+state.  Three fields are mandatory for this call to succeed:
+
+\begin{minted}{c}
+BComp1Record rec;
+memset(&rec, 0, sizeof(rec));
+rec.have_boundary = 1;  /* outer polygon */
+rec.have_tiles    = 1;  /* tile list      */
+rec.have_center   = 1;  /* seed boundary  */
+rec.center        = seed_center;     /* = poly[2].cycles[0] */
+rec.boundary      = poly[SEED_HATS - 1];
+rec.tiles_count   = SEED_HATS;
+for (int k = 0; k < SEED_HATS; k++) rec.tiles[k] = hats[k];
+return bcomp1_state_from_record(&rec, seed);
+\end{minted}
+
+\noindent \textbf{Note:} \code{have\_center} must be set or
+\code{bcomp1\_state\_from\_record} returns 0 silently.  The \code{center}
+field stores the outer boundary of the 3-hat seed; it is not the abstract
+rotation centre $C$ but the \emph{cycle} used by the RL1 engine to track the
+boundary of the innermost ``supertile''.
+
+% -----------------------------------------------------------------------
+\section{The RL0 / RL1 Growth Engine}
+
+\subsection{BComp1Context}
+
+\begin{tcolorbox}[dualbox, title={\code{BComp1Context} — what is loaded}]
+  \code{bcomp1\_context\_init(\&ctx, tile\_path, remembrance\_path, deletions\_path)}
+  loads three data sources into a single context object:
+  \begin{description}[leftmargin=0pt,style=nextline]
+    \item[\code{tile\_path}] The hat tile definition file
+      (\file{preferences/focus.tile}), parsed into \code{ctx.tile}
+      including all variant cycles.
+    \item[\code{remembrance\_path}] The RL0 \emph{remembrance} table
+      (\file{data/rl0/remembrance.dat}): the dictionary of valid vertex-arc
+      completions at every lattice valence.  Used by \code{attach0\_force\_live\_closure}
+      and the BComp1 growth engine to determine which tile placements are
+      globally consistent.
+    \item[\code{deletions\_path}] The RL0 \emph{deletions} table
+      (\file{data/rl0/deletions.dat}): vertex-arc completions that have
+      been proved inconsistent and must be excluded.
+  \end{description}
+  Together the remembrance and deletions tables constitute the \textbf{RL0 rulebook}
+  — the first-order local constraint set for valid hat tilings.
+\tcblower
+\begin{minted}{c}
+BComp1Context ctx;
+bcomp1_context_init(&ctx,
+    "preferences/focus.tile",
+    "data/rl0/remembrance.dat",
+    "data/rl0/deletions.dat");
+
+/* ctx.tile:  loaded Tile struct    */
+/* ctx.map:   RL0 forget/arc map   */
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Forced Deterministic Closure}
+
+\begin{tcolorbox}[dualbox, title={\code{attach0\_force\_live\_closure}}]
+  After the 3-hat pinwheel seed is built, the program attempts a
+  \emph{forced ring}: it repeatedly scans every boundary vertex of the
+  current polygon and, wherever the RL0 rulebook leaves only one possible
+  tile placement, makes that placement deterministically.  This continues
+  until no more forced moves remain.
+
+  The function returns 1 (ok) in two situations:
+  \begin{itemize}
+    \item No forced moves exist from the start (0 steps), or
+    \item All forced moves were made and no contradiction was reached.
+  \end{itemize}
+  It returns 0 only when the RL0 rules produce a contradiction — a
+  vertex with no valid completion at all.
+
+  For the $v[12]$ pinwheel, the forced closure completes with
+  \code{closure\_steps=0} and \code{unresolved=30}: the 3-hat seed has
+  no deterministic forced moves.  Every boundary vertex still has multiple
+  valid completions.  This is fundamentally different from the $v[0]$
+  pinwheel (where forced closure adds 9 tiles in 6 steps and resolves all
+  boundary vertices), and explains why the $v[12]$ seed yields multiple
+  symmetric completions at every ring level.
+\tcblower
+\begin{minted}{c}
+Attach0Stats astats;
+Attach0ClosureStats cstats;
+attach0_stats_init(&astats);
+attach0_closure_stats_init(&cstats);
+
+int ok = attach0_force_live_closure(
+    &seed.poly,
+    &ctx.tile,
+    seed.tiles,
+    &seed.tile_count,
+    &ctx.map,
+    FORCE_STEPS,    /* = 1024 */
+    &astats,
+    &cstats);
+
+/* v[12] result:
+   ok=1, closure_steps=0, unresolved=30
+   => no forced moves, not a dead end */
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Ring-by-Ring Growth with BComp1}
+
+\begin{tcolorbox}[dualbox, title={\code{bcomp1\_complete\_state} — growth options}]
+  \code{bcomp1\_complete\_state(\&ctx, \&seed, \&center, \&opts, \&result)}
+  grows $N$ concentric rings from the seed state.  A ``ring'' is one
+  additional layer of RL0-consistent tile placements.  The function
+  exhaustively enumerates all completions up to the requested depth and
+  collects them into \code{result.records}.
+
+  The three key options are:
+  \begin{description}[leftmargin=0pt,style=nextline]
+    \item[\code{depth = N}]  Number of rings to add.
+    \item[\code{live\_only = 1}]  Discard any completion that the RL0
+      rulebook marks as a dead end (a state with no valid infinite
+      extension).
+    \item[\code{collect\_records = 1}]  Store every surviving completion
+      as a \code{BComp1Record} in \code{result.records}.
+  \end{description}
+  Without \code{live\_only=1} the count at level 3 would be much larger;
+  the flag prunes early those clusters that cannot be part of a valid
+  hat tiling.
+\tcblower
+\begin{minted}{c}
+BComp1Options opts;
+bcomp1_options_default(&opts);
+opts.depth           = level; /* --level N */
+opts.collect_records = 1;
+opts.live_only       = 1;
+
+BComp1Result result;
+bcomp1_complete_state(
+    &ctx, &seed, &center,
+    &opts, &result);
+
+/* result.records.count = total live
+   completions at requested depth   */
+\end{minted}
+\end{tcolorbox}
+
+% -----------------------------------------------------------------------
+\section{Symmetry Filtering}
+
+\subsection{The 120° Invariance Test}
+
+\begin{tcolorbox}[dualbox, title={\code{has\_120\_symmetry}}]
+  A completion's outer boundary is \textbf{120°-symmetric} if rotating it
+  by $120°$ around $C = v[12]$ produces the same cycle (up to a cyclic
+  shift of the start vertex).  This is the defining property of the pinwheel
+  symmetry group $\mathbb{Z}/3\mathbb{Z}$.
+
+  The test has two steps:
+  \begin{enumerate}
+    \item Apply the origin-centred $t=2$ lattice rotation to the boundary
+      cycle: \code{cycle\_transform\_lattice(c, \&rotated, lattice, 2)}.
+    \item Translate the result by \code{(g\_rot\_m6, g\_rot\_n6)} to undo
+      the displacement of $C$ under the rotation:
+      \code{tetrille\_translate\_cycle(\&rotated, g\_rot\_m6, g\_rot\_n6)}.
+  \end{enumerate}
+  The two steps together implement $\text{Rot}_{C,120°}$.
+  The resulting cycle \code{rotated} is compared to the original \code{c}
+  by \code{cycles\_match\_cyclic}, which allows any cyclic shift.
+\tcblower
+\begin{minted}{c}
+static int has_120_symmetry(
+    const Poly *boundary, int lattice)
+{
+    if (boundary->cycle_count != 1)
+        return 0;
+    const Cycle *c = &boundary->cycles[0];
+    Cycle rotated;
+    /* step 1: rotate around origin */
+    cycle_transform_lattice(
+        c, &rotated, lattice, 2);
+    /* step 2: translate so C is fixed */
+    tetrille_translate_cycle(
+        &rotated, g_rot_m6, g_rot_n6);
+    /* compare allowing cyclic shift */
+    return cycles_match_cyclic(c, &rotated);
+}
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Cyclic Matching}
+
+\begin{tcolorbox}[dualbox, title={\code{cycles\_match\_cyclic}}]
+  Two cycles represent the same geometric polygon if they have the same
+  vertices in the same order but possibly starting at a different point.
+  The function searches all cyclic shifts $s$ of $b$ and checks whether
+  any shifted $b$ agrees vertex-for-vertex with $a$.  Both vertex count
+  and all coordinate triples $(v, x, y)$ must match exactly.
+\tcblower
+\begin{minted}{c}
+static int cycles_match_cyclic(
+    const Cycle *a, const Cycle *b)
+{
+    if (a->n != b->n) return 0;
+    for (int s = 0; s < b->n; s++) {
+        if (!coord_eq(b->v[s], a->v[0]))
+            continue;       /* wrong start */
+        int ok = 1;
+        for (int i = 1; i < a->n && ok; i++)
+            if (!coord_eq(a->v[i],
+                    b->v[(s+i) % b->n]))
+                ok = 0;
+        if (ok) return 1;
+    }
+    return 0;
+}
+\end{minted}
+\end{tcolorbox}
+
+\subsection{In-Place Record Filtering}
+
+After \code{bcomp1\_complete\_state} fills \code{result.records}, the
+program compacts the array in-place, overwriting non-symmetric entries:
+
+\begin{minted}{c}
+size_t total = result.records.count;
+size_t sym_count = 0;
+for (size_t i = 0; i < total; i++) {
+    if (has_120_symmetry(&result.records.items[i].boundary, ctx.tile.lattice))
+        result.records.items[sym_count++] = result.records.items[i];
+}
+result.records.count = sym_count;
+\end{minted}
+
+\noindent This avoids any dependency on a non-public \code{push/init/clear}
+API for \code{BComp1RecordVec}: the filter works entirely through the public
+\code{items[]} and \code{count} fields.
+
+% -----------------------------------------------------------------------
+\section{Helper Functions}
+
+\subsection{Collecting Interior (Hidden) Vertices}
+
+\begin{tcolorbox}[dualbox, title={\code{rebuild\_hidden} and \code{collect\_verts}}]
+  A \code{BComp1Record} carries a list of \emph{hidden vertices}: lattice
+  points that are interior to the cluster (touched by at least one tile
+  but not lying on the outer boundary).  The count of hidden vertices
+  serves as the RL1 \emph{level} field, a measure of cluster depth.
+
+  \code{collect\_verts} builds the union of all vertex sets from all tile
+  cycles (deduplicating by linear scan).  \code{rebuild\_hidden} then
+  subtracts the boundary vertices (from \code{build\_boundary\_vertices})
+  to obtain only the interior points.  Results are sorted by the
+  lexicographic order $(v, x, y)$ for reproducibility.
+\tcblower
+\begin{minted}{c}
+/* Collect all tile vertices */
+static int collect_verts(
+    const Cycle *tiles, int n, Coord *out)
+{
+    int c = 0;
+    for (int t = 0; t < n; t++)
+      for (int i = 0; i < tiles[t].n; i++)
+        if (!coord_in(out, c, tiles[t].v[i]))
+          out[c++] = tiles[t].v[i];
+    return c;
+}
+
+/* Hidden = all_verts \ boundary_verts */
+static int rebuild_hidden(
+    const Poly *p, const Cycle *tiles,
+    int n, Coord *hidden)
+{
+    Coord all[BCOMP1_MAX_COORDS];
+    Coord bnd[BCOMP1_MAX_COORDS];
+    int ac = collect_verts(tiles, n, all);
+    int bc = build_boundary_vertices(p, bnd);
+    int hc = 0;
+    for (int i = 0; i < ac; i++)
+      if (!coord_in(bnd, bc, all[i]))
+        hidden[hc++] = all[i];
+    qsort(hidden, hc, sizeof(Coord),
+          coord_cmp);
+    return hc;
+}
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Assembling a BComp1Record from a State}
+
+\code{make\_record(\&state, \&center, \&rec)} constructs the full
+\code{BComp1Record} needed to write a structured output file.
+It allocates a temporary buffer, calls \code{rebuild\_hidden} to count
+and list interior vertices, then populates all mandatory fields:
+
+\begin{minted}{c}
+r->have_center = r->have_boundary = r->have_hidden = r->have_tiles = 1;
+r->level         = hc;              /* hidden vertex count = depth metric */
+r->center        = *center;
+r->boundary      = s->poly;
+r->hidden_count  = hc;
+r->tiles_count   = r->tile_count = s->tile_count;
+\end{minted}
+
+% -----------------------------------------------------------------------
+\section{SVG Rendering}
+
+\subsection{Coordinate Conversion}
+
+Tetrille coordinates $(v, x, y)$ are mapped to Euclidean screen space using
+the basis vectors that the \file{hat.tile} lattice prescribes
+($\sqrt{3}$ pre-computed as \code{g\_r3}):
+
+\[
+  (x_s,\, y_s) =
+  \begin{cases}
+    \Bigl(\tfrac{\sqrt{3}}{2}(x+y),\; \tfrac{1}{2}(y-x)\Bigr) & v = 6 \\[4pt]
+    \Bigl(\tfrac{\sqrt{3}}{4}(x+y),\; \tfrac{1}{4}(y-x)\Bigr) & v = 4 \\[4pt]
+    \Bigl(\tfrac{x + \tfrac{1}{2}y}{\sqrt{3}},\; \tfrac{1}{2}y\Bigr) & v = 3
+  \end{cases}
+\]
+
+SVG $y$ increases downward, so the draw call negates $y_s$: a tile vertex
+at $(x_s, y_s)$ appears at SVG position
+$(o_x + \texttt{SC}\cdot x_s,\; o_y - \texttt{SC}\cdot y_s)$
+where $(o_x, o_y)$ is the per-cell offset and \code{SC = 24} is the pixel
+scale factor.
+
+\subsection{Grid Layout}
+
+A global bounding box is computed over all tile vertices in all output
+records, so every grid cell uses the same scale.  The grid dimensions
+(rows $\times$ columns) are chosen to minimise the deviation from a $16:9$
+aspect ratio:
+
+\begin{minted}{c}
+for (int r = 1; r <= n; r++) {
+    int c2 = (n + r - 1) / r;
+    double sc2 = fabs((double)c2 * cw / ((double)r * ch) - 16.0 / 9.0);
+    if (sc2 < best) { best = sc2; rows = r; cols = c2; }
+}
+\end{minted}
+
+\subsection{Colour Coding}
+
+Tiles are drawn in a fixed layer order (grown tiles first, seed tiles on top,
+centre outline last) with the following colour scheme:
+
+\medskip
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Role} & \textbf{Colour} & \textbf{Hex} \\
+\midrule
+Seed hat 0 (base orientation)  & {\color{seedorange}\rule{1em}{0.8em}} Amber   & \texttt{\#f39c12} \\
+Seed hat 1 (120° rotation)     & {\color{seedred}\rule{1em}{0.8em}} Red     & \texttt{\#e74c3c} \\
+Seed hat 2 (240° rotation)     & {\color{seedpurple}\rule{1em}{0.8em}} Purple  & \texttt{\#8e44ad} \\
+Grown tiles (ring 1, 2, \ldots) & {\color{grownblue}\rule{1em}{0.8em}} Light blue & \texttt{\#a8d8ea} \\
+Seed boundary outline          & {\color{centerred}\rule{1em}{0.8em}} Dark red & \texttt{\#c0392b} \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\noindent The seed boundary outline (the outer boundary of the 3-hat
+seed itself) is drawn with no fill and a thick stroke, giving a visual
+landmark for the pinwheel centre across all completions.
+
+% -----------------------------------------------------------------------
+\section{Main Pipeline}
+
+The \code{main} function executes the following steps in order:
+
+\begin{enumerate}
+  \item \textbf{Argument parsing.}  Accepts \code{--level N},
+    \code{--tile}, \code{--remembrance}, \code{--deletions},
+    \code{--out-dir}, and \code{--svg} flags.
+  \item \textbf{Context initialisation.}  \code{bcomp1\_context\_init}
+    loads the tile and RL0 rule tables.
+  \item \textbf{Seed construction.}  \code{build\_symmetric\_seed}:
+    computes rotation constants, builds the three rotated hat cycles,
+    searches for the shared-$v[12]$ attachment, assembles the
+    \code{BComp1State}.
+  \item \textbf{Forced closure.}  \code{attach0\_force\_live\_closure}
+    applies all deterministic RL0 moves (0 for the $v[12]$ seed).
+  \item \textbf{Supertile record.}  \code{make\_record} + \code{bcomp1\_print\_record}
+    writes the seed cluster to \file{data/sym12/supertile.dat}.
+  \item \textbf{Level-$N$ growth.}  \code{bcomp1\_complete\_state} with
+    \code{depth=N}, \code{live\_only=1}, \code{collect\_records=1}.
+  \item \textbf{Symmetry filter.}  In-place compaction retaining only
+    records whose boundary satisfies \code{has\_120\_symmetry}.
+  \item \textbf{Output.}  Sorted records written to
+    \file{data/sym12/sym\_completions\_levelN.dat}; SVG rendered if
+    \code{--svg} was given.
+\end{enumerate}
+
+% -----------------------------------------------------------------------
+\section{Results}
+
+Running \code{./bin/grow\_symmetric2} with the default canonical hat tile
+and RL0 rule tables produces:
+
+\medskip
+\begin{tabular}{@{}rrrp{8cm}@{}}
+\toprule
+\textbf{Level} & \textbf{Total live} & \textbf{Symmetric} & \textbf{Remarks} \\
+\midrule
+1 & 4  & 2  & Two distinct ways to add a first ring with 120° symmetry. \\
+2 & 24 & 4  & Four symmetric clusters after two rings. \\
+3 & 700 & 10 & Ten symmetric clusters; branching is widening. \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\noindent Diagnostic output to \code{stderr}:
+
+\begin{minted}{text}
+Symmetric 3-hat seed (center=v[12]=3(1,-1), rot_m6=1 rot_n6=-1, tiles=3)
+grow_symmetric2  center=v[12]  level=3
+  forced tiles=3  closure_steps=0  unresolved=30
+  completions=700  symmetric=10  ->  data/sym12/sym_completions_level3.dat
+\end{minted}
+
+\medskip
+\noindent\textbf{Contrast with the $v[0]$ pinwheel.}
+\code{grow\_symmetric} (the companion program centred at $v[0]$) gives
+1 symmetric completion at levels 1 and 2, and 0 at level 3: the cluster
+is a genuine dead end.  The $v[12]$ pinwheel has no such limitation — the
+growing count of completions at each level strongly suggests the configuration
+can be extended to a valid infinite hat tiling with 3-fold rotational symmetry.
+
+% -----------------------------------------------------------------------
+\section{Architecture Summary}
+
+\begin{center}
+\begin{tcolorbox}[
+  colframe=rulecolor, colback=white, boxrule=0.6pt, arc=3pt,
+  width=0.98\linewidth
+]
+\begin{minted}{text}
+main()
+  +-- bcomp1_context_init(tile, remembrance, deletions)
+  |     loads Tile + RL0 rule tables into BComp1Context
+  |
+  +-- build_symmetric_seed(ctx.tile, &seed, &center)
+  |     +-- center = tile->base.v[12]  = (3,1,-1)
+  |     +-- cycle_transform_lattice(tmp, t=2) -> compute g_rot_m6=+1, g_rot_n6=-1
+  |     +-- rot[0]=base, rot[1]=t=2(base), rot[2]=t=4(base)
+  |     +-- for k=1,2: search (be,te) with aligned.v[12]==center
+  |     +-- bcomp1_state_from_record(&rec, &seed)  [need have_center=1]
+  |
+  +-- attach0_force_live_closure(&seed, ...)
+  |     v[12] seed: 0 forced moves, 30 unresolved vertices (open config)
+  |
+  +-- make_record(&seed, &center, &supertile)
+  |     rebuild_hidden: all_verts \ boundary_verts, sorted
+  |     -> write data/sym12/supertile.dat
+  |
+  +-- bcomp1_complete_state(&ctx, &seed, &center, depth=N, live_only=1)
+  |     exhaustive ring-by-ring growth guided by RL0 rulebook
+  |     result.records.count = total live completions
+  |
+  +-- symmetry filter (in-place compaction)
+  |     for each record: has_120_symmetry(boundary)?
+  |       cycle_transform_lattice(t=2) + tetrille_translate_cycle(+1,-1)
+  |       cycles_match_cyclic (cyclic shift allowed)
+  |     result.records.count = symmetric count
+  |
+  +-- bcomp1_sort_records + bcomp1_print_record
+  |     -> write data/sym12/sym_completions_levelN.dat
+  |
+  +-- emit_svg (optional)
+        bbox over all records -> uniform scale SC=24
+        draw grown tiles (#a8d8ea), seed trio (orange/red/purple)
+        draw seed boundary outline (#c0392b, no fill)
+        grid layout: minimise deviation from 16:9
+\end{minted}
+\end{tcolorbox}
+\end{center}
+
+% -----------------------------------------------------------------------
+\section{Usage}
+
+\begin{minted}{bash}
+# Build
+make grow_symmetric2
+
+# Level 1 (default)
+./bin/grow_symmetric2
+
+# Level 3 with SVG output
+./bin/grow_symmetric2 --level 3 --svg img/sym12_level3.svg
+
+# Custom output directory and tile file
+./bin/grow_symmetric2 --level 2 --out-dir data/my_run \
+    --tile preferences/focus.tile \
+    --remembrance data/rl0/remembrance.dat \
+    --deletions data/rl0/deletions.dat
+\end{minted}
+
+\medskip
+\noindent Output files written to \code{out-dir} (default \file{data/sym12}):
+
+\begin{itemize}
+  \item \file{supertile.dat} — the 3-hat seed cluster as a \code{BComp1Record}.
+  \item \file{sym\_completions\_levelN.dat} — all 120°-symmetric live
+    completions at the requested ring depth, one record per line.
+\end{itemize}
+
+\vspace{4pt}
+\noindent\rule{\linewidth}{0.6pt}
+\vspace{2pt}
+
+{\small\color{gray}
+\file{MyHatTileStuff/grow\_symmetric2.c} — part of PolyformTown.
+Compile this document with \texttt{pdflatex -shell-escape grow\_symmetric2.tex}
+(requires \texttt{pygments} for \texttt{minted}).
+}
+
+\end{document}

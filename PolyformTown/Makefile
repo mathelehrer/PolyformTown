@@ -521,6 +521,26 @@ centers: $(BIN)/centers
 $(BIN)/centers: $(MY_HAT)/centers.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/centers.o $(CORE)
 
+growth: $(BIN)/growth
+$(BIN)/growth: $(MY_HAT)/growth.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/growth.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+grow_symmetric: $(BIN)/grow_symmetric
+$(BIN)/grow_symmetric: $(MY_HAT)/grow_symmetric.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/grow_symmetric.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+grow_sym_alt: $(BIN)/grow_sym_alt
+$(BIN)/grow_sym_alt: $(MY_HAT)/grow_sym_alt.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/grow_sym_alt.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+grow_symmetric2: $(BIN)/grow_symmetric2
+$(BIN)/grow_symmetric2: $(MY_HAT)/grow_symmetric2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/grow_symmetric2.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
+
+composing: $(BIN)/composing
+$(BIN)/composing: $(MY_HAT)/composing.o $(CORE) | $(BIN)
+	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/composing.o $(CORE)
+
 h3_cluster: $(BIN)/h3_cluster
 $(BIN)/h3_cluster: $(MY_HAT)/h3_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/h3_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) -lm
