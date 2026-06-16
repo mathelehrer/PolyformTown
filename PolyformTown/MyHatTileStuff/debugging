@@ -1,0 +1,44 @@
+● Here's the full picture. Your project is Makefile-based (no CMakeLists.txt), and composing builds to bin/composing from MyHatTileStuff/composing.o + the core objects. Two things will bite you if you don't address them:
+
+  1. No debug symbols. CFLAGS = -O3 -Wall -Wextra -std=c11 — there's no -g, and -O3 makes stepping/variable inspection nearly useless. You must rebuild with -g -O0.
+  2. Relative paths. main() takes no args, but it reads a tile file and writes img/composing.svg using relative paths, so the working directory must be the project root (/home/jmartin/CLionProjects/PolyformTown/PolyformTown), not bin/ or a cmake-build-* dir.
+
+  CLion configuration
+
+  1. Tell CLion this is a Makefile project
+
+  If it currently opened as something else, do File → Close Project, then Open the project root — CLion auto-detects the Makefile. (You already have compile_commands.json too, but it only covers centers.c, so rely on the Makefile here.)
+
+  2. Create a Custom Build Target
+
+  Settings → Build, Execution, Deployment → Custom Build Targets → +
+  - Name: composing
+  - Toolchain: your default (System GCC/GDB)
+  - Build → click ... → + to add an external tool:
+    - Program: make
+    - Arguments: composing CFLAGS="-g -O0 -Wall -Wextra -std=c11"
+    - Working directory: $ProjectFileDir$
+  - Clean (optional) → another tool: make with args clean (or just rebuild manually).
+
+  The CFLAGS="..." override is what injects debug symbols. Note: this overrides the Makefile's CFLAGS, so I dropped -O3 and added -g -O0. The -I$(SRC) is added separately by the pattern rule, so you don't need it here.
+
+  ▎ If you'd rather not pass CFLAGS each time, edit line 3 of the Makefile to CFLAGS = -g -O0 -Wall -Wextra -std=c11 and just use make composing as the build command. Then make clean composing once to force a rebuild of the .o files (otherwise the stale -O3 objects get reused).
+
+  3. Create a Run/Debug configuration
+
+  Run → Edit Configurations → + → Custom Build Application
+  - Target: composing (the custom build target above)
+  - Executable: bin/composing
+  - Program arguments: (none)
+  - Working directory: /home/jmartin/CLionProjects/PolyformTown/PolyformTown (project root — critical for the relative img/... and tile paths)
+
+  4. Debug
+
+  Set a breakpoint in composing.c, click the bug icon. GDB will stop and let you inspect since the objects now carry -g -O0.
+
+  ---
+  One caveat to verify: because .o files already exist with -O3, make won't recompile them unless the source is newer. Run a clean build the first time:
+
+  make clean composing CFLAGS="-g -O0 -Wall -Wextra -std=c11"
+
+  Want me to add a dedicated composing_debug target to the Makefile instead, so the debug build stays separate from your optimized one and you don't have to clean back and forth?

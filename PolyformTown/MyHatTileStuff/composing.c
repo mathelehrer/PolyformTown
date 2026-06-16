@@ -1,7 +1,7 @@
 /*
  * composing.c - three hat tiles sharing vertex 12 (v[12] = (3,1,-1)).
  *
- * Loads preferences/focus.tile, places the base hat, then attaches the 120°
+ * Loads tiles/hat.tile, places the base hat, then attaches the 120°
  * and 240° rotations so all three share v[12].  Writes img/composing.svg.
  *
  * Build:  make composing
@@ -10,7 +10,6 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "core/attach.h"
 #include "core/boundary.h"

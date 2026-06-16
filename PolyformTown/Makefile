@@ -505,6 +505,17 @@ converter: $(BIN)/converter
 $(BIN)/converter: $(MY_HAT)/converter.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/converter.o $(CORE) -lm
 
+# self-contained: renders a Python CSV hat cluster (x,y,dir,ref,pt) to SVG
+csv2svg: $(BIN)/csv2svg
+$(BIN)/csv2svg: $(MY_HAT)/csv2svg.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/csv2svg.o -lm
+
+# self-contained: checks a CSV supertile makes a 3-fold rotationally symmetric
+# cluster from copies rotated 120/240 deg about a shared vertex (renders SVG)
+rotsym: $(BIN)/rotsym
+$(BIN)/rotsym: $(MY_HAT)/rotsym.o | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/rotsym.o -lm
+
 hat_three_no_rotation: $(BIN)/hat_three_no_rotation
 $(BIN)/hat_three_no_rotation: $(MY_HAT)/hat_three_no_rotation.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $(MY_HAT)/hat_three_no_rotation.o $(CORE)
