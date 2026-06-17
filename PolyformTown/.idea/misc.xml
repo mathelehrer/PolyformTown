@@ -3,5 +3,6 @@
   <component name="CMakePythonSetting">
     <option name="pythonIntegrationState" value="YES" />
   </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="uv (PolyformTown)" project-jdk-type="Python SDK" />
   <component name="CMakeWorkspace" PROJECT_DIR="$PROJECT_DIR$" />
 </project>
