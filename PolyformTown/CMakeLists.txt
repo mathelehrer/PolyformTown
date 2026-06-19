@@ -9,7 +9,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 add_compile_options(-O3 -Wall -Wextra)
 
 set(SRC ${CMAKE_SOURCE_DIR}/src)
-set(MY_HAT ${CMAKE_SOURCE_DIR}/MyHatTileStuff)
+set(MY_HAT ${CMAKE_SOURCE_DIR}/mystuff)
+set(RESTART ${CMAKE_SOURCE_DIR}/restart)
 
 include_directories(${SRC})
 
@@ -259,6 +260,9 @@ target_link_libraries(centers m)
 
 add_executable(composing ${MY_HAT}/composing.c ${CORE_OBJS})
 target_link_libraries(composing m)
+
+add_executable(learning_by_doing ${RESTART}/learning_by_doing.c ${CORE_OBJS})
+target_link_libraries(learning_by_doing m)
 
 add_executable(growth ${MY_HAT}/growth.c
     ${BCOMP1_OBJS} ${RL0_SURFACE_OBJS} ${CORE_OBJS} ${VCOMP_SURFACE_OBJS})

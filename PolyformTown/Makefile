@@ -493,10 +493,11 @@ $(BIN)/hat_boundary_dfs_check: $(SRC)/usage/hat_boundary_dfs_check.o $(CORE) $(S
 		$(CORE) $(SRC)/core/dfs.o
 
 # -----------------------------------------------------------------------------
-# MyHatTileStuff - personal experiments
+# mystuff - personal experiments
 # -----------------------------------------------------------------------------
 
-MY_HAT = MyHatTileStuff
+MY_HAT = mystuff
+RESTART = restart
 
 $(MY_HAT)/%.o: $(MY_HAT)/%.c
 	$(CC) $(CFLAGS) -I$(SRC) -c $< -o $@
@@ -555,6 +556,10 @@ $(BIN)/grow_symmetric2: $(MY_HAT)/grow_symmetric2.o $(SRC)/rl1/bcomp1.o $(RL0_SU
 composing: $(BIN)/composing
 $(BIN)/composing: $(MY_HAT)/composing.o $(CORE) | $(BIN)
 	$(CC) $(CFLAGS) -lm -o $@ $(MY_HAT)/composing.o $(CORE)
+
+learning_by_doing: $(BIN)/learning_by_doing
+$(BIN)/learning_by_doing: $(RESTART)/learning_by_doing: $(CORE)|$(BIN)
+	$(CC) $(CFLAGS) -lm -o $@ $(RESTART)/learning_by_doing.o $(CORE)
 
 h3_cluster: $(BIN)/h3_cluster
 $(BIN)/h3_cluster: $(MY_HAT)/h3_cluster.o $(SRC)/rl1/bcomp1.o $(RL0_SURFACE) $(CORE) $(VCOMP_SURFACE) | $(BIN)
